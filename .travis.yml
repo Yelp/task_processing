@@ -13,9 +13,8 @@ env:
 services:
   - docker
 before_install:
-  - sudo apt-get update
-  - sudo apt-get -o Dpkg::Options::="--force-confnew" install -y --force-yes \
-      docker-engine=1.13.1-0~ubuntu-trusty devscripts
+  - docker --version
+  - docker-compose --version
   - |2+
     if [ "$TRAVIS_BRANCH" = "master" -a \
          "$TRAVIS_PULL_REQUEST" = "false" -a \
