@@ -1,4 +1,7 @@
 #!/bin/bash
 
-pip install pytest pytest-bdd
-pytest tests/integration
+set -eux
+
+examples/sync.py
+examples/async.py
+examples/subscription.py

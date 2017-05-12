@@ -39,8 +39,8 @@ services:
       - mesosmaster
   playground:
     build:
-      context: ../../..
-      dockerfile: ./task_processing/examples/cluster/playground/Dockerfile
+      context: ../..
+      dockerfile: ./examples/cluster/playground/Dockerfile
     environment:
       MESOS: mesosmaster:5050
     depends_on:
@@ -48,7 +48,7 @@ services:
       - mesosmaster
       - mesosslave
     volumes:
-      - ../../..:/src
+      - ../..:/src
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - 22
