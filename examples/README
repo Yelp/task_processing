@@ -1,4 +1,0 @@
-You can run these examples:
-
-    docker-compose -f examples/cluster/docker-compose.yaml \
-      run playground examples/sync.py
