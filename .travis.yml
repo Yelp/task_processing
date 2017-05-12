@@ -7,15 +7,13 @@ language: python
 python: 3.6
 cache: pip
 env:
-  - TOXENV=py3
-  - TOXENV=coverage
-  - TOXENV=docs
-  - MAKE_TARGET=itest
+  - TARGET="tox"
+  - TARGET="tox -e coverage"
+  - TARGET="tox -e docs"
+  - TARGET="make itest"
 services:
   - docker
 before_install:
-  - docker --version
-  - docker-compose --version
   - |2+
     if [ "$TRAVIS_BRANCH" = "master" -a \
          "$TRAVIS_PULL_REQUEST" = "false" -a \
@@ -23,9 +21,7 @@ before_install:
       docker login -u="$DOCKER_USERNAME" \
                    -p="$DOCKER_PASSWORD"; \
     fi
-install: pip install coveralls tox
-script: if [[ -n "$MAKE_TARGET" ]]; then make "$MAKE_TARGET"; else tox; fi
-after_success:
-  - coveralls
+install: pip install tox
+script: $MAKE_TARGET
 matrix:
   fast_finish: true
