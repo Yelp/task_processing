@@ -1,0 +1,27 @@
+---
+branches:
+  only:
+    - master
+    - /^v[0-9.]+$/
+language: python
+python: 3.6
+cache: pip
+env:
+  - TARGET="tox"
+  - TARGET="tox -e coverage"
+  - TARGET="tox -e docs"
+  - TARGET="make itest"
+services:
+  - docker
+before_install:
+  - |2+
+    if [ "$TRAVIS_BRANCH" = "master" -a \
+         "$TRAVIS_PULL_REQUEST" = "false" -a \
+         "$DOCKER_USERNAME" != "" ]; then \
+      docker login -u="$DOCKER_USERNAME" \
+                   -p="$DOCKER_PASSWORD"; \
+    fi
+install: pip install tox
+script: $MAKE_TARGET
+matrix:
+  fast_finish: true
