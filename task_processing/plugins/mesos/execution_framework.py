@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-
 import logging
 import threading
 import time
@@ -10,8 +6,8 @@ from threading import Timer
 import mesos.interface
 import mesos.native
 from mesos.interface import mesos_pb2
-
 from paasta_tools.utils import paasta_print
+
 from task_processing.plugins.mesos.translator import mesos_status_to_event
 
 try:
@@ -104,7 +100,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
     def shutdown(self, driver):
         # TODO: this is naive, as it does nothing to stop on-going calls
         #       to statusUpdate or resourceOffers.
-        paasta_print("Freezing the scheduler. Further status updates and resource offers are ignored.")
+        paasta_print(
+            "Freezing the scheduler. Further status updates and resource offers are ignored.")
         self.frozen = True
         paasta_print("Killing any remaining live tasks.")
         for task, parameters in self.tasks_with_flags.items():
@@ -125,7 +122,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
                     if self.dry_run:
                         tasks, new_state = self.tasks_and_state_for_offer(
                             driver, offer, self.constraint_state)
-                        tasks, _ = self.tasks_and_state_for_offer(driver, offer, self.constraint_state)
+                        tasks, _ = self.tasks_and_state_for_offer(
+                            driver, offer, self.constraint_state)
                         print("Would have launched: ", tasks)
                         self.driver.stop()
                     else:
@@ -161,7 +159,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
                         else:
                             driver.declineOffer(offer.id)
                 except ConstraintFailAllTasksError:
-                    paasta_print("Offer failed constraints for every task, rejecting 60s")
+                    paasta_print(
+                        "Offer failed constraints for every task, rejecting 60s")
                     filters = mesos_pb2.Filters()
                     filters.refuse_seconds = 60
                     driver.declineOffer(offer.id, filters)
@@ -201,7 +200,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
         return tid.startswith("%s." % name)
 
     def log_and_kill(self, driver, task_id):
-        log.critical('Task stuck launching for %ss, assuming to have failed. Killing task.' % self.staging_timeout)
+        log.critical(
+            'Task stuck launching for %ss, assuming to have failed. Killing task.' % self.staging_timeout)
 
         lost_state = mesos_pb2.TaskStatus()
         lost_state.task_id.value = task_id
@@ -209,7 +209,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
         lost_state.data = 'startup timer expired'.encode('ascii', 'ignore')
         self.statusUpdate(driver, lost_state)
 
-        self.blacklist_slave(self.tasks_with_flags[task_id].offer.slave_id.value)
+        self.blacklist_slave(
+            self.tasks_with_flags[task_id].offer.slave_id.value)
         self.kill_task(driver, task_id)
 
     def staging_timer_for_task(self, timeout_value, driver, task_id):
@@ -228,7 +229,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
                 offerMem += resource.scalar.value
             elif resource.name == "ports":
                 for rg in resource.ranges.range:
-                    # I believe mesos protobuf ranges are inclusive, but range() is exclusive
+                    # I believe mesos protobuf ranges are inclusive, but
+                    # range() is exclusive
                     offerPorts += range(rg.begin, rg.end + 1)
         remainingCpus = offerCpus
         remainingMem = offerMem
@@ -303,7 +305,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
         log.debug("Blacklisting slave: %s" % slave_id)
         with self.blacklisted_slaves_lock:
             self.blacklisted_slaves.add(slave_id)
-            Timer(self.blacklist_timeout, lambda: self.unblacklist_slave(slave_id)).start()
+            Timer(self.blacklist_timeout,
+                  lambda: self.unblacklist_slave(slave_id)).start()
 
     def unblacklist_slave(self, slave_id):
         if slave_id not in self.blacklisted_slaves:
@@ -486,7 +489,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
             return
 
         if self.within_reconcile_backoff():
-            paasta_print("Declining all offers since we started reconciliation too recently")
+            paasta_print(
+                "Declining all offers since we started reconciliation too recently")
             for offer in offers:
                 driver.declineOffer(offer.id)
         else:
@@ -511,7 +515,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
         # update tasks
         task_id = update.task_id.value
         state = update.state
-        task_params = self.tasks_with_flags.setdefault(task_id, MesosTaskParameters(health=None))
+        task_params = self.tasks_with_flags.setdefault(
+            task_id, MesosTaskParameters(health=None))
         task_params.mesos_task_state = state
 
         for task, params in list(self.tasks_with_flags.items()):

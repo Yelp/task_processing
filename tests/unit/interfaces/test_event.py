@@ -1,5 +1,6 @@
 from task_processing.interfaces.event import Event
 
+
 def test_event_creation():
     x = object()
     e = Event(raw=x, terminal=True, platform_type='killed')

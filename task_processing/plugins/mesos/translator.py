@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-from __future__ import unicode_literals
-
 from task_processing.interfaces.event import Event
 
 # https://github.com/apache/mesos/blob/master/include/mesos/mesos.proto
