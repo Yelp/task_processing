@@ -36,7 +36,11 @@ def main():
             event = None
 
         if event is None:
-            print("Timeout on subscription queue, still waiting for {}".format(tasks))
+            print(
+                'Timeout on subscription queue, still waiting for {}'.format(
+                    tasks
+                )
+            )
         else:
             print("{} {}".format(event.task_id, type(event)))
             if isinstance(event, EventTerminal):
