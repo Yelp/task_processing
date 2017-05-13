@@ -6,8 +6,12 @@ import six
 
 TaskConfig = namedtuple(
     'TaskConfig',
-    ['task_id', 'name', 'image', 'cmd', 'cpus', 'mem', 'disk', 'volumes', 'ports', 'cap_add',
-     'ulimit', 'docker_parameters'],
+    [
+        'task_id', 'name', 'image', 'cmd',
+        'cpus', 'mem', 'disk',
+        'volumes', 'ports', 'cap_add',
+        'ulimit', 'docker_parameters'
+    ],
 )
 
 # TODO: reimplement TaskConfig using attrs or precord
@@ -36,8 +40,10 @@ def make_task_config(image="ubuntu:xenial", cmd="/bin/true", cpus=0.1,
     if docker_parameters:
         docker_parameters = []
 
-    return TaskConfig(task_id, name, image, cmd, cpus, mem, disk, volumes, ports, cap_add,
-                      ulimit, docker_parameters)
+    return TaskConfig(
+        task_id, name, image, cmd, cpus, mem, disk, volumes, ports, cap_add,
+        ulimit, docker_parameters
+    )
 
 
 @six.add_metaclass(abc.ABCMeta)
