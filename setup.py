@@ -25,13 +25,13 @@ import task_processing
 setup(
     name='task_processing',
     version=task_processing.__version__,
-    provides=["paasta_tools"],
+    provides=["task_processing"],
     author='Task Processing',
     author_email='lol@yelp.com',
     description='Framework for task processing executors and configuration',
     packages=find_packages(exclude=("tests")),
     include_package_data=True,
-    install_requires=[],
+    install_requires=['pyrsistent'],
     extras_require={
         # We can add the mesos specific dependencies here
         'mesos_executor': [],
