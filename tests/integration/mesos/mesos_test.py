@@ -1,9 +1,4 @@
-from subprocess import call
-from subprocess import PIPE
-from subprocess import Popen
-
 from pytest_bdd import given
-from pytest_bdd import parsers
 from pytest_bdd import then
 from pytest_bdd import when
 

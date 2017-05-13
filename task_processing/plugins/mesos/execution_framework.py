@@ -101,7 +101,9 @@ class ExecutionFramework(mesos.interface.Scheduler):
         # TODO: this is naive, as it does nothing to stop on-going calls
         #       to statusUpdate or resourceOffers.
         paasta_print(
-            "Freezing the scheduler. Further status updates and resource offers are ignored.")
+            'Freezing the scheduler. Further status updates and resource '
+            'offers are ignored.'
+        )
         self.frozen = True
         paasta_print("Killing any remaining live tasks.")
         for task, parameters in self.tasks_with_flags.items():
@@ -160,7 +162,9 @@ class ExecutionFramework(mesos.interface.Scheduler):
                             driver.declineOffer(offer.id)
                 except ConstraintFailAllTasksError:
                     paasta_print(
-                        "Offer failed constraints for every task, rejecting 60s")
+                        'Offer failed constraints for every task, '
+                        'rejecting 60s'
+                    )
                     filters = mesos_pb2.Filters()
                     filters.refuse_seconds = 60
                     driver.declineOffer(offer.id, filters)
@@ -183,17 +187,23 @@ class ExecutionFramework(mesos.interface.Scheduler):
         return True
 
     def get_new_tasks(self, name, tasks):
+        def task_state(tid):
+            return self.tasks_with_flags[tid].mesos_task_state
+
         return set(filter(
             lambda tid:
                 self.is_task_new(name, tid) and
-                self.tasks_with_flags[tid].mesos_task_state in LIVE_TASK_STATES,
+                task_state(tid) in LIVE_TASK_STATES,
             tasks))
 
     def get_old_tasks(self, name, tasks):
+        def task_state(tid):
+            return self.tasks_with_flags[tid].mesos_task_state
+
         return set(filter(
             lambda tid:
                 not(self.is_task_new(name, tid)) and
-                self.tasks_with_flags[tid].mesos_task_state in LIVE_TASK_STATES,
+                task_state(tid) in LIVE_TASK_STATES,
             tasks))
 
     def is_task_new(self, name, tid):
@@ -201,7 +211,9 @@ class ExecutionFramework(mesos.interface.Scheduler):
 
     def log_and_kill(self, driver, task_id):
         log.critical(
-            'Task stuck launching for %ss, assuming to have failed. Killing task.' % self.staging_timeout)
+            'Task stuck launching for %ss, assuming to have failed. '
+            'Killing task.' % self.staging_timeout
+        )
 
         lost_state = mesos_pb2.TaskStatus()
         lost_state.task_id.value = task_id
@@ -274,7 +286,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
             remainingMem -= task_config.mem
             # remainingPorts -= {task_port}
 
-            # update_constraint_state(offer, self.constraints, new_constraint_state)
+            # update_constraint_state(
+            #    offer, self.constraints, new_constraint_state)
 
         # raise constraint error but only if no other tasks fit/fail the offer
         # if total > 0 and failed_constraints == total:
@@ -286,7 +299,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
         # for attribute in offer.attributes:
             # if attribute.name == "pool":
                 # return attribute.text.value == self.service_config.get_pool()
-        # # we didn't find a pool attribute on this slave, so assume it's not in our pool.
+        # # we didn't find a pool attribute on this slave, so assume it's
+        # # not in our pool.
         # return False
         return True
 
@@ -490,14 +504,19 @@ class ExecutionFramework(mesos.interface.Scheduler):
 
         if self.within_reconcile_backoff():
             paasta_print(
-                "Declining all offers since we started reconciliation too recently")
+                'Declining all offers since we started reconciliation '
+                'too recently'
+            )
             for offer in offers:
                 driver.declineOffer(offer.id)
         else:
             for idx, offer in enumerate(offers):
                 if offer.slave_id.value in self.blacklisted_slaves:
-                    log.critical("Ignoring offer %s from blacklisted slave %s" %
-                                 (offer.id.value, offer.slave_id.value))
+                    log.critical(
+                        'Ignoring offer {0} from blacklisted slave {1}'.format(
+                            offer.id.value, offer.slave_id.value
+                        )
+                    )
                     driver.declineOffer(offer.id)
                     del offers[idx]
 
