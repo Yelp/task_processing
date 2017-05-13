@@ -24,7 +24,7 @@ def main():
     runner = Sync(executor)
     result = runner.run(task_config)
     print(result)
-    print(result.original_event)
+    print(result.raw)
     runner.stop()
 
 
