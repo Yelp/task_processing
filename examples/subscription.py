@@ -1,9 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import logging
 import os
 
@@ -28,7 +23,8 @@ def main():
 
     tasks = set()
     for _ in range(1, 100):
-        task_config = make_task_config(image="ubuntu:14.04", cmd="/bin/sleep 10")
+        task_config = make_task_config(
+            image="ubuntu:14.04", cmd="/bin/sleep 10")
         tasks.add(task_config.task_id)
         runner.run(task_config)
 
@@ -40,7 +36,11 @@ def main():
             event = None
 
         if event is None:
-            print("Timeout on subscription queue, still waiting for {}".format(tasks))
+            print(
+                'Timeout on subscription queue, still waiting for {}'.format(
+                    tasks
+                )
+            )
         else:
             print("{} {}".format(event.task_id, type(event)))
             if isinstance(event, EventTerminal):
