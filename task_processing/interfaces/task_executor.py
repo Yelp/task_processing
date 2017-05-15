@@ -1,49 +1,25 @@
 import abc
 import uuid
-from collections import namedtuple
+from pyrsistent import PRecord, field, v
 
 import six
 
-TaskConfig = namedtuple(
-    'TaskConfig',
-    [
-        'task_id', 'name', 'image', 'cmd',
-        'cpus', 'mem', 'disk',
-        'volumes', 'ports', 'cap_add',
-        'ulimit', 'docker_parameters'
-    ],
-)
+class TaskConfig(PRecord):
+    uuid = field(type=uuid.UUID)
+    name = field(type=str, initial="default")
+    image = field(type=str, initial="ubuntu:xenial")
+    cmd = field(type=str, initial="/bin/true")
+    cpus = field(type=float, initial=0.1, invariant=lambda c: c > 0)
+    mem = field(type=float, initial=32, invariant=lambda m: m >= 32)
+    disk = field(type=float, initial=10, invariant=lambda d: d > 0)
+    volumes = field(type=pvector, initial=v(), factory=pvector)
+    ports = field(type=pvector, initial=v(), factory=pvector)
+    cap_add = field(type=pvector, initial=v(), factory=pvector)
+    ulimit = field(type=pvector, initialv=(), factory=pvector)
+    docker_parameters = field(type=pvector, initial=v(), factory=pvector)
 
-# TODO: reimplement TaskConfig using attrs or precord
-
-
-def make_task_config(image="ubuntu:xenial", cmd="/bin/true", cpus=0.1,
-                     mem=32, disk=10, volumes=None, ports=[], cap_add=[],
-                     ulimit=[], docker_parameters=[], task_id=None, name=None):
-    if task_id is None:
-        if name is None:
-            task_id = str(uuid.uuid4())
-        else:
-            task_id = "{}.{}".format(name, str(uuid.uuid4()))
-
-    if name is None:
-        name = str(uuid.uuid4())
-
-    if volumes is None:
-        volumes = {}
-    if ports is None:
-        ports = []
-    if cap_add is None:
-        cap_add = []
-    if ulimit is None:
-        ulimit = []
-    if docker_parameters:
-        docker_parameters = []
-
-    return TaskConfig(
-        task_id, name, image, cmd, cpus, mem, disk, volumes, ports, cap_add,
-        ulimit, docker_parameters
-    )
+    def task_id():
+        return "{}.{}".format(self.name, str(self.uuid))
 
 
 @six.add_metaclass(abc.ABCMeta)
