@@ -27,7 +27,7 @@ Implements all required interfaces to talk to Mesos deployment.
 
 ## /runners
 
-Runners are providing specific concurrency semantics and are supposed to be
+Runners provide specific concurrency semantics and are supposed to be
 platform independent.
 
 ### Sync
