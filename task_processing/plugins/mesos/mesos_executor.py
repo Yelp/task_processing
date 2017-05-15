@@ -61,7 +61,7 @@ class MesosExecutor(TaskExecutor):
         self.driver_thread.start()
 
     def run(self, task_config):
-        self.execution_framework.enqueue(task_config)
+        self.execution_framework.enqueue_task(task_config)
 
     def kill(self, task_id):
         print("Killing")
@@ -72,4 +72,4 @@ class MesosExecutor(TaskExecutor):
         self.driver.join()
 
     def get_event_queue(self):
-        return self.execution_framework.queue
+        return self.execution_framework.task_update_queue
