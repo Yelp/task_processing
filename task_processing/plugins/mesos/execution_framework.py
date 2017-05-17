@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-
 import logging
 import threading
 import time
-from threading import Timer
 
 import mesos.interface
 import mesos.native
@@ -29,52 +24,54 @@ class ExecutionFramework(mesos.interface.Scheduler):
     def __init__(
         self,
         name="remote_run",
-        task_stagging_timeout_s=240,
+        task_staging_timeout_s=240,
         pool=None,
         max_task_queue_size=1000,
         translator=mesos_status_to_event,
         slave_blacklist_timeout_s=900,
         offer_backoff=240,
-        task_retries=1,
+        task_retries=2,
     ):
         self.name = name
         # wait this long for a task to launch.
-        self.task_stagging_timeout_s = task_stagging_timeout_s
+        self.task_staging_timeout_s = task_staging_timeout_s
         self.framework_info = self.build_framework_info()
         self.pool = pool
         self.translator = translator
         self.slave_blacklist_timeout_s = slave_blacklist_timeout_s
         self.offer_backoff = offer_backoff
+        self.task_retries = task_retries
 
         self.task_queue = Queue(max_task_queue_size)
         self.task_update_queue = Queue(max_task_queue_size)
-        self.task_launch_counter = 1
         self.driver = None
+        self.are_offers_suppressed = False
 
         self.offer_decline_filter = self.build_decline_offer_filter()
         # TODO: These should be thread safe
         self.blacklisted_slaves = {}
-        self.tasks_launched = {}
-        self.tasks_inflight = {}
-        self.task_to_slave_id_mappings = {}
+        self.task_metadata = {}
 
-        self.start_new_thread(self.kill_tasks_stuck_in_stagging)
+        self.start_new_thread(self.kill_tasks_stuck_in_staging)
         self.start_new_thread(self.unblacklist_slaves)
 
     def start_new_thread(self, func):
         t = threading.Thread(target=func, args=())
+        # t.set_daemon = True
         t.start()
 
-    def kill_tasks_stuck_in_stagging(self):
-        import time
+    def kill_tasks_stuck_in_staging(self):
         while True:
             time_now = time.time()
-            for task_id in self.tasks_launched.keys():
-                if time_now > self.tasks_launched[task_id] + self.task_stagging_timeout_s:
+            for task_id in self.task_metadata.keys():
+                if time_now > (
+                    self.task_metadata[task_id]['time_launched'] +
+                    self.task_staging_timeout_s
+                ):
                     log.warning('Killing stuck task {id}'.format(id=task_id))
                     self.kill_task(task_id)
-                    self.tasks_launched.pop(task_id, None)
-                    self.blacklist_slave(self.task_to_slave_id_mappings[task_id])
+                    self.blacklist_slave(
+                        self.task_metadata[task_id]['slave_id'])
             time.sleep(10)
 
     def offer_matches_pool(self, offer):
@@ -93,28 +90,41 @@ class ExecutionFramework(mesos.interface.Scheduler):
 
     def blacklist_slave(self, slave_id):
         if slave_id in self.blacklisted_slaves:
+            # Punish this slave for more time.
             self.blacklisted_slaves.pop(slave_id, None)
 
         log.info('Blacklisting slave: {id} for {secs} seconds.'.format(
-                id=slave_id,
-                secs=self.slave_blacklist_timeout_s
-            )
+            id=slave_id,
+            secs=self.slave_blacklist_timeout_s
+        )
         )
         self.blacklisted_slaves[slave_id] = time.time()
 
     def unblacklist_slaves(self):
-        import time
         while True:
             time_now = time.time()
             for slave_id in self.blacklisted_slaves.keys():
-                if time_now < self.blacklisted_slaves[slave_id] + self.slave_blacklist_timeout_s:
+                if time_now < (
+                    self.blacklisted_slaves[slave_id] +
+                    self.slave_blacklist_timeout_s
+                ):
                     log.info('Unblacklisting slave: {id}'.format(id=slave_id))
                     self.blacklisted_slaves.pop(slave_id, None)
             time.sleep(10)
 
     def enqueue_task(self, task):
         # TODO: Add a wrapper for this task
+        self.task_metadata[task.task_id] = {
+            'slave_id': None,
+            'retries': 0,
+            'task_config': task,
+            'task_state': 'enqueued'
+        }
         self.task_queue.put(task)
+        if self.are_offers_suppressed:
+            self.driver.reviveOffers()
+            self.are_offers_suppressed = False
+            log.info('Reviving offers because we have tasks to run.')
 
     def build_framework_info(self):
         framework = mesos_pb2.FrameworkInfo()
@@ -169,8 +179,7 @@ class ExecutionFramework(mesos.interface.Scheduler):
         )
 
         tasks_to_put_back_in_queue = []
-
-        # Iterate over all the tasks of the queue
+        # Get all the tasks of the queue
         while not self.task_queue.empty():
             task = self.task_queue.get()
 
@@ -178,17 +187,21 @@ class ExecutionFramework(mesos.interface.Scheduler):
                  remaining_mem >= task.mem and
                  remaining_disk >= task.disk)):
                 # This offer is sufficient for us to launch task
-                tasks_to_launch.append(self.create_new_docker_task(offer, task, available_ports))
+                tasks_to_launch.append(self.create_new_docker_task(
+                    offer, task, available_ports))
 
-                # Deduct the resources taken by this task from the total available resources.
+                # Deduct the resources taken by this task from the total
+                # available resources.
                 remaining_cpus -= task.cpus
                 remaining_mem -= task.mem
                 remaining_disk -= task.disk
             else:
-                # This offer is insufficient for this task. We need to put it back in the queue
+                # This offer is insufficient for this task. We need to put it
+                # back in the queue
                 tasks_to_put_back_in_queue.append(task)
 
-        # TODO: This needs to be thread safe. We can write a wrapper over queue with a mutux.
+        # TODO: This needs to be thread safe. We can write a wrapper over queue
+        # with a mutux.
         for task in tasks_to_put_back_in_queue:
             self.task_queue.put(task)
 
@@ -204,10 +217,12 @@ class ExecutionFramework(mesos.interface.Scheduler):
         command.value = task_config.cmd
 
         task.command.MergeFrom(command)
-        task.task_id.value = str(self.task_launch_counter)
+        task.task_id.value = task_config.task_id
         task.slave_id.value = offer.slave_id.value
-        task.name = 'executor-{id}'.format(id=self.task_launch_counter)
-        self.task_launch_counter += 1
+        task.name = 'executor-{id}'.format(id=task_config.task_id)
+
+        self.task_metadata[task_config.task_id]['slave_id'] = \
+            task.slave_id.value
 
         # CPUs
         cpus = task.resources.add()
@@ -275,35 +290,44 @@ class ExecutionFramework(mesos.interface.Scheduler):
         log.warning("Slave lost: {id}".format(id=str(slaveId)))
 
     def registered(self, driver, frameworkId, masterInfo):
-        log.info("Registered with framework ID {id}".format(id=frameworkId.value))
+        log.info("Registered with framework ID {id}".format(
+            id=frameworkId.value))
 
     def reregistered(self, driver, frameworkId, masterInfo):
-        log.warning("Registered with framework ID {id}".format(id=frameworkId.value))
+        log.warning("Registered with framework ID {id}".format(
+            id=frameworkId.value))
 
     def resourceOffers(self, driver, offers):
         if self.driver is None:
             self.driver = driver
 
-        for offer in offers:
-            if self.task_queue.empty():
-                log.info("Declining offer {id} because there are no more tasks to launch.".format(id=offer.id.value))
+        if self.task_queue.empty():
+            for offer in offers:
+                log.info("Declining offer {id} because there are no more tasks to launch.".format(
+                    id=offer.id.value))
                 driver.declineOffer(offer.id, self.offer_decline_filter)
-                continue
 
+            driver.suppressOffers()
+            self.are_offers_suppressed = True
+            log.info(
+                'Supressing offers because we dont have any more tasks to run.')
+            return
+
+        for offer in offers:
             if offer.slave_id.value in self.blacklisted_slaves:
                 log.critical("Ignoring offer {offer_id} from blacklisted slave {slave_name}".format(
-                        offer_id=offer.id.value,
-                        slave_name=offer.slave_id.value
-                    )
+                    offer_id=offer.id.value,
+                    slave_name=offer.slave_id.value
+                )
                 )
                 driver.declineOffer(offer.id, self.offer_decline_filter)
                 continue
 
             if not self.offer_matches_pool(offer):
                 log.info("Declining offer {id} because it is not for pool {pool}.".format(
-                        id=offer.id.value,
-                        pool=self.pool
-                    )
+                    id=offer.id.value,
+                    pool=self.pool
+                )
                 )
                 driver.declineOffer(offer.id, self.offer_decline_filter)
                 continue
@@ -311,51 +335,56 @@ class ExecutionFramework(mesos.interface.Scheduler):
             tasks_to_launch = self.get_tasks_to_launch(offer)
 
             if len(tasks_to_launch) == 0:
-                log.info("Declining offer {id} because it does not match our requirements.".format(id=offer.id.value))
+                log.info("Declining offer {id} because it does not match our requirements.".format(
+                    id=offer.id.value))
                 driver.declineOffer(offer.id, self.offer_decline_filter)
                 continue
 
             log.info("Launching {number} new docker task(s) using offer {id} on slave {slave}".format(
-                    number=len(tasks_to_launch),
-                    id=offer.id.value,
-                    slave=offer.slave_id.value
-                )
+                number=len(tasks_to_launch),
+                id=offer.id.value,
+                slave=offer.slave_id.value
+            )
             )
             driver.launchTasks(offer.id, tasks_to_launch)
 
             for task in tasks_to_launch:
-                self.tasks_launched[task.task_id.value] = time.time()
-                self.task_to_slave_id_mappings[task.task_id.value] = task.slave_id.value
+                self.task_metadata[task.task_id.value]['retries'] += 1
+                self.task_metadata[task.task_id.value]['time_launched'] = time.time(
+                )
+                self.task_metadata[task.task_id.value]['task_state'] = 'launched'
 
     def statusUpdate(self, driver, update):
+        task_id = update.task_id.value
         log.info("Task update {update} received for task {task}".format(
-                update=mesos_pb2.TaskState.Name(update.state),
-                task=update.task_id.value
-            )
+            update=mesos_pb2.TaskState.Name(update.state),
+            task=task_id
+        )
         )
 
         if update.state == mesos_pb2.TASK_RUNNING:
-            self.tasks_launched.pop(update.task_id.value, None)
-            self.tasks_inflight[update.task_id.value] = 1
+            self.task_metadata[task_id]['task_state'] = 'in-flight'
 
         if update.state == mesos_pb2.TASK_FINISHED:
-            self.tasks_inflight.pop(update.task_id.value, None)
             self.task_update_queue.put(self.translator(update))
+            self.task_metadata.pop(task_id, None)
 
         if update.state in (
-                mesos_pb2.TASK_LOST,
-                mesos_pb2.TASK_KILLED,
-                mesos_pb2.TASK_FAILED,
-                mesos_pb2.TASK_ERROR
-            ):
-            if update.task_id.value in self.tasks_launched:
-                # Garbage collection thread will take care of this case.
-                pass
-            elif self.tasks_inflight[update.task_id.value] < self.retries:
-                self.tasks_inflight.pop(update.task_id.value, None)
-            else:
-                self.tasks_inflight[update.task_id.value] += 1
+            mesos_pb2.TASK_LOST,
+            mesos_pb2.TASK_KILLED,
+            mesos_pb2.TASK_FAILED,
+            mesos_pb2.TASK_ERROR
+        ):
+            if self.task_metadata[task_id]['retries'] >= self.task_retries:
+                log.info(
+                    'All the retries for task {task} are done.'.format(task=task_id))
                 self.task_update_queue.put(self.translator(update))
+                self.task_metadata.pop(task_id, None)
+            else:
+                log.info('Re-enqueuing task {task_id}'.format(task_id=task_id))
+                self.task_queue.put(self.task_metadata[task_id]['task_config'])
+                self.task_metadata[task_id]['task_state'] = 're-enqueued'
 
-        # We have to do this because we are not using implicit acknowledgements.
+        # We have to do this because we are not using implicit
+        # acknowledgements.
         driver.acknowledgeStatusUpdate(update)
