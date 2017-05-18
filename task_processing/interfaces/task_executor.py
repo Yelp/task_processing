@@ -1,8 +1,13 @@
 import abc
 import uuid
-from pyrsistent import PRecord, PVector, field, v, pvector
 
 import six
+from pyrsistent import field
+from pyrsistent import PRecord
+from pyrsistent import PVector
+from pyrsistent import pvector
+from pyrsistent import v
+
 
 class TaskConfig(PRecord):
     uuid = field(type=uuid.UUID, initial=uuid.uuid4)
@@ -25,7 +30,7 @@ class TaskConfig(PRecord):
     # TODO: containerization + containerization_args ?
     docker_parameters = field(type=PVector, initial=v(), factory=pvector)
 
-    def task_id():
+    def task_id(self):
         return "{}.{}".format(self.name, str(self.uuid))
 
 
