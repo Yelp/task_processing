@@ -1,12 +1,10 @@
 import logging
 import threading
 import time
-from threading import Timer
 
 import mesos.interface
 import mesos.native
 from mesos.interface import mesos_pb2
-from paasta_tools.utils import paasta_print
 
 from task_processing.plugins.mesos.translator import mesos_status_to_event
 
@@ -15,20 +13,6 @@ try:
 except ImportError:
     from queue import Queue
 
-MESOS_TASK_SPACER = '.'
-
-# Bring these into local scope for shorter lines of code.
-TASK_STAGING = mesos_pb2.TASK_STAGING
-TASK_STARTING = mesos_pb2.TASK_STARTING
-TASK_RUNNING = mesos_pb2.TASK_RUNNING
-
-TASK_FINISHED = mesos_pb2.TASK_FINISHED
-TASK_FAILED = mesos_pb2.TASK_FAILED
-TASK_KILLED = mesos_pb2.TASK_KILLED
-TASK_LOST = mesos_pb2.TASK_LOST
-TASK_ERROR = mesos_pb2.TASK_ERROR
-
-LIVE_TASK_STATES = (TASK_STAGING, TASK_STARTING, TASK_RUNNING)
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
 LEVEL = logging.DEBUG
@@ -36,317 +20,112 @@ logging.basicConfig(format=FORMAT, level=LEVEL)
 log = logging.getLogger(__name__)
 
 
-class ConstraintFailAllTasksError(Exception):
-    pass
-
-
-class MesosTaskParameters(object):
-    def __init__(
-        self,
-        health=None,
-        mesos_task_state=None,
-        is_draining=False,
-        is_healthy=False,
-        staging_timer=None,
-        offer=None
-    ):
-        self.health = health
-        self.mesos_task_state = mesos_task_state
-
-        self.is_draining = is_draining
-        self.is_healthy = is_healthy
-        self.offer = offer
-        self.marked_for_gc = False
-        self.staging_timer = staging_timer
+# TODO: Move this to utils
+def start_new_thread(func):
+    t = threading.Thread(target=func, args=())
+    t.start()
 
 
 class ExecutionFramework(mesos.interface.Scheduler):
     def __init__(
         self,
         name,
-        staging_timeout,
-        reconcile_backoff=1,
-        reconcile_start_time=float('inf'),
-        dry_run=False,
+        task_staging_timeout_s=240,
+        pool=None,
+        max_task_queue_size=1000,
         translator=mesos_status_to_event,
+        slave_blacklist_timeout_s=900,
+        offer_backoff=240,
+        task_retries=2,
     ):
-        self.translator = translator
-        self.queue = Queue(1000)
         self.name = name
-        self.tasks_with_flags = {}
-        self.constraint_state = {}
-        self.constraint_state_lock = threading.Lock()
-        self.frozen = False
-        self.framework_info = self.build_framework_info()
-        self.tasks_waiting = Queue(1000)
-        self.dry_run = dry_run
-
-        # don't accept resources until we reconcile.
-        self.reconcile_start_time = reconcile_start_time
-
-        # wait this long after starting a reconcile before accepting offers.
-        self.reconcile_backoff = 1
-
         # wait this long for a task to launch.
-        self.staging_timeout = staging_timeout
+        self.task_staging_timeout_s = task_staging_timeout_s
+        self.framework_info = self.build_framework_info()
+        self.pool = pool
+        self.translator = translator
+        self.slave_blacklist_timeout_s = slave_blacklist_timeout_s
+        self.offer_backoff = offer_backoff
+        self.task_retries = task_retries
 
-        # Gets set when registered() is called
-        self.framework_id = None
+        self.task_queue = Queue(max_task_queue_size)
+        self.task_update_queue = Queue(max_task_queue_size)
+        self.driver = None
+        self.are_offers_suppressed = False
 
-        self.blacklisted_slaves = set()
-        self.blacklisted_slaves_lock = threading.Lock()
-        self.blacklist_timeout = 10
+        self.offer_decline_filter = self.build_decline_offer_filter()
+        # TODO: These should be thread safe
+        self.blacklisted_slaves = {}
+        self.task_metadata = {}
 
-    def shutdown(self, driver):
-        # TODO: this is naive, as it does nothing to stop on-going calls
-        #       to statusUpdate or resourceOffers.
-        paasta_print(
-            'Freezing the scheduler. Further status updates and resource '
-            'offers are ignored.'
-        )
-        self.frozen = True
-        paasta_print("Killing any remaining live tasks.")
-        for task, parameters in self.tasks_with_flags.items():
-            if parameters.mesos_task_state in LIVE_TASK_STATES:
-                self.kill_task(driver, task)
+        start_new_thread(self.kill_tasks_stuck_in_staging)
+        start_new_thread(self.unblacklist_slaves)
 
-    def need_to_stop(self):
-        return False
-
-    def launch_tasks_for_offers(self, driver, offers):
-        """For each offer tries to launch all tasks that can fit in there.
-        Declines offer if no fitting tasks found."""
-        launched_tasks = []
-
-        for offer in offers:
-            with self.constraint_state_lock:
-                try:
-                    if self.dry_run:
-                        tasks, new_state = self.tasks_and_state_for_offer(
-                            driver, offer, self.constraint_state)
-                        tasks, _ = self.tasks_and_state_for_offer(
-                            driver, offer, self.constraint_state)
-                        print("Would have launched: ", tasks)
-                        self.driver.stop()
-                    else:
-                        tasks, new_state = self.tasks_and_state_for_offer(
-                            driver=driver,
-                            offer=offer,
-                            state=self.constraint_state
-                        )
-                        if tasks is not None and len(tasks) > 0:
-                            operation = mesos_pb2.Offer.Operation()
-                            operation.type = mesos_pb2.Offer.Operation.LAUNCH
-                            operation.launch.task_infos.extend(tasks)
-                            driver.acceptOffers([offer.id], [operation])
-
-                            for task in tasks:
-                                staging_timer = self.staging_timer_for_task(
-                                    self.staging_timeout,
-                                    driver,
-                                    task.task_id.value
-                                )
-                                self.tasks_with_flags.setdefault(
-                                    task.task_id.value,
-                                    MesosTaskParameters(
-                                        health=None,
-                                        mesos_task_state=TASK_STAGING,
-                                        offer=offer,
-                                        staging_timer=staging_timer,
-                                    )
-                                )
-                                staging_timer.start()
-                            launched_tasks.extend(tasks)
-                            self.constraint_state = new_state
-                        else:
-                            driver.declineOffer(offer.id)
-                except ConstraintFailAllTasksError:
-                    paasta_print(
-                        'Offer failed constraints for every task, '
-                        'rejecting 60s'
+    def kill_tasks_stuck_in_staging(self):
+        while True:
+            time_now = time.time()
+            for task_id in self.task_metadata.keys():
+                if time_now > (
+                    self.task_metadata[task_id]['time_launched'] +
+                    self.task_staging_timeout_s
+                ):
+                    log.warning('Killing stuck task {id}'.format(id=task_id))
+                    self.kill_task(task_id)
+                    self.blacklist_slave(
+                        self.task_metadata[task_id]['slave_id']
                     )
-                    filters = mesos_pb2.Filters()
-                    filters.refuse_seconds = 60
-                    driver.declineOffer(offer.id, filters)
-        return launched_tasks
-
-    def task_fits(self, offer):
-        """Checks whether the offer is big enough to fit the tasks"""
-        needed_resources = {
-            "cpus": self.service_config.get_cpus(),
-            "mem": self.service_config.get_mem(),
-            "disk": self.service_config.get_disk(),
-        }
-        for resource in offer.resources:
-            try:
-                if resource.scalar.value < needed_resources[resource.name]:
-                    return False
-            except KeyError:
-                pass
-
-        return True
-
-    def get_new_tasks(self, name, tasks):
-        def task_state(tid):
-            return self.tasks_with_flags[tid].mesos_task_state
-
-        return set(filter(
-            lambda tid:
-                self.is_task_new(name, tid) and
-                task_state(tid) in LIVE_TASK_STATES,
-            tasks))
-
-    def get_old_tasks(self, name, tasks):
-        def task_state(tid):
-            return self.tasks_with_flags[tid].mesos_task_state
-
-        return set(filter(
-            lambda tid:
-                not(self.is_task_new(name, tid)) and
-                task_state(tid) in LIVE_TASK_STATES,
-            tasks))
-
-    def is_task_new(self, name, tid):
-        return tid.startswith("%s." % name)
-
-    def log_and_kill(self, driver, task_id):
-        log.critical(
-            'Task stuck launching for %ss, assuming to have failed. '
-            'Killing task.' % self.staging_timeout
-        )
-
-        lost_state = mesos_pb2.TaskStatus()
-        lost_state.task_id.value = task_id
-        lost_state.state = TASK_LOST
-        lost_state.data = 'startup timer expired'.encode('ascii', 'ignore')
-        self.statusUpdate(driver, lost_state)
-
-        self.blacklist_slave(
-            self.tasks_with_flags[task_id].offer.slave_id.value)
-        self.kill_task(driver, task_id)
-
-    def staging_timer_for_task(self, timeout_value, driver, task_id):
-        return Timer(timeout_value, lambda: self.log_and_kill(driver, task_id))
-
-    def tasks_and_state_for_offer(self, driver, offer, state):
-        """Returns collection of tasks that can fit inside an offer."""
-        tasks = []
-        offerCpus = 0
-        offerMem = 0
-        offerPorts = []
-        for resource in offer.resources:
-            if resource.name == "cpus":
-                offerCpus += resource.scalar.value
-            elif resource.name == "mem":
-                offerMem += resource.scalar.value
-            elif resource.name == "ports":
-                for rg in resource.ranges.range:
-                    # I believe mesos protobuf ranges are inclusive, but
-                    # range() is exclusive
-                    offerPorts += range(rg.begin, rg.end + 1)
-        remainingCpus = offerCpus
-        remainingMem = offerMem
-        remainingPorts = set(offerPorts)
-
-        # don't mutate existing state
-        # new_constraint_state = copy.deepcopy(state)
-        # total = 0
-        # failed_constraints = 0
-        while not self.tasks_waiting.empty():
-            task_config = self.tasks_waiting.get()
-            mesos_task = self.create_new_docker_task(offer, task_config)
-            mesos_task.slave_id.value = offer.slave_id.value
-
-            # total += 1
-
-            if not(remainingCpus >= task_config.cpus and
-                   remainingMem >= task_config.mem and
-                   self.offer_matches_pool(offer) and
-                   len(remainingPorts) >= 1):
-                # re-queue the config we've just pulled
-                self.tasks_waiting.put(task_config)
-                break
-
-            # if not(check_offer_constraints(offer, task.constraints,
-                # new_constraint_state)):
-                # failed_constraints += 1
-                # break
-
-            # task_port = random.choice(list(remainingPorts))
-
-            # t.container.docker.port_mappings[0].host_port = task_port
-            # for resource in t.resources:
-            # if resource.name == "ports":
-            # resource.ranges.range[0].begin = task_port
-            # resource.ranges.range[0].end = task_port
-
-            tasks.append(mesos_task)
-
-            remainingCpus -= task_config.cpus
-            remainingMem -= task_config.mem
-            # remainingPorts -= {task_port}
-
-            # update_constraint_state(
-            #    offer, self.constraints, new_constraint_state)
-
-        # raise constraint error but only if no other tasks fit/fail the offer
-        # if total > 0 and failed_constraints == total:
-        #     raise ConstraintFailAllTasksError
-
-        return tasks, state
+            time.sleep(10)
 
     def offer_matches_pool(self, offer):
-        # for attribute in offer.attributes:
-            # if attribute.name == "pool":
-                # return attribute.text.value == self.service_config.get_pool()
-        # # we didn't find a pool attribute on this slave, so assume it's
-        # # not in our pool.
-        # return False
-        return True
+        if self.pool is None:
+            # If pool is not specified, then we can accept offer from any agent
+            return True
+        for attribute in offer.attributes:
+            if attribute.name == "pool":
+                return attribute.text.value == self.pool
+        return False
 
-    def within_reconcile_backoff(self):
-        return time.time() - self.reconcile_backoff < self.reconcile_start_time
-
-    def kill_task(self, driver, task):
+    def kill_task(self, task_id):
         tid = mesos_pb2.TaskID()
-        tid.value = task
-        driver.killTask(tid)
+        tid.value = task_id
+        self.driver.killTask(tid)
 
     def blacklist_slave(self, slave_id):
         if slave_id in self.blacklisted_slaves:
-            return
+            # Punish this slave for more time.
+            self.blacklisted_slaves.pop(slave_id, None)
 
-        log.debug("Blacklisting slave: %s" % slave_id)
-        with self.blacklisted_slaves_lock:
-            self.blacklisted_slaves.add(slave_id)
-            Timer(self.blacklist_timeout,
-                  lambda: self.unblacklist_slave(slave_id)).start()
+        log.info('Blacklisting slave: {id} for {secs} seconds.'.format(
+            id=slave_id,
+            secs=self.slave_blacklist_timeout_s
+        ))
+        self.blacklisted_slaves[slave_id] = time.time()
 
-    def unblacklist_slave(self, slave_id):
-        if slave_id not in self.blacklisted_slaves:
-            return
+    def unblacklist_slaves(self):
+        while True:
+            time_now = time.time()
+            for slave_id in self.blacklisted_slaves.keys():
+                if time_now < (
+                    self.blacklisted_slaves[slave_id] +
+                    self.slave_blacklist_timeout_s
+                ):
+                    log.info('Unblacklisting slave: {id}'.format(id=slave_id))
+                    self.blacklisted_slaves.pop(slave_id, None)
+            time.sleep(10)
 
-        log.debug("Unblacklisting slave: %s" % slave_id)
-        with self.blacklisted_slaves_lock:
-            self.blacklisted_slaves.discard(slave_id)
-
-    def enqueue(self, task_info):
-        self.tasks_waiting.put(task_info)
-
-    def wait_for(self, task_id):
-        result = Queue()
-        self.on_success(task_id, lambda: result.put(0))
-        self.on_failure(task_id, lambda: result.put(1))
-        return result.get()
-
-    def on_success(self, task_id, callback):
-        pass
-
-    def on_failure(self, task_id, callback):
-        pass
-
-    def on_status(self, task_id, func):
-        pass
+    def enqueue_task(self, task):
+        # TODO: Add a wrapper for this task
+        self.task_metadata[task.task_id] = {
+            'slave_id': None,
+            'retries': 0,
+            'task_config': task,
+            'task_state': 'enqueued'
+        }
+        self.task_queue.put(task)
+        if self.are_offers_suppressed:
+            self.driver.reviveOffers()
+            self.are_offers_suppressed = False
+            log.info('Reviving offers because we have tasks to run.')
 
     def build_framework_info(self):
         framework = mesos_pb2.FrameworkInfo()
@@ -374,37 +153,68 @@ class ExecutionFramework(mesos.interface.Scheduler):
                 break
         return ports
 
-    def is_offer_valid(self, offer, task_config):
-        offer_cpus = 0
-        offer_mem = 0
-        offer_disk = 0
+    def get_tasks_to_launch(self, offer):
+        tasks_to_launch = []
+        remaining_cpus = 0
+        remaining_mem = 0
+        remaining_disk = 0
+        available_ports = []
         for resource in offer.resources:
             if resource.name == "cpus":
-                offer_cpus += resource.scalar.value
+                remaining_cpus += resource.scalar.value
             elif resource.name == "mem":
-                offer_mem += resource.scalar.value
+                remaining_mem += resource.scalar.value
             elif resource.name == "disk":
-                offer_disk += resource.scalar.value
+                remaining_disk += resource.scalar.value
             elif resource.name == "ports":
-                # TODO: Validate if the ports available > ports require
-                self.get_available_ports(resource)
+                # TODO: Validate if the ports available > ports required
+                available_ports = self.get_available_ports(resource)
 
         log.info(
-            "Received offer {id} with cpus: {cpu} and mem: {mem}".format(
+            "Received offer {id} with cpus: {cpu}, mem: {mem}, \
+            disk: {disk}".format(
                 id=offer.id.value,
-                cpu=offer_cpus,
-                mem=offer_mem
+                cpu=remaining_cpus,
+                mem=remaining_mem,
+                disk=remaining_disk
             )
         )
 
-        if ((offer_cpus >= task_config.cpus and
-             offer_mem >= task_config.mem and
-             offer_disk >= task_config.disk)):
-            return True
+        tasks_to_put_back_in_queue = []
+        # Get all the tasks of the queue
+        while not self.task_queue.empty():
+            task = self.task_queue.get()
 
-        return False
+            if ((remaining_cpus >= task.cpus and
+                 remaining_mem >= task.mem and
+                 remaining_disk >= task.disk)):
+                # This offer is sufficient for us to launch task
+                tasks_to_launch.append(
+                    self.create_new_docker_task(
+                        offer,
+                        task,
+                        available_ports
+                    )
+                )
 
-    def create_new_docker_task(self, offer, task_config):
+                # Deduct the resources taken by this task from the total
+                # available resources.
+                remaining_cpus -= task.cpus
+                remaining_mem -= task.mem
+                remaining_disk -= task.disk
+            else:
+                # This offer is insufficient for this task. We need to put it
+                # back in the queue
+                tasks_to_put_back_in_queue.append(task)
+
+        # TODO: This needs to be thread safe. We can write a wrapper over queue
+        # with a mutux.
+        for task in tasks_to_put_back_in_queue:
+            self.task_queue.put(task)
+
+        return tasks_to_launch
+
+    def create_new_docker_task(self, offer, task_config, available_ports):
         task = mesos_pb2.TaskInfo()
 
         container = mesos_pb2.ContainerInfo()
@@ -416,7 +226,10 @@ class ExecutionFramework(mesos.interface.Scheduler):
         task.command.MergeFrom(command)
         task.task_id.value = task_config.task_id
         task.slave_id.value = offer.slave_id.value
-        task.name = task_config.name
+        task.name = 'executor-{id}'.format(id=task_config.task_id)
+
+        self.task_metadata[task_config.task_id]['slave_id'] = \
+            task.slave_id.value
 
         # CPUs
         cpus = task.resources.add()
@@ -454,25 +267,20 @@ class ExecutionFramework(mesos.interface.Scheduler):
         docker.network = 2  # mesos_pb2.ContainerInfo.DockerInfo.Network.BRIDGE
         docker.force_pull_image = True
 
-        # TODO: who wants to implement support for ports?
+        # Handle the case of multiple port allocations
+        port_to_use = available_ports[0]
+        available_ports[:] = available_ports[1:]
 
-        # available_ports = []
-        # for resource in offer.resources:
-        #     if resource.name == "ports":
-        #         available_ports = self.get_available_ports(resource)
+        mesos_ports = task.resources.add()
+        mesos_ports.name = "ports"
+        mesos_ports.type = mesos_pb2.Value.RANGES
+        port_range = mesos_ports.ranges.range.add()
 
-        # port_to_use = available_ports[0]
-
-        # mesos_ports = task.resources.add()
-        # mesos_ports.name = "ports"
-        # mesos_ports.type = mesos_pb2.Value.RANGES
-        # port_range = mesos_ports.ranges.range.add()
-
-        # port_range.begin = port_to_use
-        # port_range.end = port_to_use
-        # docker_port = docker.port_mappings.add()
-        # docker_port.host_port = port_to_use
-        # docker_port.container_port = 8888
+        port_range.begin = port_to_use
+        port_range.end = port_to_use
+        docker_port = docker.port_mappings.add()
+        docker_port.host_port = port_to_use
+        docker_port.container_port = 8888
 
         # Set docker info in container.docker
         container.docker.MergeFrom(docker)
@@ -481,110 +289,119 @@ class ExecutionFramework(mesos.interface.Scheduler):
 
         return task
 
-    def stop(self):
-        pass
-
     ####################################################################
     #                   Mesos driver hooks go here                     #
     ####################################################################
 
     def slaveLost(self, drive, slaveId):
-        log.error("Slave lost: {id}".format(id=str(slaveId)))
+        log.warning("Slave lost: {id}".format(id=str(slaveId)))
 
     def registered(self, driver, frameworkId, masterInfo):
-        self.framework_id = frameworkId.value
-        paasta_print("Registered with framework ID %s" % frameworkId.value)
+        log.info("Registered with framework ID {id}".format(
+            id=frameworkId.value
+        ))
 
-        self.reconcile_start_time = time.time()
-        driver.reconcileTasks([])
+    def reregistered(self, driver, frameworkId, masterInfo):
+        log.warning("Registered with framework ID {id}".format(
+            id=frameworkId.value
+        ))
 
     def resourceOffers(self, driver, offers):
-        if self.frozen:
+        if self.driver is None:
+            self.driver = driver
+
+        if self.task_queue.empty():
+            for offer in offers:
+                log.info("Declining offer {id} because there are no more \
+                    tasks to launch.".format(
+                    id=offer.id.value
+                ))
+                driver.declineOffer(offer.id, self.offer_decline_filter)
+
+            driver.suppressOffers()
+            self.are_offers_suppressed = True
+            log.info(
+                'Supressing offers because we dont have any more tasks to run.'
+            )
             return
 
-        if self.within_reconcile_backoff():
-            paasta_print(
-                'Declining all offers since we started reconciliation '
-                'too recently'
-            )
-            for offer in offers:
-                driver.declineOffer(offer.id)
-        else:
-            for idx, offer in enumerate(offers):
-                if offer.slave_id.value in self.blacklisted_slaves:
-                    log.critical(
-                        'Ignoring offer {0} from blacklisted slave {1}'.format(
-                            offer.id.value, offer.slave_id.value
-                        )
-                    )
-                    driver.declineOffer(offer.id)
-                    del offers[idx]
+        for offer in offers:
+            if offer.slave_id.value in self.blacklisted_slaves:
+                log.critical("Ignoring offer {offer_id} from blacklisted \
+                    slave {slave_name}".format(
+                    offer_id=offer.id.value,
+                    slave_name=offer.slave_id.value
+                ))
+                driver.declineOffer(offer.id, self.offer_decline_filter)
+                continue
 
-            if len(offers) == 0:
-                return
+            if not self.offer_matches_pool(offer):
+                log.info("Declining offer {id} because it is not for pool \
+                    {pool}.".format(
+                    id=offer.id.value,
+                    pool=self.pool
+                ))
+                driver.declineOffer(offer.id, self.offer_decline_filter)
+                continue
 
-            self.launch_tasks_for_offers(driver, offers)
+            tasks_to_launch = self.get_tasks_to_launch(offer)
+
+            if len(tasks_to_launch) == 0:
+                log.info("Declining offer {id} because it does not match our \
+                    requirements.".format(
+                    id=offer.id.value
+                ))
+                driver.declineOffer(offer.id, self.offer_decline_filter)
+                continue
+
+            log.info("Launching {number} new docker task(s) using offer {id} \
+                on slave {slave}".format(
+                number=len(tasks_to_launch),
+                id=offer.id.value,
+                slave=offer.slave_id.value
+            ))
+            driver.launchTasks(offer.id, tasks_to_launch)
+
+            for task in tasks_to_launch:
+                self.task_metadata[task.task_id.value]['retries'] += 1
+                self.task_metadata[task.task_id.value]['time_launched'] \
+                    = time.time()
+                self.task_metadata[task.task_id.value]['task_state'] \
+                    = 'launched'
 
     def statusUpdate(self, driver, update):
-        if self.queue:
-            self.queue.put(self.translator(update))
-        if self.frozen:
-            return
-
-        # update tasks
         task_id = update.task_id.value
-        state = update.state
-        task_params = self.tasks_with_flags.setdefault(
-            task_id, MesosTaskParameters(health=None))
-        task_params.mesos_task_state = state
+        log.info("Task update {update} received for task {task}".format(
+            update=mesos_pb2.TaskState.Name(update.state),
+            task=task_id
+        ))
 
-        for task, params in list(self.tasks_with_flags.items()):
-            if params.marked_for_gc:
-                self.tasks_with_flags.pop(task)
+        if update.state == mesos_pb2.TASK_RUNNING:
+            self.task_metadata[task_id]['task_state'] = 'in-flight'
 
-        if task_params.mesos_task_state is not TASK_STAGING:
-            if self.tasks_with_flags[task_id].staging_timer:
-                self.tasks_with_flags[task_id].staging_timer.cancel()
-                self.tasks_with_flags[task_id].staging_timer = None
+        if update.state == mesos_pb2.TASK_FINISHED:
+            self.task_update_queue.put(self.translator(update))
+            self.task_metadata.pop(task_id, None)
 
-        # if task_params.mesos_task_state not in LIVE_TASK_STATES:
-            # task_params.marked_for_gc = True
-            # with self.constraint_state_lock:
-                # update_constraint_state(task_params.offer, self.constraints,
-                # self.constraint_state, step=-1)
+        if update.state in (
+            mesos_pb2.TASK_LOST,
+            mesos_pb2.TASK_KILLED,
+            mesos_pb2.TASK_FAILED,
+            mesos_pb2.TASK_ERROR
+        ):
+            if self.task_metadata[task_id]['retries'] >= self.task_retries:
+                log.info(
+                    'All the retries for task {task} are done.'.format(
+                        task=task_id
+                    )
+                )
+                self.task_update_queue.put(self.translator(update))
+                self.task_metadata.pop(task_id, None)
+            else:
+                log.info('Re-enqueuing task {task_id}'.format(task_id=task_id))
+                self.task_queue.put(self.task_metadata[task_id]['task_config'])
+                self.task_metadata[task_id]['task_state'] = 're-enqueued'
 
+        # We have to do this because we are not using implicit
+        # acknowledgements.
         driver.acknowledgeStatusUpdate(update)
-
-
-def mesos_task_for_task_config(task_config):
-    task = mesos_pb2.TaskInfo()
-    task.container.type = mesos_pb2.ContainerInfo.MESOS
-    task.container.docker.image = task_config.image
-
-    for param in task_config.docker_parameters:
-        p = task.container.docker.parameters.add()
-        p.key = param['key']
-        p.value = param['value']
-
-    # parameters.extend(task_config.ulimit)
-    # parameters.extend(task_config.cap_add)
-
-    for volume in task_config.volumes:
-        v = task.container.volumes.add()
-        v.mode = getattr(mesos_pb2.Volume, volume['mode'].upper())
-        v.container_path = volume['containerPath']
-        v.host_path = volume['hostPath']
-
-    task.command.value = task_config.cmd
-    cpus = task.resources.add()
-    cpus.name = "cpus"
-    cpus.type = mesos_pb2.Value.SCALAR
-    cpus.scalar.value = task_config.cpus
-    mem = task.resources.add()
-    mem.name = "mem"
-    mem.type = mesos_pb2.Value.SCALAR
-    mem.scalar.value = task_config.mem
-
-    task.task_id.value = task_config.task_id
-    task.name = task_config.name
-    return task
