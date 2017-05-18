@@ -20,10 +20,16 @@ logging.basicConfig(format=FORMAT, level=LEVEL)
 log = logging.getLogger(__name__)
 
 
+# TODO: Move this to utils
+def start_new_thread(func):
+    t = threading.Thread(target=func, args=())
+    t.start()
+
+
 class ExecutionFramework(mesos.interface.Scheduler):
     def __init__(
         self,
-        name="remote_run",
+        name,
         task_staging_timeout_s=240,
         pool=None,
         max_task_queue_size=1000,
@@ -52,13 +58,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
         self.blacklisted_slaves = {}
         self.task_metadata = {}
 
-        self.start_new_thread(self.kill_tasks_stuck_in_staging)
-        self.start_new_thread(self.unblacklist_slaves)
-
-    def start_new_thread(self, func):
-        t = threading.Thread(target=func, args=())
-        # t.set_daemon = True
-        t.start()
+        start_new_thread(self.kill_tasks_stuck_in_staging)
+        start_new_thread(self.unblacklist_slaves)
 
     def kill_tasks_stuck_in_staging(self):
         while True:
@@ -71,7 +72,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
                     log.warning('Killing stuck task {id}'.format(id=task_id))
                     self.kill_task(task_id)
                     self.blacklist_slave(
-                        self.task_metadata[task_id]['slave_id'])
+                        self.task_metadata[task_id]['slave_id']
+                    )
             time.sleep(10)
 
     def offer_matches_pool(self, offer):
@@ -96,8 +98,7 @@ class ExecutionFramework(mesos.interface.Scheduler):
         log.info('Blacklisting slave: {id} for {secs} seconds.'.format(
             id=slave_id,
             secs=self.slave_blacklist_timeout_s
-        )
-        )
+        ))
         self.blacklisted_slaves[slave_id] = time.time()
 
     def unblacklist_slaves(self):
@@ -170,7 +171,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
                 available_ports = self.get_available_ports(resource)
 
         log.info(
-            "Received offer {id} with cpus: {cpu}, mem: {mem}, disk: {disk}".format(
+            "Received offer {id} with cpus: {cpu}, mem: {mem}, \
+            disk: {disk}".format(
                 id=offer.id.value,
                 cpu=remaining_cpus,
                 mem=remaining_mem,
@@ -187,8 +189,13 @@ class ExecutionFramework(mesos.interface.Scheduler):
                  remaining_mem >= task.mem and
                  remaining_disk >= task.disk)):
                 # This offer is sufficient for us to launch task
-                tasks_to_launch.append(self.create_new_docker_task(
-                    offer, task, available_ports))
+                tasks_to_launch.append(
+                    self.create_new_docker_task(
+                        offer,
+                        task,
+                        available_ports
+                    )
+                )
 
                 # Deduct the resources taken by this task from the total
                 # available resources.
@@ -291,11 +298,13 @@ class ExecutionFramework(mesos.interface.Scheduler):
 
     def registered(self, driver, frameworkId, masterInfo):
         log.info("Registered with framework ID {id}".format(
-            id=frameworkId.value))
+            id=frameworkId.value
+        ))
 
     def reregistered(self, driver, frameworkId, masterInfo):
         log.warning("Registered with framework ID {id}".format(
-            id=frameworkId.value))
+            id=frameworkId.value
+        ))
 
     def resourceOffers(self, driver, offers):
         if self.driver is None:
@@ -303,64 +312,69 @@ class ExecutionFramework(mesos.interface.Scheduler):
 
         if self.task_queue.empty():
             for offer in offers:
-                log.info("Declining offer {id} because there are no more tasks to launch.".format(
-                    id=offer.id.value))
+                log.info("Declining offer {id} because there are no more \
+                    tasks to launch.".format(
+                    id=offer.id.value
+                ))
                 driver.declineOffer(offer.id, self.offer_decline_filter)
 
             driver.suppressOffers()
             self.are_offers_suppressed = True
             log.info(
-                'Supressing offers because we dont have any more tasks to run.')
+                'Supressing offers because we dont have any more tasks to run.'
+            )
             return
 
         for offer in offers:
             if offer.slave_id.value in self.blacklisted_slaves:
-                log.critical("Ignoring offer {offer_id} from blacklisted slave {slave_name}".format(
+                log.critical("Ignoring offer {offer_id} from blacklisted \
+                    slave {slave_name}".format(
                     offer_id=offer.id.value,
                     slave_name=offer.slave_id.value
-                )
-                )
+                ))
                 driver.declineOffer(offer.id, self.offer_decline_filter)
                 continue
 
             if not self.offer_matches_pool(offer):
-                log.info("Declining offer {id} because it is not for pool {pool}.".format(
+                log.info("Declining offer {id} because it is not for pool \
+                    {pool}.".format(
                     id=offer.id.value,
                     pool=self.pool
-                )
-                )
+                ))
                 driver.declineOffer(offer.id, self.offer_decline_filter)
                 continue
 
             tasks_to_launch = self.get_tasks_to_launch(offer)
 
             if len(tasks_to_launch) == 0:
-                log.info("Declining offer {id} because it does not match our requirements.".format(
-                    id=offer.id.value))
+                log.info("Declining offer {id} because it does not match our \
+                    requirements.".format(
+                    id=offer.id.value
+                ))
                 driver.declineOffer(offer.id, self.offer_decline_filter)
                 continue
 
-            log.info("Launching {number} new docker task(s) using offer {id} on slave {slave}".format(
+            log.info("Launching {number} new docker task(s) using offer {id} \
+                on slave {slave}".format(
                 number=len(tasks_to_launch),
                 id=offer.id.value,
                 slave=offer.slave_id.value
-            )
-            )
+            ))
             driver.launchTasks(offer.id, tasks_to_launch)
 
             for task in tasks_to_launch:
                 self.task_metadata[task.task_id.value]['retries'] += 1
-                self.task_metadata[task.task_id.value]['time_launched'] = time.time(
-                )
-                self.task_metadata[task.task_id.value]['task_state'] = 'launched'
+                self.task_metadata[task.task_id.value]['time_launched'] \
+                    = time.time()
+                self.task_metadata[task.task_id.value]['task_state'] \
+                    = 'launched'
 
     def statusUpdate(self, driver, update):
         task_id = update.task_id.value
         log.info("Task update {update} received for task {task}".format(
             update=mesos_pb2.TaskState.Name(update.state),
             task=task_id
-        )
-        )
+        ))
 
         if update.state == mesos_pb2.TASK_RUNNING:
             self.task_metadata[task_id]['task_state'] = 'in-flight'
@@ -377,7 +391,10 @@ class ExecutionFramework(mesos.interface.Scheduler):
         ):
             if self.task_metadata[task_id]['retries'] >= self.task_retries:
                 log.info(
-                    'All the retries for task {task} are done.'.format(task=task_id))
+                    'All the retries for task {task} are done.'.format(
+                        task=task_id
+                    )
+                )
                 self.task_update_queue.put(self.translator(update))
                 self.task_metadata.pop(task_id, None)
             else:
