@@ -8,7 +8,7 @@ python: 3.6
 cache: pip
 env:
   - MAKE_TARGET=test
-  - MAKE_TARGET=tox_integration
+  # - MAKE_TARGET=tox_integration
   - MAKE_TARGET=tox_coverage
   - MAKE_TARGET=tox_docs
 services:
