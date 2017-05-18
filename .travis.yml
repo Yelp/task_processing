@@ -7,10 +7,10 @@ language: python
 python: 3.6
 cache: pip
 env:
-  - TARGET="tox"
-  - TARGET="tox -e coverage"
-  - TARGET="tox -e docs"
-  - TARGET="make itest"
+  - MAKE_TARGET=test
+  # - MAKE_TARGET=tox_integration
+  # - MAKE_TARGET=tox_coverage
+  # - MAKE_TARGET=tox_docs
 services:
   - docker
 before_install:
@@ -22,6 +22,6 @@ before_install:
                    -p="$DOCKER_PASSWORD"; \
     fi
 install: pip install tox
-script: $MAKE_TARGET
+script: make $MAKE_TARGET
 matrix:
   fast_finish: true

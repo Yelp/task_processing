@@ -1,24 +1,17 @@
-.PHONY: all docs test itest
+.PHONY: all test dev_env
 
-docs: .taskproc/bin/activate
-	.taskproc/bin/tox -e docs
+TOX=".tox/dev/bin/tox"
 
-test: .taskproc/bin/activate
-	.taskproc/bin/tox
+test: dev_env
+	${TOX}
 
-itest:
-	cd tests/integration && \
-	docker-compose -f cluster/docker-compose.yaml down && \
-	docker-compose -f cluster/docker-compose.yaml pull && \
-	docker-compose -f cluster/docker-compose.yaml build && \
-	docker-compose -f cluster/docker-compose.yaml up -d zookeeper mesosmaster mesosslave && \
-	docker-compose -f cluster/docker-compose.yaml scale mesosslave=2 && \
-	docker-compose -f cluster/docker-compose.yaml run playground /src/itest.sh
+dev_env:
+	mkdir -p .tox
+	test -f .tox/dev/bin/activate || virtualenv -p python3.6 .tox/dev
+	.tox/dev/bin/pip install -U tox
 
-.taskproc/bin/activate:
-	test -d .taskproc/bin/activate || virtualenv -p python3.6 .taskproc
-	.taskproc/bin/pip install -U tox
-	touch .taskproc/bin/activate
+tox_%: dev_env
+	${TOX} -e $*
 
 clean:
 	rm -rf docs/build
