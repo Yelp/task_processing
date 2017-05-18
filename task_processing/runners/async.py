@@ -1,9 +1,11 @@
+from collections import namedtuple
 from threading import Thread
 
 from six.moves.queue import Empty
 
 from task_processing.interfaces.runner import Runner
 
+EventHandler = namedtuple('EventHandler', ['matcher_func', 'cb'])
 
 class AsyncError(Exception):
     pass
@@ -38,9 +40,9 @@ class Async(Runner):
             try:
                 event = event_queue.get(True, 10)
 
-                for (cl, fn) in self.callbacks:
-                    if isinstance(event, cl):
-                        fn(event)
+                for cb in self.callbacks:
+                    if cb.matcher_func(event):
+                        cb.cb(event)
             except Empty:
                 pass
 
