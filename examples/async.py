@@ -4,7 +4,7 @@ import os
 import time
 
 from task_processing.events.event import EventTerminal
-from task_processing.interfaces.task_executor import make_task_config
+from task_processing.interfaces.task_executor import TaskConfig
 from task_processing.plugins.mesos.mesos_executor import MesosExecutor
 from task_processing.runners.async import Async
 
@@ -31,8 +31,8 @@ def main():
     runner = Async(executor, [(EventTerminal, counter.process_event)])
 
     for _ in range(100):
-        task_config = make_task_config(image="ubuntu:14.04",
-                                       cmd="/bin/sleep 10")
+        task_config = TaskConfig(image="ubuntu:14.04",
+                                 cmd="/bin/sleep 10")
         runner.run(task_config)
 
     while True:
