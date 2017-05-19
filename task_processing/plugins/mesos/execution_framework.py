@@ -5,6 +5,8 @@ import time
 import mesos.interface
 import mesos.native
 from mesos.interface import mesos_pb2
+from pyrsistent import field
+from pyrsistent import PRecord
 from six.moves.queue import Queue
 
 from task_processing.plugins.mesos.translator import mesos_status_to_event
@@ -14,6 +16,14 @@ FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
 LEVEL = logging.DEBUG
 logging.basicConfig(format=FORMAT, level=LEVEL)
 log = logging.getLogger(__name__)
+
+
+class TaskMetadata(PRecord):
+    slave_id = field(type=str, initial=None)
+    retries = field(type=int, initial=0)
+    task_config = field(type=PRecord, mandatory=True)
+    task_state = field(type=str, initial='enqueued')
+    time_launched = field(type=time.time, mandatory=True)
 
 
 class ExecutionFramework(mesos.interface.Scheduler):
@@ -62,13 +72,13 @@ class ExecutionFramework(mesos.interface.Scheduler):
             time_now = time.time()
             for task_id in self.task_metadata.keys():
                 if time_now > (
-                    self.task_metadata[task_id]['time_launched'] +
+                    self.task_metadata[task_id].time_launched +
                     self.task_staging_timeout_s
                 ):
                     log.warning('Killing stuck task {id}'.format(id=task_id))
                     self.kill_task(task_id)
                     self.blacklist_slave(
-                        self.task_metadata[task_id]['slave_id']
+                        self.task_metadata[task_id].slave_id
                     )
             time.sleep(10)
 
@@ -112,15 +122,11 @@ class ExecutionFramework(mesos.interface.Scheduler):
                     self.blacklisted_slaves.pop(slave_id, None)
             time.sleep(10)
 
-    def enqueue_task(self, task):
-        # TODO: Add a wrapper for this task
-        self.task_metadata[task.task_id] = {
-            'slave_id': None,
-            'retries': 0,
-            'task_config': task,
-            'task_state': 'enqueued'
-        }
-        self.task_queue.put(task)
+    def enqueue_task(self, task_config):
+        self.task_metadata[task_config.task_id] = TaskMetadata(
+            task_config=task_config
+        )
+        self.task_queue.put(task_config)
         if self.are_offers_suppressed:
             self.driver.reviveOffers()
             self.are_offers_suppressed = False
@@ -227,8 +233,9 @@ class ExecutionFramework(mesos.interface.Scheduler):
         task.slave_id.value = offer.slave_id.value
         task.name = 'executor-{id}'.format(id=task_config.task_id)
 
-        self.task_metadata[task_config.task_id]['slave_id'] = \
-            task.slave_id.value
+        md = self.task_metadata[task_config.task_id]
+        self.task_metadata[task_config.task_id] = md.set(
+            slave_id=task.slave_id.value)
 
         # CPUs
         cpus = task.resources.add()
@@ -365,11 +372,12 @@ class ExecutionFramework(mesos.interface.Scheduler):
             driver.launchTasks(offer.id, tasks_to_launch)
 
             for task in tasks_to_launch:
-                self.task_metadata[task.task_id.value]['retries'] += 1
-                self.task_metadata[task.task_id.value]['time_launched'] \
-                    = time.time()
-                self.task_metadata[task.task_id.value]['task_state'] \
-                    = 'launched'
+                md = self.task_metadata[task.task_id.value]
+                self.task_metadata[task.task_id.value] = md.set(
+                    retries=md.retries + 1,
+                    time_launched=time.time(),
+                    task_state='launched'
+                )
 
     def statusUpdate(self, driver, update):
         task_id = update.task_id.value
@@ -390,7 +398,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
             mesos_pb2.TASK_FAILED,
             mesos_pb2.TASK_ERROR
         ):
-            if self.task_metadata[task_id]['retries'] >= self.task_retries:
+            md = self.task_metadata[task_id]
+            if md.retries >= self.task_retries:
                 log.info(
                     'All the retries for task {task} are done.'.format(
                         task=task_id
@@ -400,8 +409,8 @@ class ExecutionFramework(mesos.interface.Scheduler):
                 self.task_metadata.pop(task_id, None)
             else:
                 log.info('Re-enqueuing task {task_id}'.format(task_id=task_id))
-                self.task_queue.put(self.task_metadata[task_id]['task_config'])
-                self.task_metadata[task_id]['task_state'] = 're-enqueued'
+                self.task_queue.put(md.task_config)
+                self.task_metadata[task_id] = md.set(task_state='re-enqueued')
 
         # We have to do this because we are not using implicit
         # acknowledgements.
