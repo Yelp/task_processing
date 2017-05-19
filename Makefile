@@ -1,4 +1,4 @@
-.PHONY: all test dev_env
+.PHONY: all test dev_env docs
 
 TOX=".tox/dev/bin/tox"
 
@@ -12,6 +12,9 @@ dev_env:
 
 tox_%: dev_env
 	${TOX} -e $*
+
+docs: dev_env
+	${TOX} -e docs
 
 clean:
 	rm -rf docs/build
