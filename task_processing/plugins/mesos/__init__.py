@@ -1,6 +1,8 @@
 from .mesos_executor import MesosExecutor
 
 
+TASK_PROCESSING_PLUGIN = 'mesos_plugin'
+
+
 def register_plugin(registry):
-    registry.register_task_executor('mesos', MesosExecutor)
-    return 'mesos'
+    return registry.register_task_executor('mesos', MesosExecutor)
