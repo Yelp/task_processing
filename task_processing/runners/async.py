@@ -5,7 +5,8 @@ from six.moves.queue import Empty
 
 from task_processing.interfaces.runner import Runner
 
-EventHandler = namedtuple('EventHandler', ['matcher_func', 'cb'])
+EventHandler = namedtuple('EventHandler', ['predicate', 'cb'])
+
 
 class AsyncError(Exception):
     pass
@@ -41,7 +42,7 @@ class Async(Runner):
                 event = event_queue.get(True, 10)
 
                 for cb in self.callbacks:
-                    if cb.matcher_func(event):
+                    if cb.predicate(event):
                         cb.cb(event)
             except Empty:
                 pass

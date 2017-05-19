@@ -27,8 +27,13 @@ def main():
     )
 
     counter = Counter()
-    runner = Async(executor, [EventHandler(matcher_func=lambda x: x.terminal, cb=counter.process_event)])
-
+    runner = Async(
+        executor,
+        [EventHandler(
+            predicate=lambda x: x.terminal,
+            cb=counter.process_event
+        )]
+    )
 
     tasks_to_launch = 2
     for _ in range(tasks_to_launch):
