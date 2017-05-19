@@ -32,6 +32,7 @@ services:
       MESOS_PORT: 5051
       MESOS_RESOURCES: ports(*):[11000-11999]
       MESOS_WORK_DIR: /tmp/mesos
+      MESOS_LOG_DIR: /var/log/mesos
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
