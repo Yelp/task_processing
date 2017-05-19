@@ -5,25 +5,15 @@ import time
 import mesos.interface
 import mesos.native
 from mesos.interface import mesos_pb2
+from six.moves.queue import Queue
 
 from task_processing.plugins.mesos.translator import mesos_status_to_event
-
-try:
-    from Queue import Queue
-except ImportError:
-    from queue import Queue
 
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
 LEVEL = logging.DEBUG
 logging.basicConfig(format=FORMAT, level=LEVEL)
 log = logging.getLogger(__name__)
-
-
-# TODO: Move this to utils
-def start_new_thread(func):
-    t = threading.Thread(target=func, args=())
-    t.start()
 
 
 class ExecutionFramework(mesos.interface.Scheduler):
@@ -58,11 +48,17 @@ class ExecutionFramework(mesos.interface.Scheduler):
         self.blacklisted_slaves = {}
         self.task_metadata = {}
 
-        start_new_thread(self.kill_tasks_stuck_in_staging)
-        start_new_thread(self.unblacklist_slaves)
+        self.stopping = False
+        threading.Thread(
+            target=self.kill_tasks_stuck_in_staging, args=()).start()
+        threading.Thread(
+            target=self.unblacklist_slaves, args=()).start()
 
     def kill_tasks_stuck_in_staging(self):
         while True:
+            if self.stopping:
+                return
+
             time_now = time.time()
             for task_id in self.task_metadata.keys():
                 if time_now > (
@@ -103,6 +99,9 @@ class ExecutionFramework(mesos.interface.Scheduler):
 
     def unblacklist_slaves(self):
         while True:
+            if self.stopping:
+                return
+
             time_now = time.time()
             for slave_id in self.blacklisted_slaves.keys():
                 if time_now < (
@@ -208,7 +207,7 @@ class ExecutionFramework(mesos.interface.Scheduler):
                 tasks_to_put_back_in_queue.append(task)
 
         # TODO: This needs to be thread safe. We can write a wrapper over queue
-        # with a mutux.
+        # with a mutex.
         for task in tasks_to_put_back_in_queue:
             self.task_queue.put(task)
 
@@ -288,6 +287,9 @@ class ExecutionFramework(mesos.interface.Scheduler):
         task.container.MergeFrom(container)
 
         return task
+
+    def stop(self):
+        self.stopping = True
 
     ####################################################################
     #                   Mesos driver hooks go here                     #
@@ -376,13 +378,12 @@ class ExecutionFramework(mesos.interface.Scheduler):
             task=task_id
         ))
 
-        if update.state == mesos_pb2.TASK_RUNNING:
-            self.task_metadata[task_id]['task_state'] = 'in-flight'
+        self.task_update_queue.put(self.translator(update))
 
         if update.state == mesos_pb2.TASK_FINISHED:
-            self.task_update_queue.put(self.translator(update))
             self.task_metadata.pop(task_id, None)
 
+        # TODO: move retries out of the framework
         if update.state in (
             mesos_pb2.TASK_LOST,
             mesos_pb2.TASK_KILLED,
