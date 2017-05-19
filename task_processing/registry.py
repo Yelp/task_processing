@@ -73,7 +73,7 @@ class Registry(object):
         )
         self.task_executor_registry = new_registry
 
-    def executor_from_config(self, provider, provider_config):
+    def executor_from_config(self, provider, provider_config=None):
         """Called by users of TaskProcessing to obtain :class:`TaskExecutor`s
 
         :param str provider: The kind of executor the user wants to run.
@@ -86,6 +86,8 @@ class Registry(object):
                     provider, self.task_executor_registry.keys().tolist()
                 )
             )
+        if provider_config is None:
+            provider_config = dict()
 
         executor_cls = self.task_executor_registry[provider]
         return executor_cls(**provider_config)
