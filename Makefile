@@ -13,6 +13,9 @@ dev_env:
 tox_%: dev_env
 	${TOX} -e $*
 
+docs: dev_env
+	${TOX} -e docs
+
 clean:
 	rm -rf docs/build
 	find . -name '*.pyc' -delete
