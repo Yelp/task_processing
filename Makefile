@@ -1,4 +1,4 @@
-.PHONY: all test dev_env
+.PHONY: all test dev_env docs
 
 TOX=".tox/dev/bin/tox"
 
