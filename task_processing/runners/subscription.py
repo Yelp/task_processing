@@ -9,6 +9,7 @@ from task_processing.interfaces.runner import Runner
 class Subscription(Runner):
     def __init__(self, executor, queue):
         self.executor = executor
+        self.TASK_CONFIG_INTERFACE = executor.TASK_CONFIG_INTERFACE
         self.event_queue = queue
         self.stopping = False
         self.producer_t = Thread(target=self.event_producer)

@@ -19,6 +19,7 @@ class Async(Runner):
 
         self.callbacks = callbacks
         self.executor = executor
+        self.TASK_CONFIG_INTERFACE = executor.TASK_CONFIG_INTERFACE
         self.stopping = False
 
         callback_t = Thread(target=self.callback_loop)

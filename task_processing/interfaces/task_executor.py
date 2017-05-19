@@ -4,42 +4,52 @@ import uuid
 import six
 from pyrsistent import field
 from pyrsistent import PRecord
-from pyrsistent import PVector
-from pyrsistent import pvector
-from pyrsistent import v
 
 
-class TaskConfig(PRecord):
-    uuid = field(type=uuid.UUID, initial=uuid.uuid4)
-    name = field(type=str, initial="default")
-    image = field(type=str, initial="ubuntu:xenial")
-    cmd = field(type=str, initial="/bin/true")
-    cpus = field(type=float,
-                 initial=0.1,
-                 invariant=lambda c: (c > 0, 'cpus > 0'))
-    mem = field(type=float,
-                initial=32.0,
-                invariant=lambda m: (m >= 32, 'mem is >= 32'))
-    disk = field(type=float,
-                 initial=10.0,
-                 invariant=lambda d: (d > 0, 'disk > 0'))
-    volumes = field(type=PVector, initial=v(), factory=pvector)
-    ports = field(type=PVector, initial=v(), factory=pvector)
-    cap_add = field(type=PVector, initial=v(), factory=pvector)
-    ulimit = field(type=PVector, initial=v(), factory=pvector)
-    # TODO: containerization + containerization_args ?
-    docker_parameters = field(type=PVector, initial=v(), factory=pvector)
-
-    def task_id(self):
-        return "{}.{}".format(self.name, str(self.uuid))
+class DefaultTaskConfigInterface(PRecord):
+    task_id = field(type=uuid.UUID, initial=uuid.uuid4)
+    name = field(type=str, initial='default')
 
 
 @six.add_metaclass(abc.ABCMeta)
 class TaskExecutor(object):
+    """The core interface for Task Processing
+    This is the class you want to implement to add a new TaskExecutor
+    """
+
+    TASK_CONFIG_INTERFACE = DefaultTaskConfigInterface
+    """
+    The interface, specified as a PRecord of
+    objects that you will be passing as task_configs to run
+    """
+
     @abc.abstractmethod
     def run(self, task_config):
+        """Run the supplied task
+
+        :param task_config: An object satistfying the TASK_CONFIG_INTERFACE
+        The executor should start running the provided task and return the
+        task id.
+
+        :returns str task_id: Callers get the id of the task that was run
+        to check status or kill it later
+        """
         pass
 
     @abc.abstractmethod
     def kill(self, task_id):
+        """Kill the specified task
+
+        :param str task_id: The task that you want to kill
+        """
+        pass
+
+    @abc.abstractmethod
+    def status(self, task_id):
+        """Get Status of the specified task
+
+        :param str task_id: The task that you want to get status on
+
+        :returns: TBD
+        """
         pass

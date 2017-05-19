@@ -3,7 +3,6 @@ import logging
 import os
 import time
 
-from task_processing.interfaces.task_executor import TaskConfig
 from task_processing.plugins.mesos.mesos_executor import MesosExecutor
 from task_processing.runners.async import Async
 from task_processing.runners.async import EventHandler
@@ -35,6 +34,7 @@ def main():
         )]
     )
 
+    TaskConfig = MesosExecutor.TASK_CONFIG_INTERFACE
     tasks_to_launch = 2
     for _ in range(tasks_to_launch):
         task_config = TaskConfig(image="busybox",
