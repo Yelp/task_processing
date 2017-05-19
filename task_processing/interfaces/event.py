@@ -8,6 +8,6 @@ class Event(PRecord):
     # reference to platform-specific event object
     raw = field()
     # is this the last event for a task?
-    terminal = field(type=bool)
+    terminal = field(type=bool, mandatory=True)
     # platform-specific event name
     platform_type = field(type=str)
