@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
@@ -75,7 +74,8 @@ class ExecutionFramework(Scheduler):
                 if time_now > self.task_metadata[task_id]['time_launched'] + self.task_staging_timeout_s:
                     log.warning('Killing stuck task {id}'.format(id=task_id))
                     self.kill_task(task_id)
-                    self.blacklist_slave(self.task_metadata[task_id]['slave_id'])
+                    self.blacklist_slave(
+                        self.task_metadata[task_id]['slave_id'])
             time.sleep(10)
 
     def offer_matches_pool(self, offer):
@@ -88,9 +88,7 @@ class ExecutionFramework(Scheduler):
         return False
 
     def kill_task(self, task_id):
-        tid = mesos_pb2.TaskID()
-        tid.value = task_id
-        self.driver.killTask(tid)
+        self.driver.killTask(dict(value=task_id)))
 
     def blacklist_slave(self, slave_id):
         if slave_id in self.blacklisted_slaves:
@@ -102,11 +100,11 @@ class ExecutionFramework(Scheduler):
                 secs=self.slave_blacklist_timeout_s
             )
         )
-        self.blacklisted_slaves[slave_id] = time.time()
+        self.blacklisted_slaves[slave_id]=time.time()
 
     def unblacklist_slaves(self):
         while True:
-            time_now = time.time()
+            time_now=time.time()
             for slave_id in self.blacklisted_slaves.keys():
                 if time_now < self.blacklisted_slaves[slave_id] + self.slave_blacklist_timeout_s:
                     log.info('Unblacklisting slave: {id}'.format(id=slave_id))
@@ -115,7 +113,7 @@ class ExecutionFramework(Scheduler):
 
     def enqueue_task(self, task):
         # TODO: Add a wrapper for this task
-        self.task_metadata[task.task_id] = {
+        self.task_metadata[task.task_id]={
             'slave_id': None,
             'retries': 0,
             'task_config': task,

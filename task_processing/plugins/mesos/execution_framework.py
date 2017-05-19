@@ -2,9 +2,9 @@ import logging
 import threading
 import time
 
-import mesos.interface
-import mesos.native
-from mesos.interface import mesos_pb2
+from addict import Dict
+from pymesos import MesosSchedulerDriver
+from pymesos.interface import Scheduler
 from pyrsistent import field
 from pyrsistent import PRecord
 from six.moves.queue import Queue
@@ -26,7 +26,7 @@ class TaskMetadata(PRecord):
     time_launched = field(type=time.time, mandatory=True)
 
 
-class ExecutionFramework(mesos.interface.Scheduler):
+class ExecutionFramework(Scheduler):
     def __init__(
         self,
         name,
@@ -92,9 +92,7 @@ class ExecutionFramework(mesos.interface.Scheduler):
         return False
 
     def kill_task(self, task_id):
-        tid = mesos_pb2.TaskID()
-        tid.value = task_id
-        self.driver.killTask(tid)
+        self.driver.killTask(dict(value=task_id)))
 
     def blacklist_slave(self, slave_id):
         if slave_id in self.blacklisted_slaves:
@@ -105,14 +103,14 @@ class ExecutionFramework(mesos.interface.Scheduler):
             id=slave_id,
             secs=self.slave_blacklist_timeout_s
         ))
-        self.blacklisted_slaves[slave_id] = time.time()
+        self.blacklisted_slaves[slave_id]=time.time()
 
     def unblacklist_slaves(self):
         while True:
             if self.stopping:
                 return
 
-            time_now = time.time()
+            time_now=time.time()
             for slave_id in self.blacklisted_slaves.keys():
                 if time_now < (
                     self.blacklisted_slaves[slave_id] +
@@ -133,16 +131,14 @@ class ExecutionFramework(mesos.interface.Scheduler):
             log.info('Reviving offers because we have tasks to run.')
 
     def build_framework_info(self):
-        framework = mesos_pb2.FrameworkInfo()
+        framework = Dict()
         framework.user = ""  # Have Mesos fill in the current user.
         framework.name = self.name
         framework.checkpoint = True
         return framework
 
     def build_decline_offer_filter(self):
-        f = mesos_pb2.Filters()
-        f.refuse_seconds = self.offer_backoff
-        return f
+        return dict(refuse_seconds=self.offer_backoff)
 
     def get_available_ports(self, resource):
         i = 0
@@ -220,17 +216,17 @@ class ExecutionFramework(mesos.interface.Scheduler):
         return tasks_to_launch
 
     def create_new_docker_task(self, offer, task_config, available_ports):
-        task = mesos_pb2.TaskInfo()
+        task = Dict()
 
-        container = mesos_pb2.ContainerInfo()
+        container = Dict()
         container.type = 1  # mesos_pb2.ContainerInfo.Type.DOCKER
 
-        command = mesos_pb2.CommandInfo()
+        command = Dict()
         command.value = task_config.cmd
 
-        task.command.MergeFrom(command)
-        task.task_id.value = task_config.task_id
-        task.slave_id.value = offer.slave_id.value
+        task.command.update(command)
+        task.task_id = dict(value=task_config.task_id)
+        task.slave_id = dict(value=offer.slave_id.value)
         task.name = 'executor-{id}'.format(id=task_config.task_id)
 
         md = self.task_metadata[task_config.task_id]
@@ -238,22 +234,25 @@ class ExecutionFramework(mesos.interface.Scheduler):
             slave_id=task.slave_id.value)
 
         # CPUs
-        cpus = task.resources.add()
-        cpus.name = "cpus"
-        cpus.type = mesos_pb2.Value.SCALAR
-        cpus.scalar.value = task_config.cpus
+        cpus = dict(
+            name='cpus',
+            type='SCALAR',
+            scalar=dict(value=task_config.cpus)
+        )
 
         # mem
-        mem = task.resources.add()
-        mem.name = "mem"
-        mem.type = mesos_pb2.Value.SCALAR
-        mem.scalar.value = task_config.mem
+        mem = dict(
+            name='mem',
+            type='SCALAR',
+            scalar=dict(value=task_config.mem)
+        )
 
         # disk
-        disk = task.resources.add()
-        disk.name = "disk"
-        disk.type = mesos_pb2.Value.SCALAR
-        disk.scalar.value = task_config.disk
+        disk = dict(
+            name='disk',
+            type='SCALAR',
+            scalar=dict(value=task_config.disk)
+        )
 
         # Volumes
         for mode in task_config.volumes:
