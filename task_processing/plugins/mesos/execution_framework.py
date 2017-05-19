@@ -3,7 +3,6 @@ import threading
 import time
 
 from addict import Dict
-from pymesos import MesosSchedulerDriver
 from pymesos.interface import Scheduler
 from pyrsistent import field
 from pyrsistent import PRecord
@@ -92,7 +91,7 @@ class ExecutionFramework(Scheduler):
         return False
 
     def kill_task(self, task_id):
-        self.driver.killTask(dict(value=task_id)))
+        self.driver.killTask(dict(value=task_id))
 
     def blacklist_slave(self, slave_id):
         if slave_id in self.blacklisted_slaves:
@@ -103,14 +102,14 @@ class ExecutionFramework(Scheduler):
             id=slave_id,
             secs=self.slave_blacklist_timeout_s
         ))
-        self.blacklisted_slaves[slave_id]=time.time()
+        self.blacklisted_slaves[slave_id] = time.time()
 
     def unblacklist_slaves(self):
         while True:
             if self.stopping:
                 return
 
-            time_now=time.time()
+            time_now = time.time()
             for slave_id in self.blacklisted_slaves.keys():
                 if time_now < (
                     self.blacklisted_slaves[slave_id] +
@@ -220,6 +219,7 @@ class ExecutionFramework(Scheduler):
 
         container = Dict()
         container.type = 1  # mesos_pb2.ContainerInfo.Type.DOCKER
+        container.volumes = list()
 
         command = Dict()
         command.value = task_config.cmd
@@ -228,6 +228,7 @@ class ExecutionFramework(Scheduler):
         task.task_id = dict(value=task_config.task_id)
         task.slave_id = dict(value=offer.slave_id.value)
         task.name = 'executor-{id}'.format(id=task_config.task_id)
+        task.resources = list()
 
         md = self.task_metadata[task_config.task_id]
         self.task_metadata[task_config.task_id] = md.set(
@@ -239,6 +240,7 @@ class ExecutionFramework(Scheduler):
             type='SCALAR',
             scalar=dict(value=task_config.cpus)
         )
+        task.resources.append(cpus)
 
         # mem
         mem = dict(
@@ -246,6 +248,7 @@ class ExecutionFramework(Scheduler):
             type='SCALAR',
             scalar=dict(value=task_config.mem)
         )
+        task.resources.append(mem)
 
         # disk
         disk = dict(
@@ -253,44 +256,50 @@ class ExecutionFramework(Scheduler):
             type='SCALAR',
             scalar=dict(value=task_config.disk)
         )
+        task.resources.append(disk)
 
         # Volumes
         for mode in task_config.volumes:
             for container_path, host_path in task_config.volumes[mode]:
-                volume = container.volumes.add()
+                volume = Dict()
                 volume.container_path = container_path
                 volume.host_path = host_path
                 """
                 volume.mode = 1 # mesos_pb2.Volume.Mode.RW
                 volume.mode = 2 # mesos_pb2.Volume.Mode.RO
+                docker.port_mappings.append(docker_port)
                 """
                 volume.mode = 1 if mode == "RW" else 2
+                container.volumes.append(volume)
 
         # Container info
-        docker = mesos_pb2.ContainerInfo.DockerInfo()
+        docker = Dict()
         docker.image = task_config.image
         docker.network = 2  # mesos_pb2.ContainerInfo.DockerInfo.Network.BRIDGE
         docker.force_pull_image = True
+        docker.port_mappings = []
 
         # Handle the case of multiple port allocations
         port_to_use = available_ports[0]
         available_ports[:] = available_ports[1:]
 
-        mesos_ports = task.resources.add()
-        mesos_ports.name = "ports"
-        mesos_ports.type = mesos_pb2.Value.RANGES
-        port_range = mesos_ports.ranges.range.add()
+        mesos_port = Dict(
+            name='ports',
+            type='RANGES',
+            ranges=list(Dict(begin=port_to_use, end=port_to_use))
+        )
+        task.resources.append(mesos_port)
 
-        port_range.begin = port_to_use
-        port_range.end = port_to_use
-        docker_port = docker.port_mappings.add()
-        docker_port.host_port = port_to_use
-        docker_port.container_port = 8888
+        docker_port = Dict(
+            host_port=port_to_use,
+            container_port=8888,
+        )
+        docker.port_mappings.append(docker_port)
 
         # Set docker info in container.docker
-        container.docker.MergeFrom(docker)
+        container.docker = docker
         # Set docker container in task.container
-        task.container.MergeFrom(container)
+        task.container = container
 
         return task
 
@@ -381,21 +390,21 @@ class ExecutionFramework(Scheduler):
     def statusUpdate(self, driver, update):
         task_id = update.task_id.value
         log.info("Task update {update} received for task {task}".format(
-            update=mesos_pb2.TaskState.Name(update.state),
+            update=update.state,
             task=task_id
         ))
 
         self.task_update_queue.put(self.translator(update))
 
-        if update.state == mesos_pb2.TASK_FINISHED:
+        if update.state == 'TASK_FINISHED':
             self.task_metadata.pop(task_id, None)
 
         # TODO: move retries out of the framework
         if update.state in (
-            mesos_pb2.TASK_LOST,
-            mesos_pb2.TASK_KILLED,
-            mesos_pb2.TASK_FAILED,
-            mesos_pb2.TASK_ERROR
+            'TASK_LOST',
+            'TASK_KILLED',
+            'TASK_FAILED',
+            'TASK_ERROR'
         ):
             md = self.task_metadata[task_id]
             if md.retries >= self.task_retries:
