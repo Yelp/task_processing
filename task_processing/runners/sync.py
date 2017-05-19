@@ -9,6 +9,7 @@ from task_processing.interfaces.runner import Runner
 class Sync(Runner):
     def __init__(self, executor):
         self.executor = executor
+        self.TASK_CONFIG_INTERFACE = executor.TASK_CONFIG_INTERFACE
         self.queue = Queue()
 
     def kill(self, *args):
