@@ -1,10 +1,10 @@
 task_processing: Generic task processing
-==========================
+========================================
 
 Interfaces and shared infrastructure for generic task processing @ Yelp
 
 Generated Docs
-~~~~~~~~~~~~
+~~~~~~~~~~~~~~
 
 .. toctree::
    :maxdepth: 1
