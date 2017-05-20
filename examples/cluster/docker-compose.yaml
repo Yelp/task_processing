@@ -4,16 +4,16 @@ services:
   zookeeper:
     image: zookeeper
     environment:
-      ZK_CONFIG: tickTime=2000,initLimit=10,syncLimit=5,maxClientCnxns=128,forceSync=no,clientPort=2181
+      ZK_CONFIG: tickTime=2000,initLimit=10,syncLimit=5,maxClientCnxns=128,forceSync=no,clientPort=22181
       ZK_ID: 1
     ports:
-      - '2181:2181'
+      - '22181:22181'
   mesosmaster:
     build:
       context: .
       dockerfile: Dockerfile.mesos-master
     environment:
-      MESOS_ZK: zk://zookeeper:2181/mesos
+      MESOS_ZK: zk://zookeeper:22181/mesos
       MESOS_QUORUM: 1
       MESOS_CLUSTER: docker-compose
       MESOS_REGISTRY: in_memory
@@ -27,7 +27,7 @@ services:
     image: mesosphere/mesos-slave:1.2.0
     pid: host
     environment:
-      MESOS_MASTER: zk://zookeeper:2181/mesos
+      MESOS_MASTER: zk://zookeeper:22181/mesos
       MESOS_CONTAINERIZERS: docker
       MESOS_PORT: 5051
       MESOS_RESOURCES: ports(*):[11000-11999]
