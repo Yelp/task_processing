@@ -3,8 +3,7 @@ import os
 import threading
 import uuid
 
-import mesos.native
-from mesos.interface import mesos_pb2
+from pymesos import MesosSchedulerDriver
 from pyrsistent import field
 from pyrsistent import PRecord
 from pyrsistent import PVector
@@ -64,14 +63,14 @@ class MesosExecutor(TaskExecutor):
 
         self.logger = logging.getLogger(__name__)
 
-        credential = mesos_pb2.Credential()
-        credential.principal = authentication_principal
+        principal = authentication_principal
+        secret = None
         if credential_secret_file:
             if not os.path.exists(credential_secret_file):
                 self.logger.fatal("credential secret file does not exist")
             else:
                 with open(credential_secret_file) as f:
-                    credential.secret = f.read().strip()
+                    secret = f.read().strip()
 
         self.execution_framework = ExecutionFramework(
             name="test",
@@ -80,12 +79,13 @@ class MesosExecutor(TaskExecutor):
         )
 
         # TODO: Get mesos master ips from smartstack
-        self.driver = mesos.native.MesosSchedulerDriver(
-            self.execution_framework,
-            self.execution_framework.framework_info,
-            mesos_address,
-            False,
-            credential
+        self.driver = MesosSchedulerDriver(
+            sched=self.execution_framework,
+            framework=self.execution_framework.framework_info,
+            master_uri=mesos_address,
+            implicit_acknowledgements=False,
+            principal=principal,
+            secret=secret,
         )
 
         # start driver thread immediately
