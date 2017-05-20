@@ -15,12 +15,12 @@ MESOS_TASK_STATUS_TO_EVENT = {
     8: Event(platform_type='killing', terminal=False),
     9: Event(platform_type='dropped',
              terminal=True),
-    10: Event(platform_type='unreachable'),
+    10: Event(platform_type='unreachable', terminal=False),
     11: Event(platform_type='gone',
               terminal=True),
     12: Event(platform_type='gone_by_operator',
               terminal=True),
-    13: Event(platform_type='unknown')
+    13: Event(platform_type='unknown', terminal=False)
 }
 
 

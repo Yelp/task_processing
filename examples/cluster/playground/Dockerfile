@@ -29,6 +29,11 @@ RUN pip install --upgrade virtualenv==15.1.0
 #      /tmp/mesos-0.27.0-py2-none-any.whl /tmp/mesos.cli-0.27.0-py2-none-any.whl \
 #      /tmp/mesos.interface-0.27.0-py2-none-any.whl /tmp/mesos.native-0.27.0-cp27-none-linux_x86_64.whl
 
+# FIXME use actual virtualenv
+RUN pip install pymesos
+RUN pip install pyrsistent
+
+ADD . /src
 ENV PYTHONPATH=/src
 WORKDIR /src
 

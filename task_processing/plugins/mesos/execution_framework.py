@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 
 
 class TaskMetadata(PRecord):
-    slave_id = field(type=str, initial=None)
+    slave_id = field(type=str, initial='')
     retries = field(type=int, initial=0)
     task_config = field(type=PRecord, mandatory=True)
     task_state = field(type=str, initial='enqueued')
