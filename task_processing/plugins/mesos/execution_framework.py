@@ -315,9 +315,12 @@ class ExecutionFramework(Scheduler):
         log.warning("Slave lost: {id}".format(id=str(slaveId)))
 
     def registered(self, driver, frameworkId, masterInfo):
+        if self.driver is None:
+            self.driver = driver
         log.info("Registered with framework ID {id}".format(
             id=frameworkId.value
         ))
+        print(driver)
 
     def reregistered(self, driver, frameworkId, masterInfo):
         log.warning("Registered with framework ID {id}".format(
@@ -325,6 +328,9 @@ class ExecutionFramework(Scheduler):
         ))
 
     def resourceOffers(self, driver, offers):
+        print('got resource offer')
+        print(offers)
+        print(driver)
         if self.driver is None:
             self.driver = driver
 

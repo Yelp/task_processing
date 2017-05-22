@@ -14,10 +14,12 @@ logging.basicConfig()
 
 
 def main():
-    credentials = {'principal': 'mesos', 'secret': 'very'}
     mesos_address = os.environ['MESOS']
-    executor = MesosExecutor(credentials=credentials,
-                             mesos_address=mesos_address)
+    executor = MesosExecutor(
+        credential_secret_file='./examples/cluster/secret',
+        mesos_address=mesos_address
+    )
+
     queue = Queue(100)
     runner = Subscription(executor, queue)
 

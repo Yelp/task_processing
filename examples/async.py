@@ -21,7 +21,7 @@ class Counter(object):
 def main():
     mesos_address = os.environ['MESOS']
     executor = MesosExecutor(
-        credential_secret_file="/src/examples/cluster/secret",
+        credential_secret_file='./examples/cluster/secret',
         mesos_address=mesos_address
     )
 
