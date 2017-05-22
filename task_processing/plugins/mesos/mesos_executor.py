@@ -41,6 +41,7 @@ class MesosTaskConfig(PRecord):
     # TODO: containerization + containerization_args ?
     docker_parameters = field(type=PVector, initial=v(), factory=pvector)
 
+    @property
     def task_id(self):
         return "{}.{}".format(self.name, str(self.uuid))
 
@@ -78,6 +79,7 @@ class MesosExecutor(TaskExecutor):
         self.driver = MesosSchedulerDriver(
             sched=self.execution_framework,
             framework=self.execution_framework.framework_info,
+            use_addict=True,
             master_uri=mesos_address,
             implicit_acknowledgements=False,
             principal=principal,
