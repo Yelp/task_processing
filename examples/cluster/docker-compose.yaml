@@ -6,8 +6,6 @@ services:
     environment:
       ZK_CONFIG: tickTime=2000,initLimit=10,syncLimit=5,maxClientCnxns=128,forceSync=no,clientPort=2181
       ZK_ID: 1
-    ports:
-      - '2181:2181'
   mesosmaster:
     build:
       context: .
@@ -18,9 +16,9 @@ services:
       MESOS_CLUSTER: docker-compose
       MESOS_REGISTRY: in_memory
       MESOS_CREDENTIALS: /etc/mesos-secrets
-    ports:
-      - '5050:5050'
-      - '5054:5054'
+    expose:
+      - '5050'
+      - '5054'
     depends_on:
       - zookeeper
   mesosslave:
@@ -51,5 +49,3 @@ services:
     volumes:
       - ../..:/src
       - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - 22
