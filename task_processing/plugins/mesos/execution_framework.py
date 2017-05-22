@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 
 
 class TaskMetadata(PRecord):
-    slave_id = field(type=str, initial='')
+    agent_id = field(type=str, initial='')
     retries = field(type=int, initial=0)
     task_config = field(type=PRecord, mandatory=True)
     task_state = field(type=str, initial='enqueued')
@@ -77,7 +77,7 @@ class ExecutionFramework(Scheduler):
                     log.warning('Killing stuck task {id}'.format(id=task_id))
                     self.kill_task(task_id)
                     self.blacklist_slave(
-                        self.task_metadata[task_id].slave_id
+                        self.task_metadata[task_id].agent_id
                     )
             time.sleep(10)
 
@@ -93,16 +93,16 @@ class ExecutionFramework(Scheduler):
     def kill_task(self, task_id):
         self.driver.killTask(dict(value=task_id))
 
-    def blacklist_slave(self, slave_id):
-        if slave_id in self.blacklisted_slaves:
+    def blacklist_slave(self, agent_id):
+        if agent_id in self.blacklisted_slaves:
             # Punish this slave for more time.
-            self.blacklisted_slaves.pop(slave_id, None)
+            self.blacklisted_slaves.pop(agent_id, None)
 
         log.info('Blacklisting slave: {id} for {secs} seconds.'.format(
-            id=slave_id,
+            id=agent_id,
             secs=self.slave_blacklist_timeout_s
         ))
-        self.blacklisted_slaves[slave_id] = time.time()
+        self.blacklisted_slaves[agent_id] = time.time()
 
     def unblacklist_slaves(self):
         while True:
@@ -110,13 +110,13 @@ class ExecutionFramework(Scheduler):
                 return
 
             time_now = time.time()
-            for slave_id in self.blacklisted_slaves.keys():
+            for agent_id in self.blacklisted_slaves.keys():
                 if time_now < (
-                    self.blacklisted_slaves[slave_id] +
+                    self.blacklisted_slaves[agent_id] +
                     self.slave_blacklist_timeout_s
                 ):
-                    log.info('Unblacklisting slave: {id}'.format(id=slave_id))
-                    self.blacklisted_slaves.pop(slave_id, None)
+                    log.info('Unblacklisting slave: {id}'.format(id=agent_id))
+                    self.blacklisted_slaves.pop(agent_id, None)
             time.sleep(10)
 
     def enqueue_task(self, task_config):
@@ -132,7 +132,8 @@ class ExecutionFramework(Scheduler):
 
     def build_framework_info(self):
         framework = Dict()
-        framework.user = ""  # Have Mesos fill in the current user.
+        # TODO: why does this need to be root, can it be "mesos plz figure out"
+        framework.user = 'root'
         framework.name = self.name
         framework.checkpoint = True
         return framework
@@ -145,12 +146,12 @@ class ExecutionFramework(Scheduler):
         ports = []
         while True:
             try:
-                ports = ports + range(
+                ports = ports + list(range(
                     resource.ranges.range[i].begin,
                     resource.ranges.range[i].end
-                )
+                ))
                 i += 1
-            except Exception:
+            except Exception as e:
                 break
         return ports
 
@@ -219,43 +220,43 @@ class ExecutionFramework(Scheduler):
         task = Dict()
 
         container = Dict()
-        container.type = 1  # mesos_pb2.ContainerInfo.Type.DOCKER
+        container.type = 'DOCKER'  # mesos_pb2.ContainerInfo.Type.DOCKER
         container.volumes = list()
 
         command = Dict()
         command.value = task_config.cmd
 
         task.command.update(command)
-        task.task_id = dict(value=task_config.task_id)
-        task.slave_id = dict(value=offer.slave_id.value)
+        task.task_id = Dict(value=task_config.task_id)
+        task.agent_id = Dict(value=offer.agent_id.value)
         task.name = 'executor-{id}'.format(id=task_config.task_id)
         task.resources = list()
 
         md = self.task_metadata[task_config.task_id]
         self.task_metadata[task_config.task_id] = md.set(
-            slave_id=task.slave_id.value)
+            agent_id=task.agent_id.value)
 
         # CPUs
-        cpus = dict(
+        cpus = Dict(
             name='cpus',
             type='SCALAR',
-            scalar=dict(value=task_config.cpus)
+            scalar=Dict(value=task_config.cpus)
         )
         task.resources.append(cpus)
 
         # mem
-        mem = dict(
+        mem = Dict(
             name='mem',
             type='SCALAR',
-            scalar=dict(value=task_config.mem)
+            scalar=Dict(value=task_config.mem)
         )
         task.resources.append(mem)
 
         # disk
-        disk = dict(
+        disk = Dict(
             name='disk',
             type='SCALAR',
-            scalar=dict(value=task_config.disk)
+            scalar=Dict(value=task_config.disk)
         )
         task.resources.append(disk)
 
@@ -276,7 +277,7 @@ class ExecutionFramework(Scheduler):
         # Container info
         docker = Dict()
         docker.image = task_config.image
-        docker.network = 2  # mesos_pb2.ContainerInfo.DockerInfo.Network.BRIDGE
+        docker.network = 'BRIDGE'
         docker.force_pull_image = True
         docker.port_mappings = []
 
@@ -284,10 +285,11 @@ class ExecutionFramework(Scheduler):
         port_to_use = available_ports[0]
         available_ports[:] = available_ports[1:]
 
+        print('lololol', port_to_use)
         mesos_port = Dict(
             name='ports',
             type='RANGES',
-            ranges=list(Dict(begin=port_to_use, end=port_to_use))
+            ranges=Dict(range=[Dict(begin=port_to_use, end=port_to_use)])
         )
         task.resources.append(mesos_port)
 
@@ -328,9 +330,6 @@ class ExecutionFramework(Scheduler):
         ))
 
     def resourceOffers(self, driver, offers):
-        print('got resource offer')
-        print(offers)
-        print(driver)
         if self.driver is None:
             self.driver = driver
 
@@ -350,11 +349,11 @@ class ExecutionFramework(Scheduler):
             return
 
         for offer in offers:
-            if offer.slave_id.value in self.blacklisted_slaves:
+            if offer.agent_id.value in self.blacklisted_slaves:
                 log.critical("Ignoring offer {offer_id} from blacklisted \
                     slave {slave_name}".format(
                     offer_id=offer.id.value,
-                    slave_name=offer.slave_id.value
+                    slave_name=offer.agent_id.value
                 ))
                 driver.declineOffer(offer.id, self.offer_decline_filter)
                 continue
@@ -382,7 +381,7 @@ class ExecutionFramework(Scheduler):
                 on slave {slave}".format(
                 number=len(tasks_to_launch),
                 id=offer.id.value,
-                slave=offer.slave_id.value
+                slave=offer.agent_id.value
             ))
             driver.launchTasks(offer.id, tasks_to_launch)
 
@@ -401,7 +400,7 @@ class ExecutionFramework(Scheduler):
             task=task_id
         ))
 
-        self.task_update_queue.put(self.translator(update))
+        self.task_update_queue.put(self.translator(update, task_id))
 
         if update.state == 'TASK_FINISHED':
             self.task_metadata.pop(task_id, None)
@@ -420,7 +419,7 @@ class ExecutionFramework(Scheduler):
                         task=task_id
                     )
                 )
-                self.task_update_queue.put(self.translator(update))
+                self.task_update_queue.put(self.translator(update, task_id))
                 self.task_metadata.pop(task_id, None)
             else:
                 log.info('Re-enqueuing task {task_id}'.format(task_id=task_id))

@@ -37,18 +37,18 @@ def main():
     TaskConfig = MesosExecutor.TASK_CONFIG_INTERFACE
     tasks_to_launch = 2
     for _ in range(tasks_to_launch):
-        task_config = TaskConfig(image="busybox",
-                                 cmd="echo hi")
+        task_config = TaskConfig(image='busybox',
+                                 cmd='echo hi')
         runner.run(task_config)
 
     while True:
         print('terminated {} tasks'.format(counter.terminated))
         if counter.terminated >= tasks_to_launch:
-            return
+            break
         time.sleep(10)
 
     runner.stop()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     exit(main())

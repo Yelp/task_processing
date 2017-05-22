@@ -10,7 +10,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.mesos
-    expose:
+    ports:
       - 5050
       - 5054
     command: 'mesos-master --zk=zk://zookeeper:2181/mesos-testcluster --registry=in_memory --quorum=1 --authenticate --authenticate_slaves --work_dir=/tmp/mesos --credentials=/etc/mesos-secrets'

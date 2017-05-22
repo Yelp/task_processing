@@ -71,7 +71,7 @@ class MesosExecutor(TaskExecutor):
 
         self.execution_framework = ExecutionFramework(
             name="test",
-            task_staging_timeout_s=10,
+            task_staging_timeout_s=30,
             translator=translator,
         )
 

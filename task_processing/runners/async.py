@@ -22,9 +22,9 @@ class Async(Runner):
         self.TASK_CONFIG_INTERFACE = executor.TASK_CONFIG_INTERFACE
         self.stopping = False
 
-        callback_t = Thread(target=self.callback_loop)
-        callback_t.daemon = True
-        callback_t.start()
+        self.callback_t = Thread(target=self.callback_loop)
+        self.callback_t.daemon = True
+        self.callback_t.start()
 
     def run(self, task_config):
         return self.executor.run(task_config)
