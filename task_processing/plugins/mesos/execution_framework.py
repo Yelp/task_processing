@@ -22,7 +22,7 @@ class TaskMetadata(PRecord):
     retries = field(type=int, initial=0)
     task_config = field(type=PRecord, mandatory=True)
     task_state = field(type=str, initial='enqueued')
-    time_launched = field(type=time.time, mandatory=True)
+    time_launched = field(type=float, mandatory=True)
 
 
 class ExecutionFramework(Scheduler):
@@ -121,7 +121,8 @@ class ExecutionFramework(Scheduler):
 
     def enqueue_task(self, task_config):
         self.task_metadata[task_config.task_id] = TaskMetadata(
-            task_config=task_config
+            task_config=task_config,
+            time_launched=time.time(),
         )
         self.task_queue.put(task_config)
         if self.are_offers_suppressed:

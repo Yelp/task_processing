@@ -1,5 +1,4 @@
 import logging
-import os
 import threading
 import uuid
 
@@ -66,15 +65,12 @@ class MesosExecutor(TaskExecutor):
         principal = authentication_principal
         secret = None
         if credential_secret_file:
-            if not os.path.exists(credential_secret_file):
-                self.logger.fatal("credential secret file does not exist")
-            else:
-                with open(credential_secret_file) as f:
-                    secret = f.read().strip()
+            with open(credential_secret_file) as f:
+                secret = f.read().strip()
 
         self.execution_framework = ExecutionFramework(
             name="test",
-            staging_timeout=10,
+            task_staging_timeout_s=10,
             translator=translator,
         )
 
@@ -102,6 +98,9 @@ class MesosExecutor(TaskExecutor):
         self.execution_framework.stop()
         self.driver.stop()
         self.driver.join()
+
+    def status(self):
+        pass
 
     def get_event_queue(self):
         return self.execution_framework.task_update_queue
