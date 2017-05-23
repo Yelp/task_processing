@@ -40,19 +40,21 @@ class ExecutionFramework(Scheduler):
         self.name = name
         # wait this long for a task to launch.
         self.task_staging_timeout_s = task_staging_timeout_s
-        self.framework_info = self.build_framework_info()
         self.pool = pool
         self.translator = translator
         self.slave_blacklist_timeout_s = slave_blacklist_timeout_s
         self.offer_backoff = offer_backoff
         self.task_retries = task_retries
 
+        # TODO: why does this need to be root, can it be "mesos plz figure out"
+        self.framework_info = Dict(
+            user='root', name=self.name, checkpoint=True)
         self.task_queue = Queue(max_task_queue_size)
         self.task_update_queue = Queue(max_task_queue_size)
         self.driver = None
         self.are_offers_suppressed = False
 
-        self.offer_decline_filter = self.build_decline_offer_filter()
+        self.offer_decline_filter = Dict(refuse_seconds=self.offer_backoff)
         # TODO: These should be thread safe
         self.blacklisted_slaves = {}
         self.task_metadata = {}
@@ -91,7 +93,7 @@ class ExecutionFramework(Scheduler):
         return False
 
     def kill_task(self, task_id):
-        self.driver.killTask(dict(value=task_id))
+        self.driver.killTask(Dict(value=task_id))
 
     def blacklist_slave(self, agent_id):
         if agent_id in self.blacklisted_slaves:
@@ -129,17 +131,6 @@ class ExecutionFramework(Scheduler):
             self.driver.reviveOffers()
             self.are_offers_suppressed = False
             log.info('Reviving offers because we have tasks to run.')
-
-    def build_framework_info(self):
-        framework = Dict()
-        # TODO: why does this need to be root, can it be "mesos plz figure out"
-        framework.user = 'root'
-        framework.name = self.name
-        framework.checkpoint = True
-        return framework
-
-    def build_decline_offer_filter(self):
-        return dict(refuse_seconds=self.offer_backoff)
 
     def get_available_ports(self, resource):
         i = 0
@@ -217,94 +208,47 @@ class ExecutionFramework(Scheduler):
         return tasks_to_launch
 
     def create_new_docker_task(self, offer, task_config, available_ports):
-        task = Dict()
-
-        container = Dict()
-        container.type = 'DOCKER'  # mesos_pb2.ContainerInfo.Type.DOCKER
-        container.volumes = list()
-
-        command = Dict()
-        command.value = task_config.cmd
-
-        task.command.update(command)
-        task.task_id = Dict(value=task_config.task_id)
-        task.agent_id = Dict(value=offer.agent_id.value)
-        task.name = 'executor-{id}'.format(id=task_config.task_id)
-        task.resources = list()
+        # Handle the case of multiple port allocations
+        port_to_use = available_ports[0]
 
         md = self.task_metadata[task_config.task_id]
         self.task_metadata[task_config.task_id] = md.set(
-            agent_id=str(task.agent_id.value)
+            agent_id=str(offer.agent_id.value)
         )
 
-        # CPUs
-        cpus = Dict(
-            name='cpus',
-            type='SCALAR',
-            scalar=Dict(value=task_config.cpus)
-        )
-        task.resources.append(cpus)
-
-        # mem
-        mem = Dict(
-            name='mem',
-            type='SCALAR',
-            scalar=Dict(value=task_config.mem)
-        )
-        task.resources.append(mem)
-
-        # disk
-        disk = Dict(
-            name='disk',
-            type='SCALAR',
-            scalar=Dict(value=task_config.disk)
-        )
-        task.resources.append(disk)
-
-        # Volumes
-        for mode in task_config.volumes:
-            for container_path, host_path in task_config.volumes[mode]:
-                volume = Dict()
-                volume.container_path = container_path
-                volume.host_path = host_path
-                """
-                volume.mode = 1 # mesos_pb2.Volume.Mode.RW
-                volume.mode = 2 # mesos_pb2.Volume.Mode.RO
-                docker.port_mappings.append(docker_port)
-                """
-                volume.mode = 1 if mode == "RW" else 2
-                container.volumes.append(volume)
-
-        # Container info
-        docker = Dict()
-        docker.image = task_config.image
-        docker.network = 'BRIDGE'
-        docker.force_pull_image = True
-        docker.port_mappings = []
-
-        # Handle the case of multiple port allocations
-        port_to_use = available_ports[0]
-        available_ports[:] = available_ports[1:]
-
-        mesos_port = Dict(
-            name='ports',
-            type='RANGES',
-            ranges=Dict(range=[Dict(begin=port_to_use, end=port_to_use)])
-        )
-        task.resources.append(mesos_port)
-
-        docker_port = Dict(
-            host_port=port_to_use,
-            container_port=8888,
-        )
-        docker.port_mappings.append(docker_port)
-
-        # Set docker info in container.docker
-        container.docker = docker
-        # Set docker container in task.container
-        task.container = container
-
-        return task
+        return Dict(
+            task_id=Dict(value=task_config.task_id),
+            agent_id=Dict(value=offer.agent_id.value),
+            name='executor-{id}'.format(id=task_config.task_id),
+            resources=[
+                Dict(name='cpus',
+                     type='SCALAR',
+                     scalar=Dict(value=task_config.cpus)),
+                Dict(name='mem',
+                     type='SCALAR',
+                     scalar=Dict(value=task_config.mem)),
+                Dict(name='disk',
+                     type='SCALAR',
+                     scalar=Dict(value=task_config.disk)),
+                Dict(name='ports',
+                     type='RANGES',
+                     ranges=Dict(
+                         range=[Dict(begin=port_to_use, end=port_to_use)]))
+            ],
+            command=Dict(value=task_config.cmd),
+            container=Dict(
+                type='DOCKER',
+                docker=Dict(image=task_config.image,
+                            network='BRIDGE',
+                            force_pull_image=True,
+                            port_mappings=[Dict(host_port=port_to_use,
+                                                container_port=8888)]),
+                volumes=[
+                    Dict(container_path=container_path,
+                         host_path=host_path,
+                         mode=1 if mode == "RW" else 2)
+                    for mode, paths in task_config.volumes
+                    for container_path, host_path in paths]))
 
     def stop(self):
         self.stopping = True
