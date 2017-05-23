@@ -32,7 +32,6 @@ def main():
 
     print('Running {} tasks: {}'.format(len(tasks), tasks))
     while len(tasks) > 0:
-        print('Have {0} more tasks to complete'.format(len(tasks)))
         try:
             event = queue.get(block=True, timeout=10)
         except Empty:
@@ -45,7 +44,6 @@ def main():
                 )
             )
         else:
-            print('{} {}'.format(event.task_id, type(event)))
             if event.terminal:
                 tasks.discard(event.task_id)
 
