@@ -1,3 +1,5 @@
+import time
+
 from six.moves.queue import Queue
 
 from task_processing.interfaces.runner import Runner
@@ -18,10 +20,10 @@ class Sync(Runner):
 
         while True:
             event = event_queue.get()
-            # if event.task_id != task_config.task_id:
-            #    event_queue.put(event)
-            #    time.sleep(1)  # hope somebody else picks it up?
-            #    continue
+            if event.task_id != task_config.task_id:
+                event_queue.put(event)
+                time.sleep(1)  # hope somebody else picks it up?
+                continue
 
             if event.terminal:
                 return event
