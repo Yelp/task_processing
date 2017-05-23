@@ -2,7 +2,6 @@ import time
 
 from six.moves.queue import Queue
 
-from task_processing.events.event import EventTerminal
 from task_processing.interfaces.runner import Runner
 
 
@@ -26,7 +25,7 @@ class Sync(Runner):
                 time.sleep(1)  # hope somebody else picks it up?
                 continue
 
-            if isinstance(event, EventTerminal):
+            if event.terminal:
                 return event
             else:
                 print("Non-terminal event: %s", event)

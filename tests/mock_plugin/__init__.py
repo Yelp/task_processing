@@ -11,6 +11,9 @@ class DummyTaskExecutor(TaskExecutor):
     def kill(self, task_id):
         pass
 
+    def status(self, task_id):
+        pass
+
 
 class DummyTaskExecutor2(TaskExecutor):
     pass

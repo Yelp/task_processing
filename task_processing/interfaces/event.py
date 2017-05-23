@@ -11,3 +11,5 @@ class Event(PRecord):
     terminal = field(type=bool, mandatory=True)
     # platform-specific event name
     platform_type = field(type=str)
+    # task_id this event pertains to
+    task_id = field(type=str)

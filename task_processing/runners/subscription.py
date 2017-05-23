@@ -22,7 +22,7 @@ class Subscription(Runner):
             if self.stopping:
                 return
             try:
-                event = executor_queue.get(True, 1)
+                event = executor_queue.get(block=True, timeout=1)
                 self.event_queue.put(event, False)
             except Empty:
                 pass
