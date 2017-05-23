@@ -234,7 +234,8 @@ class ExecutionFramework(Scheduler):
 
         md = self.task_metadata[task_config.task_id]
         self.task_metadata[task_config.task_id] = md.set(
-            agent_id=task.agent_id.value)
+            agent_id=str(task.agent_id.value)
+        )
 
         # CPUs
         cpus = Dict(
@@ -285,7 +286,6 @@ class ExecutionFramework(Scheduler):
         port_to_use = available_ports[0]
         available_ports[:] = available_ports[1:]
 
-        print('lololol', port_to_use)
         mesos_port = Dict(
             name='ports',
             type='RANGES',
@@ -322,7 +322,6 @@ class ExecutionFramework(Scheduler):
         log.info("Registered with framework ID {id}".format(
             id=frameworkId.value
         ))
-        print(driver)
 
     def reregistered(self, driver, frameworkId, masterInfo):
         log.warning("Registered with framework ID {id}".format(
