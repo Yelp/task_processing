@@ -38,6 +38,7 @@ class MesosTaskConfig(PRecord):
     ports = field(type=PVector, initial=v(), factory=pvector)
     cap_add = field(type=PVector, initial=v(), factory=pvector)
     ulimit = field(type=PVector, initial=v(), factory=pvector)
+    uris = field(type=PVector, initial=v(), factory=pvector)
     # TODO: containerization + containerization_args ?
     docker_parameters = field(type=PVector, initial=v(), factory=pvector)
 
