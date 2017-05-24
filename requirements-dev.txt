@@ -1,3 +1,5 @@
 # Testing dependencies
 pre-commit
 pytest
+
+twine

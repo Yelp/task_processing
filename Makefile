@@ -16,8 +16,13 @@ tox_%: dev_env
 docs: dev_env
 	${TOX} -e docs
 
+pypi: dev_env
+	.tox/dev/bin/python setup.py sdist bdist_wheel
+
 clean:
 	rm -rf docs/build
 	find . -name '*.pyc' -delete
 	find . -name '__pycache__' -delete
 	rm -rf .tox .taskproc
+	rm -rf dist build
+	rm -rf task_processing.egg-info
