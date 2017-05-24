@@ -17,7 +17,7 @@ docs: dev_env
 	${TOX} -e docs
 
 pypi: dev_env
-	.tox/dev/bin/python setup.py sdist bdist_wheel
+	${TOX} -e pypi
 
 clean:
 	rm -rf docs/build
