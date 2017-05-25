@@ -50,11 +50,14 @@ class MesosTaskConfig(PRecord):
 class MesosExecutor(TaskExecutor):
     TASK_CONFIG_INTERFACE = MesosTaskConfig
 
-    def __init__(self,
-                 authentication_principal='taskproc',
-                 credential_secret_file=None,
-                 mesos_address='127.0.0.1:5050',
-                 translator=mesos_status_to_event):
+    def __init__(
+        self,
+        role,
+        authentication_principal='taskproc',
+        credential_secret_file=None,
+        mesos_address='127.0.0.1:5050',
+        translator=mesos_status_to_event,
+    ):
         """
         Constructs the instance of a task execution, encapsulating all state
         required to run, monitor and stop the job.
@@ -74,6 +77,7 @@ class MesosExecutor(TaskExecutor):
             name="test",
             task_staging_timeout_s=60,
             translator=translator,
+            role=role
         )
 
         # TODO: Get mesos master ips from smartstack

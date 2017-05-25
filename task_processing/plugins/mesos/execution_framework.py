@@ -29,6 +29,7 @@ class ExecutionFramework(Scheduler):
     def __init__(
         self,
         name,
+        role,
         task_staging_timeout_s=240,
         pool=None,
         max_task_queue_size=1000,
@@ -41,6 +42,7 @@ class ExecutionFramework(Scheduler):
         # wait this long for a task to launch.
         self.task_staging_timeout_s = task_staging_timeout_s
         self.pool = pool
+        self.role = role
         self.translator = translator
         self.slave_blacklist_timeout_s = slave_blacklist_timeout_s
         self.offer_backoff = offer_backoff
@@ -48,7 +50,11 @@ class ExecutionFramework(Scheduler):
 
         # TODO: why does this need to be root, can it be "mesos plz figure out"
         self.framework_info = Dict(
-            user='root', name=self.name, checkpoint=True)
+            user='root',
+            name=self.name,
+            checkpoint=True,
+            role=self.role
+        )
         self.task_queue = Queue(max_task_queue_size)
         self.task_update_queue = Queue(max_task_queue_size)
         self.driver = None
@@ -153,23 +159,24 @@ class ExecutionFramework(Scheduler):
         remaining_disk = 0
         available_ports = []
         for resource in offer.resources:
-            if resource.name == "cpus":
+            if resource.name == "cpus" and resource.role == self.role:
                 remaining_cpus += resource.scalar.value
-            elif resource.name == "mem":
+            elif resource.name == "mem" and resource.role == self.role:
                 remaining_mem += resource.scalar.value
-            elif resource.name == "disk":
+            elif resource.name == "disk" and resource.role == self.role:
                 remaining_disk += resource.scalar.value
-            elif resource.name == "ports":
+            elif resource.name == "ports" and resource.role == self.role:
                 # TODO: Validate if the ports available > ports required
                 available_ports = self.get_available_ports(resource)
 
         log.info(
-            "Received offer {id} with cpus: {cpu}, mem: {mem}, \
-            disk: {disk}".format(
+            'Received offer {id} with cpus: {cpu}, mem: {mem},\
+            disk: {disk} role: {role}'.format(
                 id=offer.id.value,
                 cpu=remaining_cpus,
                 mem=remaining_mem,
-                disk=remaining_disk
+                disk=remaining_disk,
+                role=self.role
             )
         )
 
@@ -210,6 +217,7 @@ class ExecutionFramework(Scheduler):
     def create_new_docker_task(self, offer, task_config, available_ports):
         # Handle the case of multiple port allocations
         port_to_use = available_ports[0]
+        available_ports[:] = available_ports[1:]
 
         md = self.task_metadata[task_config.task_id]
         self.task_metadata[task_config.task_id] = md.set(
@@ -223,15 +231,19 @@ class ExecutionFramework(Scheduler):
             resources=[
                 Dict(name='cpus',
                      type='SCALAR',
+                     role=self.role,
                      scalar=Dict(value=task_config.cpus)),
                 Dict(name='mem',
                      type='SCALAR',
+                     role=self.role,
                      scalar=Dict(value=task_config.mem)),
                 Dict(name='disk',
                      type='SCALAR',
+                     role=self.role,
                      scalar=Dict(value=task_config.disk)),
                 Dict(name='ports',
                      type='RANGES',
+                     role=self.role,
                      ranges=Dict(
                          range=[Dict(begin=port_to_use, end=port_to_use)]))
             ],
@@ -267,13 +279,15 @@ class ExecutionFramework(Scheduler):
     def registered(self, driver, frameworkId, masterInfo):
         if self.driver is None:
             self.driver = driver
-        log.info("Registered with framework ID {id}".format(
-            id=frameworkId.value
+        log.info("Registered with framework ID {id} and role {role}".format(
+            id=frameworkId.value,
+            role=self.role
         ))
 
     def reregistered(self, driver, frameworkId, masterInfo):
-        log.warning("Registered with framework ID {id}".format(
-            id=frameworkId.value
+        log.warning("Registered with framework ID {id} and role {role}".format(
+            id=frameworkId.value,
+            role=self.role
         ))
 
     def resourceOffers(self, driver, offers):

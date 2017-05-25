@@ -8,7 +8,7 @@ from task_processing.runners.sync import Sync
 
 @given('mesos executor with {runner} runner')
 def mesos_executor_runner(runner):
-    executor = MesosExecutor()
+    executor = MesosExecutor(role='mock-role')
 
     if runner == 'sync':
         runner_instance = Sync(executor=executor)
