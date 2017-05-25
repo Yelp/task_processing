@@ -30,6 +30,5 @@ deploy:
   password:
     secure: PZIYjdjAmCr3y1sjimmhQaWoQKxY0ZSfqAlG3ki0Z63oSXQ9LeTwR4JQ4BEivy/m8U17DrlhiGhfhkH4FBI+etn0KC6Z+11lM18q9/CcGAvm398utkKzJD0EqZ7/Y/EnL8qaNmSc9YmFhFuh2/zGWEGYOZKfMH/fVh0t+xj7wM1nyyAhqExoUxenuBsGRihtujyGWamQxbu4ACZHcb0detKEtxqqGSYnVLd3a7kzK94k8cHBiyd8BbnGvjdREnH+MidjsblnsL/FjKmS+3D+XnOdKVrCYTKszZKSCZj2gJ5EUUpLDrrKxaIEIy+rVgDFUub+x8DSMoVXS18IAwuFGU1AI8owraGcSujNX2NnoddstnrZHF0GcNN2GtVGUoymujevHIJ1vNaPBI5bMaboq/gDi3Cn4lfWVhq3tdYEGzrYWVCbor7HTLvR7scwSlRXUiGo5Hs7/oDgE/nzj6QVqW9+J0R85GVP3hgjHRzRb/sPM8lGK3ibEreZEEb7bv/JLP0rF+w+UanpO/jbB1WxcGuDhCvTlEvtwagBS84S9HlVvqHSzDblJhFtYkyaM1C9iIX2QHYMXMXlUaqXfqTi8tJy+o1O/biRD2riawgOHfPGbqGUNkDpQi6yg8s+K5VBICZOHP/1PfNdSPV0GKTJJzhO/npEveh8qZ7QTLnTDyo=
   on:
-    tags: true
     condition: $MAKE_TARGET == pypi
     repo: Yelp/task_processing
