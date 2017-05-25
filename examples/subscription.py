@@ -15,7 +15,8 @@ def main():
     mesos_address = os.environ['MESOS']
     executor = MesosExecutor(
         credential_secret_file='./examples/cluster/secret',
-        mesos_address=mesos_address
+        mesos_address=mesos_address,
+        role='task-proc'
     )
 
     queue = Queue(100)

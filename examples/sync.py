@@ -12,7 +12,8 @@ def main():
     mesos_address = os.environ.get('MESOS', '127.0.0.1:5050')
     executor = MesosExecutor(
         credential_secret_file='./examples/cluster/secret',
-        mesos_address=mesos_address
+        mesos_address=mesos_address,
+        role='task-proc'
     )
 
     TaskConfig = MesosExecutor.TASK_CONFIG_INTERFACE
