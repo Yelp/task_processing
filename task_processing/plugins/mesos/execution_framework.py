@@ -235,7 +235,11 @@ class ExecutionFramework(Scheduler):
                      ranges=Dict(
                          range=[Dict(begin=port_to_use, end=port_to_use)]))
             ],
-            command=Dict(value=task_config.cmd),
+            command=Dict(
+                value=task_config.cmd,
+                uris=[Dict(value=uri, extract=False)
+                      for uri in task_config.uris]
+            ),
             container=Dict(
                 type='DOCKER',
                 docker=Dict(image=task_config.image,
