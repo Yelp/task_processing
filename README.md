@@ -52,4 +52,4 @@ There are some examples in `/examples`. To run them you need docker and
 docker-compose.
 
     cd examples/cluster/
-    docker-compose run examples/sync.py
+    docker-compose run playground examples/sync.py
