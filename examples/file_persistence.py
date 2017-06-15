@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 import logging
-import os
 
 from task_processing.plugins.mesos.mesos_executor import MesosExecutor
-from task_processing.plugins.persistence.file_persistence import FilePersistence
-from task_processing.plugins.stateful.stateful_executor import StatefulTaskExecutor
+from task_processing.plugins.persistence.file_persistence \
+    import FilePersistence
+from task_processing.plugins.stateful.stateful_executor \
+    import StatefulTaskExecutor
 from task_processing.runners.sync import Sync
 
 logging.basicConfig()
@@ -32,8 +33,7 @@ def main():
         )
         tasks.add(task_config.task_id)
         runner.run(task_config)
-
-    print('Running {} tasks: {}'.format(len(tasks), tasks))
+        print(executor.status(task_config.task_id))
 
 
 if __name__ == '__main__':
