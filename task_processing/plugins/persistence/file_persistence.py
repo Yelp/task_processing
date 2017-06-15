@@ -1,7 +1,7 @@
 import json
 import os
-from task_processing.plugins.persistence.reader import Reader
-from task_processing.plugins.persistence.writer import Writer
+from task_processing.interfaces.persistence.reader import Reader
+from task_processing.interfaces.persistence.writer import Writer
 
 class FilePersistence(Reader, Writer):
     def __init__(self, output_file):
