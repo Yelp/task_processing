@@ -1,5 +1,10 @@
 import json
 
+from pyrsistent import v
+
+from task_processing.interfaces.event import Event
+from task_processing.interfaces.event import json_deserializer
+from task_processing.interfaces.event import json_serializer
 from task_processing.interfaces.persistence.reader import Reader
 from task_processing.interfaces.persistence.writer import Writer
 
@@ -10,8 +15,15 @@ class FilePersistence(Reader, Writer):
         pass
 
     def read(self, task_id):
-        pass
+        acc = v()
+        with open(self.output_file, 'r') as f:
+            for line in f:
+                parsed = json.loads(line, object_hook=json_deserializer)
+                if parsed['task_id'] == task_id:
+                    acc = acc.append(Event.create(parsed))
+        return acc
 
     def write(self, event):
         with open(self.output_file, 'a+') as f:
-            f.write("{}\n".format(json.dumps(event.serialize())))
+            f.write("{}\n".format(json.dumps(
+                event.serialize(), default=json_serializer)))
