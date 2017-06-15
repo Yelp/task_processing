@@ -1,6 +1,8 @@
-from task_processing.interfaces.task_executor import TaskExecutor
-from six.moves.queue import Queue
 import threading
+
+from six.moves.queue import Queue
+
+from task_processing.interfaces.task_executor import TaskExecutor
 
 
 class StatefulTaskExecutor(TaskExecutor):
@@ -21,7 +23,6 @@ class StatefulTaskExecutor(TaskExecutor):
         worker_thread.start()
 
     def run(self, task_config):
-        task_id = task_config.task_id
         self.downstream_executor.run(task_config)
 
     def kill(self, task_id):
@@ -33,6 +34,7 @@ class StatefulTaskExecutor(TaskExecutor):
     def get_event_queue(self):
         return self.queue_for_processed_events
 
+
 def worker_for_event_queue(event_queue, persister, on_process):
     def subscribe_to_updates_for_task():
         while True:
@@ -42,6 +44,7 @@ def worker_for_event_queue(event_queue, persister, on_process):
             event_queue.task_done()
 
     return subscribe_to_updates_for_task
+
 
 def put_to_outbound_queue(event, processed_queue):
     print("processed event {}".format(event))

@@ -1,4 +1,5 @@
 import time
+
 from six.moves.queue import Queue
 
 from task_processing.interfaces.runner import Runner
