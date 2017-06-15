@@ -13,6 +13,7 @@ class StatefulTaskExecutor(TaskExecutor):
         self.downstream_executor = downstream_executor
         self.writer_queue = Queue()
         self.queue_for_processed_events = Queue()
+        self.persister = persister
         worker = worker_for_event_queue(
             event_queue=self.downstream_executor.get_event_queue(),
             persister=persister,
@@ -29,7 +30,7 @@ class StatefulTaskExecutor(TaskExecutor):
         return self.downstream_executor.kill(task_id)
 
     def status(self, task_id):
-        pass
+        return sorted(self.persister.read(task_id), key=lambda x: x.timestamp)
 
     def get_event_queue(self):
         return self.queue_for_processed_events
@@ -47,5 +48,4 @@ def worker_for_event_queue(event_queue, persister, on_process):
 
 
 def put_to_outbound_queue(event, processed_queue):
-    print("processed event {}".format(event))
     processed_queue.put(event)
