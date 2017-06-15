@@ -1,3 +1,5 @@
+import datetime
+
 from task_processing.interfaces.event import Event
 
 # https://github.com/apache/mesos/blob/master/include/mesos/mesos.proto
@@ -27,5 +29,6 @@ MESOS_TASK_STATUS_TO_EVENT = {
 def mesos_status_to_event(mesos_status, task_id):
     return MESOS_TASK_STATUS_TO_EVENT[mesos_status.state].set(
         raw=mesos_status,
-        task_id=str(task_id)
+        task_id=str(task_id),
+        timestamp=datetime.datetime.now(),
     )
