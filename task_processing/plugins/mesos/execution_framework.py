@@ -8,6 +8,8 @@ from pyrsistent import field
 from pyrsistent import PRecord
 from six.moves.queue import Queue
 
+from task_processing.plugins.mesos.translator import mesos_status_to_event
+
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
 LEVEL = logging.DEBUG
@@ -28,10 +30,10 @@ class ExecutionFramework(Scheduler):
         self,
         name,
         role,
-        translator,
         task_staging_timeout_s=240,
         pool=None,
         max_task_queue_size=1000,
+        translator=mesos_status_to_event,
         slave_blacklist_timeout_s=900,
         offer_backoff=240,
         task_retries=2,
