@@ -9,7 +9,26 @@ from pyrsistent import m
 from pyrsistent import PRecord
 from six.moves.queue import Queue
 
+from task_processing.metrics import create_counter
+from task_processing.metrics import create_timer
+from task_processing.metrics import get_metric
 from task_processing.plugins.mesos.translator import mesos_status_to_event
+
+
+TASK_LAUNCHED_COUNT = 'taskproc.mesos.task_launched_count'
+TASK_FINISHED_COUNT = 'taskproc.mesos.task_finished_count'
+TASK_FAILED_COUNT = 'taskproc.mesos.task_failure_count'
+TASK_KILLED_COUNT = 'taskproc.mesos.task_killed_count'
+TASK_LOST_COUNT = 'taskproc.mesos.task_lost_count'
+TASK_ERROR_COUNT = 'taskproc.mesos.task_error_count'
+
+TASK_ENQUEUED_COUNT = 'taskproc.mesos.task_enqueued_count'
+TASK_QUEUED_TIME_TIMER = 'taskproc.mesos.task_queued_time'
+TASK_INSUFFICIENT_OFFER_COUNT = 'taskproc.mesos.task_insufficient_offer_count'
+TASK_STUCK_COUNT = 'taskproc.mesos.task_stuck_count'
+
+OFFER_DELAY_TIMER = 'taskproc.mesos.offer_delay'
+BLACKLISTED_AGENTS_COUNT = 'taskproc.mesos.blacklisted_agents_count'
 
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
@@ -56,6 +75,7 @@ class ExecutionFramework(Scheduler):
             checkpoint=True,
             role=self.role
         )
+
         self.task_queue = Queue(max_task_queue_size)
         self.task_update_queue = Queue(max_task_queue_size)
         self.driver = None
@@ -66,6 +86,16 @@ class ExecutionFramework(Scheduler):
         self._lock = threading.RLock()
         self.blacklisted_slaves = m()
         self.task_metadata = m()
+
+        self._initialize_metrics()
+        self._last_offer_time = None
+        self._task_states = {
+            'TASK_FINISHED': TASK_FINISHED_COUNT,
+            'TASK_LOST': TASK_LOST_COUNT,
+            'TASK_KILLED': TASK_KILLED_COUNT,
+            'TASK_FAILED': TASK_FAILED_COUNT,
+            'TASK_ERROR': TASK_ERROR_COUNT,
+        }
 
         self.stopping = False
         task_kill_thread = threading.Thread(
@@ -101,6 +131,8 @@ class ExecutionFramework(Scheduler):
                         self.blacklist_slave(
                             self.task_metadata[task_id].agent_id
                         )
+                        get_metric(TASK_STUCK_COUNT).count(1)
+
             time.sleep(10)
 
     def offer_matches_pool(self, offer):
@@ -128,6 +160,7 @@ class ExecutionFramework(Scheduler):
             ))
             self.blacklisted_slaves = \
                 self.blacklisted_slaves.set(agent_id, time.time())
+            get_metric(BLACKLISTED_AGENTS_COUNT).count(1)
 
     def unblacklist_slaves(self):
         while True:
@@ -166,6 +199,8 @@ class ExecutionFramework(Scheduler):
             self.driver.reviveOffers()
             self.are_offers_suppressed = False
             log.info('Reviving offers because we have tasks to run.')
+
+        get_metric(TASK_ENQUEUED_COUNT).count(1)
 
     def get_available_ports(self, resource):
         i = 0
@@ -236,6 +271,11 @@ class ExecutionFramework(Scheduler):
                     remaining_cpus -= task.cpus
                     remaining_mem -= task.mem
                     remaining_disk -= task.disk
+
+                    get_metric(TASK_QUEUED_TIME_TIMER).record(
+                        time.time() -
+                        self.task_metadata[task.task_id].task_state_ts
+                    )
                 else:
                     # This offer is insufficient for this task. We need to put
                     # it back in the queue
@@ -243,6 +283,7 @@ class ExecutionFramework(Scheduler):
 
         for task in tasks_to_put_back_in_queue:
             self.task_queue.put(task)
+            get_metric(TASK_INSUFFICIENT_OFFER_COUNT).count(1)
 
         return tasks_to_launch
 
@@ -302,10 +343,34 @@ class ExecutionFramework(Scheduler):
                          host_path=host_path,
                          mode=1 if mode == "RW" else 2)
                     for mode, paths in task_config.volumes
-                    for container_path, host_path in paths]))
+                    for container_path, host_path in paths
+                ]
+            )
+        )
 
     def stop(self):
         self.stopping = True
+
+    # TODO: add mesos cluster dimension when available
+    def _initialize_metrics(self):
+        default_dimensions = {
+            'framework_name': self.name,
+            'framework_role': self.role
+        }
+
+        counters = [
+            TASK_LAUNCHED_COUNT,        TASK_FINISHED_COUNT,
+            TASK_FAILED_COUNT,          TASK_KILLED_COUNT,
+            TASK_LOST_COUNT,            TASK_ERROR_COUNT,
+            TASK_ENQUEUED_COUNT,        TASK_INSUFFICIENT_OFFER_COUNT,
+            TASK_STUCK_COUNT,           BLACKLISTED_AGENTS_COUNT,
+        ]
+        for cnt in counters:
+            create_counter(cnt, default_dimensions)
+
+        timers = [OFFER_DELAY_TIMER, TASK_QUEUED_TIME_TIMER]
+        for tmr in timers:
+            create_timer(tmr, default_dimensions)
 
     ####################################################################
     #                   Mesos driver hooks go here                     #
@@ -331,6 +396,13 @@ class ExecutionFramework(Scheduler):
     def resourceOffers(self, driver, offers):
         if self.driver is None:
             self.driver = driver
+
+        current_offer_time = time.time()
+        if self._last_offer_time is not None:
+            get_metric(OFFER_DELAY_TIMER).record(
+                current_offer_time - self._last_offer_time
+            )
+        self._last_offer_time = current_offer_time
 
         if self.task_queue.empty() and int(time.time()) > self.suppress_after:
             for offer in offers:
@@ -396,6 +468,7 @@ class ExecutionFramework(Scheduler):
                             task_state_ts=time.time(),
                         )
                     )
+                    get_metric(TASK_LAUNCHED_COUNT).count(1)
 
     def statusUpdate(self, driver, update):
         task_id = update.task_id.value
@@ -419,15 +492,10 @@ class ExecutionFramework(Scheduler):
                 )
             )
 
-        if update.state in (
-            'TASK_LOST',
-            'TASK_KILLED',
-            'TASK_FAILED',
-            'TASK_ERROR',
-            'TASK_FINISHED'
-        ):
+        if update.state in self._task_states:
             with self._lock:
                 self.task_metadata = self.task_metadata.discard(task_id)
+            get_metric(self._task_states[update.state]).count(1)
 
         # We have to do this because we are not using implicit
         # acknowledgements.

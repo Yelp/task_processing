@@ -1,3 +1,6 @@
+import threading
+
+import mock
 import pytest
 
 import task_processing.plugins.mesos.mesos_executor as me_module
@@ -5,9 +8,16 @@ from task_processing.plugins.mesos.translator import mesos_status_to_event
 
 
 @pytest.fixture
-def mesos_executor(mocker, request):
+def mock_Thread():
+    with mock.patch.object(threading, 'Thread') as mock_Thread:
+        yield mock_Thread
+
+
+@pytest.fixture
+def mesos_executor(mocker, request, mock_Thread):
     mocker.patch.object(me_module, 'ExecutionFramework')
     mocker.patch.object(me_module, 'MesosSchedulerDriver')
+    threading.Thread = mock.Mock()
 
     ef = me_module.ExecutionFramework.return_value
     fi = mocker.Mock()
@@ -43,7 +53,10 @@ def test_creates_execution_framework_and_driver(mesos_executor):
         secret=None,
     )
 
-    mesos_executor.driver.run.assert_called_with()
+    threading.Thread.assert_called_once_with(
+        target=mesos_executor.driver.run,
+        args=()
+    )
 
 
 def test_run_passes_task_to_execution_framework(mesos_executor):

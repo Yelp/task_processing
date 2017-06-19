@@ -1,4 +1,6 @@
+mock
 # Testing dependencies
+mock
 pre-commit
 pytest
 pytest-cov
