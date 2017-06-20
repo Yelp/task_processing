@@ -1,0 +1,8 @@
+#!/bin/bash
+
+set -eux
+
+examples/file_persistence.py
+#examples/sync.py
+#examples/async.py
+#examples/subscription.py
