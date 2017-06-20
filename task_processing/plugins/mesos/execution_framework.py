@@ -66,10 +66,14 @@ class ExecutionFramework(Scheduler):
         self.task_metadata = {}
 
         self.stopping = False
-        threading.Thread(
-            target=self.kill_tasks_stuck_in_staging, args=()).start()
-        threading.Thread(
-            target=self.unblacklist_slaves, args=()).start()
+        task_kill_thread = threading.Thread(
+            target=self.kill_tasks_stuck_in_staging, args=())
+        task_kill_thread.daemon = True
+        task_kill_thread.start()
+        blacklist_thread = threading.Thread(
+            target=self.unblacklist_slaves, args=())
+        blacklist_thread.daemon = True
+        blacklist_thread.start()
 
     def kill_tasks_stuck_in_staging(self):
         while True:

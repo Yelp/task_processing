@@ -93,7 +93,8 @@ class MesosExecutor(TaskExecutor):
 
         # start driver thread immediately
         self.driver_thread = threading.Thread(
-            target=self.driver.run, args=(), daemon=True)
+            target=self.driver.run, args=())
+        self.driver_thread.daemon = True
         self.driver_thread.start()
 
     def run(self, task_config):
