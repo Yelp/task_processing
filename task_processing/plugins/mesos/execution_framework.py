@@ -152,8 +152,9 @@ class ExecutionFramework(Scheduler):
                     time_launched=time.time(),
                 )
             )
-
-        self.task_queue.put(task_config)
+            # Need to lock on task_queue to revent enqueues when getting
+            # tasks to launch
+            self.task_queue.put(task_config)
 
         if self.are_offers_suppressed:
             self.driver.reviveOffers()
@@ -205,7 +206,8 @@ class ExecutionFramework(Scheduler):
         tasks_to_put_back_in_queue = []
 
         # Need to lock here even though we working on the task_queue, because
-        # we are predicating on the queues emptiness
+        # we are predicating on the queues emptiness. If not, other threads
+        # can continue enqueueing, and we never terminate the loop.
         with self._lock:
             # Get all the tasks of the queue
             while not self.task_queue.empty():
@@ -233,8 +235,6 @@ class ExecutionFramework(Scheduler):
                     # it back in the queue
                     tasks_to_put_back_in_queue.append(task)
 
-        # TODO: This needs to be thread safe. We can write a wrapper over queue
-        # with a mutex.
         for task in tasks_to_put_back_in_queue:
             self.task_queue.put(task)
 
