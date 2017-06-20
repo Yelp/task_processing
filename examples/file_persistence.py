@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+import os
 
 from task_processing.plugins.mesos.mesos_executor import MesosExecutor
 from task_processing.plugins.persistence.file_persistence \
@@ -12,7 +13,7 @@ logging.basicConfig()
 
 
 def main():
-    mesos_address = '0.0.0.0:32843'
+    mesos_address = os.getenv('MESOS', 'mesosmaster:5050')
     mesos_executor = MesosExecutor(
         credential_secret_file='./examples/cluster/secret',
         mesos_address=mesos_address,
@@ -37,5 +38,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
-    exit(0)
+    exit(main())
