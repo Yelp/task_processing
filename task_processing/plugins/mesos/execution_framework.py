@@ -361,7 +361,10 @@ class ExecutionFramework(Scheduler):
             task=task_id
         ))
 
-        self.task_update_queue.put(self.translator(update, task_id))
+        md = self.task_metadata[task_id]
+        self.task_update_queue.put(
+            self.translator(update, task_id).set(task_config=md.task_config)
+        )
 
         if update.state == 'TASK_FINISHED':
             self.task_metadata.pop(task_id, None)
@@ -373,7 +376,6 @@ class ExecutionFramework(Scheduler):
             'TASK_FAILED',
             'TASK_ERROR'
         ):
-            md = self.task_metadata[task_id]
             if md.retries >= self.task_retries:
                 log.info(
                     'All the retries for task {task} are done.'.format(

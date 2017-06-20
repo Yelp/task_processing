@@ -11,12 +11,25 @@ class DummyTaskExecutor(TaskExecutor):
     def kill(self, task_id):
         pass
 
-    def status(self, task_id):
+    def stop(self):
+        pass
+
+    def get_event_queue(self, task_id):
         pass
 
 
 class DummyTaskExecutor2(TaskExecutor):
-    pass
+    def run(self, task_config):
+        pass
+
+    def kill(self, task_id):
+        pass
+
+    def stop(self):
+        pass
+
+    def get_event_queue(self, task_id):
+        pass
 
 
 TASK_PROCESSING_PLUGIN = 'mock_plugin'
