@@ -33,7 +33,7 @@ class Async(Runner):
         pass
 
     def callback_loop(self):
-        event_queue = self.executor.get_event_queue()
+        event_queue = self.executor.event_queue()
 
         while True:
             if self.stopping:

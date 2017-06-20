@@ -58,7 +58,7 @@ def test_stop_shuts_down_properly(mesos_executor):
     mesos_executor.driver.join.assert_called_with()
 
 
-def test_get_event_queue(mocker, mesos_executor):
+def test_event_queue(mocker, mesos_executor):
     q = mocker.Mock()
     mesos_executor.execution_framework.task_update_queue = q
-    assert mesos_executor.get_event_queue() is q
+    assert mesos_executor.event_queue() is q

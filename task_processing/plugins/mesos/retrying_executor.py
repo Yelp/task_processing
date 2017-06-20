@@ -16,11 +16,12 @@ class RetryingExecutor(TaskExecutor):
         self.retries = retries
         self.retry_pred = retry_pred
         self.task_retries = m()
-        self.src_queue = executor.get_event_queue()
+        self.src_queue = executor.event_queue()
         self.dest_queue = Queue()
         self.retry_thread = Thread(target=self.retry_loop)
         self.retry_thread.start()
         self.stopping = False
+        self.TASK_CONFIG_INTERFACE = executor.TASK_CONFIG_INTERFACE
 
     def retry_loop(self):
         while True:
@@ -33,7 +34,7 @@ class RetryingExecutor(TaskExecutor):
                             e.task_id, self.task_retries[e.task_id] - 1)
                         continue
                 et = e.transform(
-                    ('middleware_data', 'retries'),
+                    ('extensions', 'retrying'),
                     self.retries - self.task_retries[e.task_id])
                 self.dest_queue.put(et)
 
@@ -56,5 +57,5 @@ class RetryingExecutor(TaskExecutor):
         self.stopping = True
         self.retry_thread.join()
 
-    def get_event_queue(self):
+    def event_queue(self):
         return self.dest_queue

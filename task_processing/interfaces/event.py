@@ -3,8 +3,6 @@ from pyrsistent import m
 from pyrsistent import PMap
 from pyrsistent import PRecord
 
-from task_processing.interfaces.task_executor import TaskConfig
-
 
 class Event(PRecord):
     # reference to platform-specific event object
@@ -16,5 +14,5 @@ class Event(PRecord):
     platform_type = field(type=str)
     # task_id this event pertains to
     task_id = field(type=str)
-    task_config = field(type=TaskConfig)
-    middleware_data = field(type=PMap, initial=m())
+    task_config = field(type=PRecord)
+    extensions = field(type=PMap, initial=m())

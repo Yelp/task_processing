@@ -16,7 +16,7 @@ class Sync(Runner):
 
     def run(self, task_config):
         self.executor.run(task_config)
-        event_queue = self.executor.get_event_queue()
+        event_queue = self.executor.event_queue()
 
         while True:
             event = event_queue.get()
