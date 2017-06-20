@@ -1,6 +1,7 @@
 import datetime
 
 from pyrsistent import field
+from pyrsistent import freeze
 from pyrsistent import m
 from pyrsistent import PMap
 from pyrsistent import PRecord
@@ -17,7 +18,7 @@ class Event(PRecord):
     platform_type = field(type=str)
     # task_id this event pertains to
     task_id = field(type=str)
-    task_config = field(type=PRecord)
+    task_config = field()
     extensions = field(type=PMap, initial=m())
 
 
@@ -33,4 +34,6 @@ def json_deserializer(dct):
                 dct[k] = datetime.datetime.fromtimestamp(float(v))
             except:
                 pass
+        else:
+            dct[k] = freeze(v)
     return dct
