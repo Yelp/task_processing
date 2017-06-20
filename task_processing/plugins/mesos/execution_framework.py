@@ -5,6 +5,7 @@ import time
 from addict import Dict
 from pymesos.interface import Scheduler
 from pyrsistent import field
+from pyrsistent import m
 from pyrsistent import PRecord
 from six.moves.queue import Queue
 
@@ -62,8 +63,8 @@ class ExecutionFramework(Scheduler):
 
         self.offer_decline_filter = Dict(refuse_seconds=self.offer_backoff)
         self._lock = threading.RLock()
-        self.blacklisted_slaves = {}
-        self.task_metadata = {}
+        self.blacklisted_slaves = m()
+        self.task_metadata = m()
 
         self.stopping = False
         task_kill_thread = threading.Thread(
@@ -112,13 +113,15 @@ class ExecutionFramework(Scheduler):
         with self._lock:
             if agent_id in self.blacklisted_slaves:
                 # Punish this slave for more time.
-                self.blacklisted_slaves.pop(agent_id, None)
+                self.blacklisted_slaves = \
+                    self.blacklisted_slaves.discard(agent_id)
 
             log.info('Blacklisting slave: {id} for {secs} seconds.'.format(
                 id=agent_id,
                 secs=self.slave_blacklist_timeout_s
             ))
-            self.blacklisted_slaves[agent_id] = time.time()
+            self.blacklisted_slaves = \
+                self.blacklisted_slaves.set(agent_id, time.time())
 
     def unblacklist_slaves(self):
         while True:
@@ -135,14 +138,18 @@ class ExecutionFramework(Scheduler):
                         log.info(
                             'Unblacklisting slave: {id}'.format(id=agent_id)
                         )
-                        self.blacklisted_slaves.pop(agent_id, None)
+                        self.blacklisted_slaves = \
+                            self.blacklisted_slaves.discard(agent_id)
             time.sleep(10)
 
     def enqueue_task(self, task_config):
         with self._lock:
-            self.task_metadata[task_config.task_id] = TaskMetadata(
-                task_config=task_config,
-                time_launched=time.time(),
+            self.task_metadata = self.task_metadata.set(
+                task_config.task_id,
+                TaskMetadata(
+                    task_config=task_config,
+                    time_launched=time.time(),
+                )
             )
 
         self.task_queue.put(task_config)
@@ -239,8 +246,9 @@ class ExecutionFramework(Scheduler):
 
         with self._lock:
             md = self.task_metadata[task_config.task_id]
-            self.task_metadata[task_config.task_id] = md.set(
-                agent_id=str(offer.agent_id.value)
+            self.task_metadata = self.task_metadata.set(
+                task_config.task_id,
+                md.set(agent_id=str(offer.agent_id.value))
             )
 
         return Dict(
@@ -369,10 +377,13 @@ class ExecutionFramework(Scheduler):
             with self._lock:
                 for task in tasks_to_launch:
                     md = self.task_metadata[task.task_id.value]
-                    self.task_metadata[task.task_id.value] = md.set(
-                        retries=md.retries + 1,
-                        time_launched=time.time(),
-                        task_state='launched'
+                    self.task_metadata = self.task_metadata.set(
+                        task.task_id.value,
+                        md.set(
+                            retries=md.retries + 1,
+                            time_launched=time.time(),
+                            task_state='launched'
+                        )
                     )
 
     def statusUpdate(self, driver, update):
@@ -389,7 +400,7 @@ class ExecutionFramework(Scheduler):
 
         if update.state == 'TASK_FINISHED':
             with self._lock:
-                self.task_metadata.pop(task_id, None)
+                self.task_metadata = self.task_metadata.discard(task_id)
 
         # TODO: move retries out of the framework
         if update.state in (
@@ -405,15 +416,19 @@ class ExecutionFramework(Scheduler):
                             task=task_id
                         )
                     )
-                    self.task_update_queue.put(self.translator(update, task_id))
-                    self.task_metadata.pop(task_id, None)
+                    self.task_update_queue.put(
+                        self.translator(update, task_id))
+                    self.task_metadata = self.task_metadata.discard(task_id)
                 else:
                     log.info(
                         'Re-enqueuing task {task_id}'.format(task_id=task_id)
                     )
                     self.task_queue.put(md.task_config)
-                    self.task_metadata[task_id] = md.set(
-                        task_state='re-enqueued'
+                    self.task_metadata = self.task_metadata.set(
+                        task_id,
+                        md.set(
+                            task_state='re-enqueued'
+                        )
                     )
 
         # We have to do this because we are not using implicit
