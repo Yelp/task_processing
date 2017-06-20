@@ -1,5 +1,6 @@
 import json
 
+from pyrsistent import thaw
 from pyrsistent import v
 
 from task_processing.interfaces.event import Event
@@ -25,4 +26,4 @@ class FilePersistence(Reader, Writer):
     def write(self, event):
         with open(self.output_file, 'a+') as f:
             f.write("{}\n".format(json.dumps(
-                event.serialize(), default=json_serializer)))
+                thaw(event), default=json_serializer)))
