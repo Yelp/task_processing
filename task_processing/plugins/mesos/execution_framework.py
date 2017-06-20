@@ -61,7 +61,7 @@ class ExecutionFramework(Scheduler):
         self.are_offers_suppressed = False
 
         self.offer_decline_filter = Dict(refuse_seconds=self.offer_backoff)
-        # TODO: These should be thread safe
+        self._lock = threading.RLock()
         self.blacklisted_slaves = {}
         self.task_metadata = {}
 
@@ -80,17 +80,20 @@ class ExecutionFramework(Scheduler):
             if self.stopping:
                 return
 
-            time_now = time.time()
-            for task_id in self.task_metadata.keys():
-                if time_now > (
-                    self.task_metadata[task_id].time_launched +
-                    self.task_staging_timeout_s
-                ):
-                    log.warning('Killing stuck task {id}'.format(id=task_id))
-                    self.kill_task(task_id)
-                    self.blacklist_slave(
-                        self.task_metadata[task_id].agent_id
-                    )
+            with self._lock:
+                time_now = time.time()
+                for task_id in self.task_metadata.keys():
+                    if time_now > (
+                        self.task_metadata[task_id].time_launched +
+                        self.task_staging_timeout_s
+                    ):
+                        log.warning(
+                            'Killing stuck task {id}'.format(id=task_id)
+                        )
+                        self.kill_task(task_id)
+                        self.blacklist_slave(
+                            self.task_metadata[task_id].agent_id
+                        )
             time.sleep(10)
 
     def offer_matches_pool(self, offer):
@@ -106,37 +109,44 @@ class ExecutionFramework(Scheduler):
         self.driver.killTask(Dict(value=task_id))
 
     def blacklist_slave(self, agent_id):
-        if agent_id in self.blacklisted_slaves:
-            # Punish this slave for more time.
-            self.blacklisted_slaves.pop(agent_id, None)
+        with self._lock:
+            if agent_id in self.blacklisted_slaves:
+                # Punish this slave for more time.
+                self.blacklisted_slaves.pop(agent_id, None)
 
-        log.info('Blacklisting slave: {id} for {secs} seconds.'.format(
-            id=agent_id,
-            secs=self.slave_blacklist_timeout_s
-        ))
-        self.blacklisted_slaves[agent_id] = time.time()
+            log.info('Blacklisting slave: {id} for {secs} seconds.'.format(
+                id=agent_id,
+                secs=self.slave_blacklist_timeout_s
+            ))
+            self.blacklisted_slaves[agent_id] = time.time()
 
     def unblacklist_slaves(self):
         while True:
             if self.stopping:
                 return
 
-            time_now = time.time()
-            for agent_id in self.blacklisted_slaves.keys():
-                if time_now < (
-                    self.blacklisted_slaves[agent_id] +
-                    self.slave_blacklist_timeout_s
-                ):
-                    log.info('Unblacklisting slave: {id}'.format(id=agent_id))
-                    self.blacklisted_slaves.pop(agent_id, None)
+            with self._lock:
+                time_now = time.time()
+                for agent_id in self.blacklisted_slaves.keys():
+                    if time_now < (
+                        self.blacklisted_slaves[agent_id] +
+                        self.slave_blacklist_timeout_s
+                    ):
+                        log.info(
+                            'Unblacklisting slave: {id}'.format(id=agent_id)
+                        )
+                        self.blacklisted_slaves.pop(agent_id, None)
             time.sleep(10)
 
     def enqueue_task(self, task_config):
-        self.task_metadata[task_config.task_id] = TaskMetadata(
-            task_config=task_config,
-            time_launched=time.time(),
-        )
+        with self._lock:
+            self.task_metadata[task_config.task_id] = TaskMetadata(
+                task_config=task_config,
+                time_launched=time.time(),
+            )
+
         self.task_queue.put(task_config)
+
         if self.are_offers_suppressed:
             self.driver.reviveOffers()
             self.are_offers_suppressed = False
@@ -185,31 +195,35 @@ class ExecutionFramework(Scheduler):
         )
 
         tasks_to_put_back_in_queue = []
-        # Get all the tasks of the queue
-        while not self.task_queue.empty():
-            task = self.task_queue.get()
 
-            if ((remaining_cpus >= task.cpus and
-                 remaining_mem >= task.mem and
-                 remaining_disk >= task.disk)):
-                # This offer is sufficient for us to launch task
-                tasks_to_launch.append(
-                    self.create_new_docker_task(
-                        offer,
-                        task,
-                        available_ports
+        # Need to lock here even though we working on the task_queue, because
+        # we are predicating on the queues emptiness
+        with self._lock:
+            # Get all the tasks of the queue
+            while not self.task_queue.empty():
+                task = self.task_queue.get()
+
+                if ((remaining_cpus >= task.cpus and
+                     remaining_mem >= task.mem and
+                     remaining_disk >= task.disk)):
+                    # This offer is sufficient for us to launch task
+                    tasks_to_launch.append(
+                        self.create_new_docker_task(
+                            offer,
+                            task,
+                            available_ports
+                        )
                     )
-                )
 
-                # Deduct the resources taken by this task from the total
-                # available resources.
-                remaining_cpus -= task.cpus
-                remaining_mem -= task.mem
-                remaining_disk -= task.disk
-            else:
-                # This offer is insufficient for this task. We need to put it
-                # back in the queue
-                tasks_to_put_back_in_queue.append(task)
+                    # Deduct the resources taken by this task from the total
+                    # available resources.
+                    remaining_cpus -= task.cpus
+                    remaining_mem -= task.mem
+                    remaining_disk -= task.disk
+                else:
+                    # This offer is insufficient for this task. We need to put
+                    # it back in the queue
+                    tasks_to_put_back_in_queue.append(task)
 
         # TODO: This needs to be thread safe. We can write a wrapper over queue
         # with a mutex.
@@ -223,10 +237,11 @@ class ExecutionFramework(Scheduler):
         port_to_use = available_ports[0]
         available_ports[:] = available_ports[1:]
 
-        md = self.task_metadata[task_config.task_id]
-        self.task_metadata[task_config.task_id] = md.set(
-            agent_id=str(offer.agent_id.value)
-        )
+        with self._lock:
+            md = self.task_metadata[task_config.task_id]
+            self.task_metadata[task_config.task_id] = md.set(
+                agent_id=str(offer.agent_id.value)
+            )
 
         return Dict(
             task_id=Dict(value=task_config.task_id),
@@ -314,14 +329,15 @@ class ExecutionFramework(Scheduler):
             return
 
         for offer in offers:
-            if offer.agent_id.value in self.blacklisted_slaves:
-                log.critical("Ignoring offer {offer_id} from blacklisted \
-                    slave {slave_name}".format(
-                    offer_id=offer.id.value,
-                    slave_name=offer.agent_id.value
-                ))
-                driver.declineOffer(offer.id, self.offer_decline_filter)
-                continue
+            with self._lock:
+                if offer.agent_id.value in self.blacklisted_slaves:
+                    log.critical("Ignoring offer {offer_id} from blacklisted \
+                        slave {slave_name}".format(
+                        offer_id=offer.id.value,
+                        slave_name=offer.agent_id.value
+                    ))
+                    driver.declineOffer(offer.id, self.offer_decline_filter)
+                    continue
 
             if not self.offer_matches_pool(offer):
                 log.info("Declining offer {id} because it is not for pool \
@@ -350,13 +366,14 @@ class ExecutionFramework(Scheduler):
             ))
             driver.launchTasks(offer.id, tasks_to_launch)
 
-            for task in tasks_to_launch:
-                md = self.task_metadata[task.task_id.value]
-                self.task_metadata[task.task_id.value] = md.set(
-                    retries=md.retries + 1,
-                    time_launched=time.time(),
-                    task_state='launched'
-                )
+            with self._lock:
+                for task in tasks_to_launch:
+                    md = self.task_metadata[task.task_id.value]
+                    self.task_metadata[task.task_id.value] = md.set(
+                        retries=md.retries + 1,
+                        time_launched=time.time(),
+                        task_state='launched'
+                    )
 
     def statusUpdate(self, driver, update):
         task_id = update.task_id.value
@@ -371,7 +388,8 @@ class ExecutionFramework(Scheduler):
         )
 
         if update.state == 'TASK_FINISHED':
-            self.task_metadata.pop(task_id, None)
+            with self._lock:
+                self.task_metadata.pop(task_id, None)
 
         # TODO: move retries out of the framework
         if update.state in (
@@ -380,18 +398,23 @@ class ExecutionFramework(Scheduler):
             'TASK_FAILED',
             'TASK_ERROR'
         ):
-            if md.retries >= self.task_retries:
-                log.info(
-                    'All the retries for task {task} are done.'.format(
-                        task=task_id
+            with self._lock:
+                if md.retries >= self.task_retries:
+                    log.info(
+                        'All the retries for task {task} are done.'.format(
+                            task=task_id
+                        )
                     )
-                )
-                self.task_update_queue.put(self.translator(update, task_id))
-                self.task_metadata.pop(task_id, None)
-            else:
-                log.info('Re-enqueuing task {task_id}'.format(task_id=task_id))
-                self.task_queue.put(md.task_config)
-                self.task_metadata[task_id] = md.set(task_state='re-enqueued')
+                    self.task_update_queue.put(self.translator(update, task_id))
+                    self.task_metadata.pop(task_id, None)
+                else:
+                    log.info(
+                        'Re-enqueuing task {task_id}'.format(task_id=task_id)
+                    )
+                    self.task_queue.put(md.task_config)
+                    self.task_metadata[task_id] = md.set(
+                        task_state='re-enqueued'
+                    )
 
         # We have to do this because we are not using implicit
         # acknowledgements.
