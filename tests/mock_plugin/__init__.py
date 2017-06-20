@@ -14,7 +14,7 @@ class DummyTaskExecutor(TaskExecutor):
     def stop(self):
         pass
 
-    def event_queue(self, task_id):
+    def get_event_queue(self, task_id):
         pass
 
 
@@ -28,7 +28,7 @@ class DummyTaskExecutor2(TaskExecutor):
     def stop(self):
         pass
 
-    def event_queue(self, task_id):
+    def get_event_queue(self, task_id):
         pass
 
 

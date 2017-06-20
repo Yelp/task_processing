@@ -51,7 +51,7 @@ class TaskExecutor(object):
         pass
 
     @abc.abstractmethod
-    def event_queue(self):
+    def get_event_queue(self):
         """Get queue of events
 
         :param str task_id: The task that you want to get status on

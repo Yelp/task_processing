@@ -17,7 +17,7 @@ class Subscription(Runner):
         self.producer_t.start()
 
     def event_producer(self):
-        executor_queue = self.executor.event_queue()
+        executor_queue = self.executor.get_event_queue()
         while True:
             if self.stopping:
                 return
