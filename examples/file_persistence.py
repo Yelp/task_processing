@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import logging
 
 from task_processing.plugins.mesos.mesos_executor import MesosExecutor
