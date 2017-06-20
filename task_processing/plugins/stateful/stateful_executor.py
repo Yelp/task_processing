@@ -20,7 +20,8 @@ class StatefulTaskExecutor(TaskExecutor):
             on_process=lambda event:
                 put_to_outbound_queue(event, self.queue_for_processed_events)
         )
-        worker_thread = threading.Thread(target=worker, daemon=True)
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.daemon = True
         worker_thread.start()
 
     def run(self, task_config):
@@ -31,6 +32,9 @@ class StatefulTaskExecutor(TaskExecutor):
 
     def status(self, task_id):
         return sorted(self.persister.read(task_id), key=lambda x: x.timestamp)
+
+    def stop(self):
+        return self.downstream_executor.stop()
 
     def get_event_queue(self):
         return self.queue_for_processed_events
