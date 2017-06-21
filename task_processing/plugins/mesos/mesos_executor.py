@@ -56,8 +56,9 @@ class MesosExecutor(TaskExecutor):
         principal='taskproc',
         secret=None,
         mesos_address='127.0.0.1:5050',
-        translator=mesos_status_to_event,
-        framework_kwargs={},
+        framework_translator=mesos_status_to_event,
+        framework_name='taskproc-default',
+        framework_staging_timeout=60,
     ):
         """
         Constructs the instance of a task execution, encapsulating all state
@@ -68,11 +69,12 @@ class MesosExecutor(TaskExecutor):
 
         self.logger = logging.getLogger(__name__)
 
-        framework_kwargs.setdefault('task_staging_timeout_s', 60)
-        framework_kwargs.setdefault('role', role)
-        framework_kwargs.setdefault('name', 'taskproc-default')
-        framework_kwargs.setdefault('translator', translator)
-        self.execution_framework = ExecutionFramework(**framework_kwargs)
+        self.execution_framework = ExecutionFramework(
+            role=role,
+            name=framework_name,
+            translator=framework_translator,
+            task_staging_timeout_s=framework_staging_timeout
+        )
 
         # TODO: Get mesos master ips from smartstack
         self.driver = MesosSchedulerDriver(
