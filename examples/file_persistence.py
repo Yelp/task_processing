@@ -2,11 +2,11 @@
 import logging
 import os
 
+from task_processing.executors.stateful.stateful_executor \
+    import StatefulTaskExecutor
 from task_processing.plugins.mesos.mesos_executor import MesosExecutor
 from task_processing.plugins.persistence.file_persistence \
     import FilePersistence
-from task_processing.plugins.stateful.stateful_executor \
-    import StatefulTaskExecutor
 from task_processing.runners.sync import Sync
 
 logging.basicConfig()
