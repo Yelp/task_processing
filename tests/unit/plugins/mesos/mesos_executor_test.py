@@ -25,7 +25,7 @@ def test_creates_execution_framework_and_driver(mesos_executor):
     ef = me_module.ExecutionFramework.return_value
     assert mesos_executor.execution_framework is ef
     me_module.ExecutionFramework.assert_called_with(
-        name="test",
+        name="taskproc-default",
         task_staging_timeout_s=60,
         translator=mesos_status_to_event,
         role="role"
