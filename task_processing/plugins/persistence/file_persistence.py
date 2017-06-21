@@ -6,11 +6,10 @@ from pyrsistent import v
 from task_processing.interfaces.event import Event
 from task_processing.interfaces.event import json_deserializer
 from task_processing.interfaces.event import json_serializer
-from task_processing.interfaces.persistence.reader import Reader
-from task_processing.interfaces.persistence.writer import Writer
+from task_processing.interfaces.persistence import Persister
 
 
-class FilePersistence(Reader, Writer):
+class FilePersistence(Persister):
     def __init__(self, output_file):
         self.output_file = output_file
 
