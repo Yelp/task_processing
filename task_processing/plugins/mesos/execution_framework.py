@@ -152,7 +152,7 @@ class ExecutionFramework(Scheduler):
                     time_launched=time.time(),
                 )
             )
-            # Need to lock on task_queue to revent enqueues when getting
+            # Need to lock on task_queue to prevent enqueues when getting
             # tasks to launch
             self.task_queue.put(task_config)
 
@@ -205,9 +205,9 @@ class ExecutionFramework(Scheduler):
 
         tasks_to_put_back_in_queue = []
 
-        # Need to lock here even though we working on the task_queue, because
-        # we are predicating on the queues emptiness. If not, other threads
-        # can continue enqueueing, and we never terminate the loop.
+        # Need to lock here even though we are working on the task_queue, since
+        # we are predicating on the queue's emptiness. If not locked, other
+        # threads can continue enqueueing, and we never terminate the loop.
         with self._lock:
             # Get all the tasks of the queue
             while not self.task_queue.empty():
