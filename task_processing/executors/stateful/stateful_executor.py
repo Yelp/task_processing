@@ -18,7 +18,7 @@ class StatefulTaskExecutor(TaskExecutor):
             event_queue=self.downstream_executor.get_event_queue(),
             persister=persister,
             on_process=lambda event:
-                put_to_outbound_queue(event, self.queue_for_processed_events)
+                self.queue_for_processed_events.put(event)
         )
         worker_thread = threading.Thread(target=worker)
         worker_thread.daemon = True
@@ -49,7 +49,3 @@ def worker_for_event_queue(event_queue, persister, on_process):
             event_queue.task_done()
 
     return subscribe_to_updates_for_task
-
-
-def put_to_outbound_queue(event, processed_queue):
-    processed_queue.put(event)
