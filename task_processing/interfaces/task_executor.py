@@ -54,8 +54,6 @@ class TaskExecutor(object):
     def get_event_queue(self):
         """Get queue of events
 
-        :param str task_id: The task that you want to get status on
-
         :returns: TBD
         """
         pass
