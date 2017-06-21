@@ -14,13 +14,9 @@ class StatefulTaskExecutor(TaskExecutor):
         self.writer_queue = Queue()
         self.queue_for_processed_events = Queue()
         self.persister = persister
-        worker = worker_for_event_queue(
-            event_queue=self.downstream_executor.get_event_queue(),
-            persister=persister,
-            on_process=lambda event:
-                self.queue_for_processed_events.put(event)
+        worker_thread = threading.Thread(
+            target=self.subscribe_to_updates_for_task
         )
-        worker_thread = threading.Thread(target=worker)
         worker_thread.daemon = True
         worker_thread.start()
 
@@ -39,13 +35,9 @@ class StatefulTaskExecutor(TaskExecutor):
     def get_event_queue(self):
         return self.queue_for_processed_events
 
-
-def worker_for_event_queue(event_queue, persister, on_process):
-    def subscribe_to_updates_for_task():
+    def subscribe_to_updates_for_task(self):
         while True:
-            result = event_queue.get()
-            persister.write(event=result)
-            on_process(result)
-            event_queue.task_done()
-
-    return subscribe_to_updates_for_task
+            result = self.downstream_executor.get_event_queue().get()
+            self.persister.write(event=result)
+            self.queue_for_processed_events.put(result)
+            self.downstream_executor.get_event_queue().task_done()
