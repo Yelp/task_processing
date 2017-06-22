@@ -305,7 +305,7 @@ class ExecutionFramework(Scheduler):
                     tasks to launch.".format(
                     id=offer.id.value
                 ))
-                driver.declineOffer(offer.id)  # , self.offer_decline_filter)
+                driver.declineOffer(offer.id, self.offer_decline_filter)
 
             driver.suppressOffers()
             self.are_offers_suppressed = True
