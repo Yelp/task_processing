@@ -27,8 +27,6 @@ class Sync(Runner):
 
             if event.terminal:
                 return event
-            else:
-                print("Non-terminal event: %s", event)
 
     def stop(self):
         self.executor.stop()
