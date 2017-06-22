@@ -9,9 +9,6 @@ from six.moves.queue import Queue
 
 from task_processing.interfaces.task_executor import TaskExecutor
 
-FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
-LEVEL = logging.DEBUG
-logging.basicConfig(format=FORMAT, level=LEVEL)
 log = logging.getLogger(__name__)
 
 
@@ -33,13 +30,14 @@ class RetryingExecutor(TaskExecutor):
         self.TASK_CONFIG_INTERFACE = executor.TASK_CONFIG_INTERFACE
 
         self.retry_thread = Thread(target=self.retry_loop)
+        self.retry_thread.daemon = True
         self.retry_thread.start()
 
     def event_with_retries(self, event):
         return event.transform(
             ('extensions', 'RetryingExecutor/tries'),
             "{}/{}".format(
-                self.retries - self.task_retries.get(event.task_id, -1),
+                1 + self.retries - self.task_retries.get(event.task_id, -1),
                 self.retries
             )
         )
