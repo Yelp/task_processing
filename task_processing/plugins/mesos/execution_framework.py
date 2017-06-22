@@ -35,8 +35,8 @@ class ExecutionFramework(Scheduler):
         max_task_queue_size=1000,
         translator=mesos_status_to_event,
         slave_blacklist_timeout_s=900,
-        offer_backoff=240,
-        task_retries=2,
+        offer_backoff=10,
+        suppress_delay=10,
     ):
         self.name = name
         # wait this long for a task to launch.
@@ -46,7 +46,7 @@ class ExecutionFramework(Scheduler):
         self.translator = translator
         self.slave_blacklist_timeout_s = slave_blacklist_timeout_s
         self.offer_backoff = offer_backoff
-        self.task_retries = task_retries
+        self.suppress_delay = suppress_delay
 
         # TODO: why does this need to be root, can it be "mesos plz figure out"
         self.framework_info = Dict(
@@ -59,6 +59,7 @@ class ExecutionFramework(Scheduler):
         self.task_update_queue = Queue(max_task_queue_size)
         self.driver = None
         self.are_offers_suppressed = False
+        self.suppress_after = int(time.time()) + self.suppress_delay
 
         self.offer_decline_filter = Dict(refuse_seconds=self.offer_backoff)
         # TODO: These should be thread safe
@@ -298,7 +299,7 @@ class ExecutionFramework(Scheduler):
         if self.driver is None:
             self.driver = driver
 
-        if self.task_queue.empty():
+        if self.task_queue.empty() and int(time.time()) > self.suppress_after:
             for offer in offers:
                 log.info("Declining offer {id} because there are no more \
                     tasks to launch.".format(
@@ -373,25 +374,14 @@ class ExecutionFramework(Scheduler):
         if update.state == 'TASK_FINISHED':
             self.task_metadata.pop(task_id, None)
 
-        # TODO: move retries out of the framework
         if update.state in (
             'TASK_LOST',
             'TASK_KILLED',
             'TASK_FAILED',
             'TASK_ERROR'
         ):
-            if md.retries >= self.task_retries:
-                log.info(
-                    'All the retries for task {task} are done.'.format(
-                        task=task_id
-                    )
-                )
-                self.task_update_queue.put(self.translator(update, task_id))
-                self.task_metadata.pop(task_id, None)
-            else:
-                log.info('Re-enqueuing task {task_id}'.format(task_id=task_id))
-                self.task_queue.put(md.task_config)
-                self.task_metadata[task_id] = md.set(task_state='re-enqueued')
+            self.task_update_queue.put(self.translator(update, task_id))
+            self.task_metadata.pop(task_id, None)
 
         # We have to do this because we are not using implicit
         # acknowledgements.
