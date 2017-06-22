@@ -22,8 +22,8 @@ class TaskMetadata(PRecord):
     agent_id = field(type=str, initial='')
     retries = field(type=int, initial=0)
     task_config = field(type=PRecord, mandatory=True)
-    task_state = field(type=str, initial='enqueued')
-    time_launched = field(type=float, mandatory=True)
+    task_state = field(type=str, mandatory=True)
+    task_state_ts = field(type=float, mandatory=True)
 
 
 class ExecutionFramework(Scheduler):
@@ -85,8 +85,13 @@ class ExecutionFramework(Scheduler):
             with self._lock:
                 time_now = time.time()
                 for task_id in self.task_metadata.keys():
+                    if self.task_metadata[task_id].task_state not in (
+                        'TASK_STAGING',
+                    ):
+                        continue
+
                     if time_now > (
-                        self.task_metadata[task_id].time_launched +
+                        self.task_metadata[task_id].task_state_ts +
                         self.task_staging_timeout_s
                     ):
                         log.warning(
@@ -149,7 +154,8 @@ class ExecutionFramework(Scheduler):
                 task_config.task_id,
                 TaskMetadata(
                     task_config=task_config,
-                    time_launched=time.time(),
+                    task_state='TASK_INITED',
+                    task_state_ts=time.time(),
                 )
             )
             # Need to lock on task_queue to prevent enqueues when getting
@@ -386,8 +392,8 @@ class ExecutionFramework(Scheduler):
                         task.task_id.value,
                         md.set(
                             retries=md.retries + 1,
-                            time_launched=time.time(),
-                            task_state='launched'
+                            task_state='TASK_STAGING',
+                            task_state_ts=time.time(),
                         )
                     )
 
@@ -402,6 +408,16 @@ class ExecutionFramework(Scheduler):
         self.task_update_queue.put(
             self.translator(update, task_id).set(task_config=md.task_config)
         )
+
+        # Record state changes
+        if md.task_state != update.state:
+            self.task_metadata = self.task_metadata.set(
+                task_id,
+                md.set(
+                    task_state=update.state,
+                    task_state_ts=time.time(),
+                )
+            )
 
         if update.state in (
             'TASK_LOST',
