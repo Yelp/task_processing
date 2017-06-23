@@ -411,7 +411,7 @@ class ExecutionFramework(Scheduler):
             'TASK_FINISHED'
         ):
             with self._lock:
-                self.task_metadata.pop(task_id, None)
+                self.task_metadata = self.task_metadata.discard(task_id)
 
         # We have to do this because we are not using implicit
         # acknowledgements.
