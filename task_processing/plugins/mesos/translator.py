@@ -6,7 +6,9 @@ from task_processing.interfaces.event import Event
 MESOS_TASK_STATUS_TO_EVENT = {
     'TASK_STARTING': Event(platform_type='starting', terminal=False),
     'TASK_RUNNING': Event(platform_type='running', terminal=False),
-    'TASK_FINISHED': Event(platform_type='finished', terminal=True),
+    'TASK_FINISHED': Event(platform_type='finished',
+                           terminal=True,
+                           success=True),
     'TASK_FAILED': Event(platform_type='failed', terminal=True),
     'TASK_KILLED': Event(platform_type='killed',
                          terminal=True),

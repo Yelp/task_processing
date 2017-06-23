@@ -287,6 +287,10 @@ class ExecutionFramework(Scheduler):
                             force_pull_image=True,
                             port_mappings=[Dict(host_port=port_to_use,
                                                 container_port=8888)]),
+                parameters=[
+                    Dict(key=param['key'], value=param['value'])
+                    for param in task_config.docker_parameters
+                ],
                 volumes=[
                     Dict(container_path=container_path,
                          host_path=host_path,
@@ -399,17 +403,13 @@ class ExecutionFramework(Scheduler):
             self.translator(update, task_id).set(task_config=md.task_config)
         )
 
-        if update.state == 'TASK_FINISHED':
-            with self._lock:
-                self.task_metadata = self.task_metadata.discard(task_id)
-
         if update.state in (
             'TASK_LOST',
             'TASK_KILLED',
             'TASK_FAILED',
-            'TASK_ERROR'
+            'TASK_ERROR',
+            'TASK_FINISHED'
         ):
-            self.task_update_queue.put(self.translator(update, task_id))
             with self._lock:
                 self.task_metadata = self.task_metadata.discard(task_id)
 
