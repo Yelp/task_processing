@@ -20,7 +20,7 @@ RUN pip3 install --upgrade pip==9.0.1
 RUN pip3 install --upgrade virtualenv==15.1.0
 
 # FIXME use actual virtualenv
-RUN pip3 install pymesos pyrsistent
+RUN pip3 install pymesos pyrsistent boto3
 
 ADD . /src
 ENV PYTHONPATH=/src
