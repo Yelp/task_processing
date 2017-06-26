@@ -26,9 +26,7 @@ class DynamoDBPersister(Persister):
         res = self.table.query(
             KeyConditionExpression=Key('task_id').eq(task_id)
         )
-        items = res['Items']
-        x = [self._replace_decimals(item) for item in items]
-        return x
+        return [self._replace_decimals(item) for item in res['Items']]
 
     def write(self, event):
         return self.ddb_client.put_item(
