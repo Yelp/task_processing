@@ -2,6 +2,13 @@
 
 TOX=".tox/dev/bin/tox"
 
+ifeq ($(findstring .yelpcorp.com, $(shell hostname -f)), .yelpcorp.com)
+	BUILD_ENV?=YELP
+	export PIP_INDEX_URL?=https://pypi.yelpcorp.com/simple
+else
+	BUILD_ENV?=$(shell hostname -f)
+endif
+
 test: dev_env
 	${TOX}
 
