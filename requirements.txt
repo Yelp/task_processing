@@ -1,4 +1,4 @@
 # Library so -e .
 -e .
-jsonpickle
+boto3
 pyrsistent
