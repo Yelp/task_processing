@@ -2,6 +2,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from task_processing.interfaces.event import Event
 from task_processing.plugins.persistence.dynamodb_persistence \
     import DynamoDBPersister
 
@@ -46,3 +47,18 @@ def test_replaces_decimals_list(x, persister):
 ))
 def test_replaces_decimals_unaffected(x, persister):
     assert persister._replace_decimals(x) == x
+
+
+@given(x=st.builds(Event,
+                   timestamp=st.datetimes(),
+                   terminal=st.booleans(),
+                   success=st.booleans(),
+                   task_config=st.dictionaries(
+                       keys=st.text(), values=st.text()),
+                   ))
+def test_event_timestamp(x, persister):
+    res = persister._event_to_item(x)
+    assert 'N' in res['timestamp'].keys()
+    assert 'S' in res['success'].keys()
+    assert 'S' in res['terminal'].keys()
+    assert 'M' in res['task_config'].keys()
