@@ -14,8 +14,10 @@ logging.basicConfig()
 
 def main():
     mesos_address = os.getenv('MESOS', 'mesosmaster:5050')
+    with open('./examples/cluster/secret') as f:
+        secret = f.read().strip()
     mesos_executor = MesosExecutor(
-        credentials={'principal': 'mesos', 'secret': 'very'},
+        secret=secret,
         mesos_address=mesos_address,
         role='task-proc'
     )
