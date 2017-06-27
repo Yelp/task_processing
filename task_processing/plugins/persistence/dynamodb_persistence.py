@@ -66,13 +66,10 @@ class DynamoDBPersister(Persister):
 
     def _replace_decimals(self, obj):
         if isinstance(obj, list):
-            return [self._replace_decimals(obj[x] for x in range(len(obj)))]
+            return [self._replace_decimals(x) for x in obj]
         elif isinstance(obj, dict):
             return {k: self._replace_decimals(v) for k, v in obj.items()}
         elif isinstance(obj, decimal.Decimal):
-            if obj % 1 == 0:
-                return int(obj)
-            else:
-                return float(obj)
+            return float(obj)
         else:
             return obj

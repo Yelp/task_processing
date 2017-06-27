@@ -1,3 +1,4 @@
+hypothesis
 # Testing dependencies
 mock
 pre-commit
