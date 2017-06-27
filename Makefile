@@ -2,11 +2,6 @@
 
 TOX=".tox/dev/bin/tox"
 
-YELP_IDX="https://pypi.yelpcorp.com/simple"
-ORIG_DEPS=mesos_executor
-EXTRA_DEPS=mesos_executor,metrics
-
-NOOP = true
 ifeq ($(findstring .yelpcorp.com, $(shell hostname -f)), .yelpcorp.com)
 	BUILD_ENV?=YELP
 	export PIP_INDEX_URL?=https://pypi.yelpcorp.com/simple

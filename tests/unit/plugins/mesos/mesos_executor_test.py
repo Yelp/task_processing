@@ -17,7 +17,6 @@ def mock_Thread():
 def mesos_executor(mocker, request, mock_Thread):
     mocker.patch.object(me_module, 'ExecutionFramework')
     mocker.patch.object(me_module, 'MesosSchedulerDriver')
-    threading.Thread = mock.Mock()
 
     ef = me_module.ExecutionFramework.return_value
     fi = mocker.Mock()
@@ -31,10 +30,10 @@ def mesos_executor(mocker, request, mock_Thread):
     return me
 
 
-def test_creates_execution_framework_and_driver(mesos_executor):
+def test_creates_execution_framework_and_driver(mock_Thread, mesos_executor):
     ef = me_module.ExecutionFramework.return_value
     assert mesos_executor.execution_framework is ef
-    me_module.ExecutionFramework.assert_called_with(
+    assert me_module.ExecutionFramework.call_args == mock.call(
         name="taskproc-default",
         task_staging_timeout_s=60,
         translator=mesos_status_to_event,
@@ -43,7 +42,7 @@ def test_creates_execution_framework_and_driver(mesos_executor):
 
     msd = me_module.MesosSchedulerDriver.return_value
     assert mesos_executor.driver is msd
-    me_module.MesosSchedulerDriver.assert_called_with(
+    assert me_module.MesosSchedulerDriver.call_args == mock.call(
         sched=ef,
         framework=ef.framework_info,
         use_addict=True,
@@ -53,7 +52,7 @@ def test_creates_execution_framework_and_driver(mesos_executor):
         secret=None,
     )
 
-    threading.Thread.assert_called_once_with(
+    assert mock_Thread.call_args == mock.call(
         target=mesos_executor.driver.run,
         args=()
     )
@@ -61,14 +60,15 @@ def test_creates_execution_framework_and_driver(mesos_executor):
 
 def test_run_passes_task_to_execution_framework(mesos_executor):
     mesos_executor.run("task")
-    mesos_executor.execution_framework.enqueue_task.assert_called_with("task")
+    assert mesos_executor.execution_framework.enqueue_task.call_args ==\
+        mock.call("task")
 
 
 def test_stop_shuts_down_properly(mesos_executor):
     mesos_executor.stop()
-    mesos_executor.execution_framework.stop.assert_called_with()
-    mesos_executor.driver.stop.assert_called_with()
-    mesos_executor.driver.join.assert_called_with()
+    assert mesos_executor.execution_framework.stop.call_count == 1
+    assert mesos_executor.driver.stop.call_count == 1
+    assert mesos_executor.driver.join.call_count == 1
 
 
 def test_event_queue(mocker, mesos_executor):

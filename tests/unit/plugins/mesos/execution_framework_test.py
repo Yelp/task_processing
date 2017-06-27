@@ -102,15 +102,22 @@ def mock_time():
         yield mock_time
 
 
+@pytest.fixture
+def mock_sleep(ef):
+    def stop_killing(task_id):
+        ef.stopping = True
+
+    with mock.patch.object(time, 'sleep', side_effect=stop_killing) as\
+            mock_sleep:
+        yield mock_sleep
+
+
 def test_ef_kills_stuck_tasks(
     ef,
     fake_task,
+    mock_sleep,
     mock_get_metric
 ):
-    # Avoid sleeping during test run and piggyback to stop infinite loop
-    def stop_killing(task_id):
-        ef.stopping = True
-    time.sleep = mock.Mock(side_effect=stop_killing)
     task_id = fake_task.task_id
     task_metadata = ef_mdl.TaskMetadata(
         agent_id='fake_agent_id',
@@ -185,12 +192,9 @@ def test_blacklist_slave(
 
 def test_unblacklist_slaves(
     ef,
-    mock_time
+    mock_time,
+    mock_sleep
 ):
-    # Avoid sleeping during test run and piggyback to stop infinite loop
-    def stop_killing(task_id):
-        ef.stopping = True
-    time.sleep = mock.Mock(side_effect=stop_killing)
     agent_id = 'fake_agent_id'
     mock_time.return_value = 0.0
 
@@ -242,16 +246,15 @@ def test_get_tasks_to_launch_sufficient_offer(
         task_state='fake_state',
         task_state_ts=1.0
     )
-    ef.create_new_docker_task = mock.Mock(return_value='fake_docker_task')
-    mock_docker_task = ef.create_new_docker_task.return_value
+    ef.create_new_docker_task = mock.Mock()
     mock_time.return_value = 2.0
 
     ef.task_queue.put(fake_task)
     ef.task_metadata = ef.task_metadata.set(fake_task.task_id, task_metadata)
     tasks_to_launch = ef.get_tasks_to_launch(fake_offer)
 
-    assert mock_docker_task in tasks_to_launch
-    assert ef.task_queue.empty()
+    assert ef.create_new_docker_task.return_value in tasks_to_launch
+    assert ef.task_queue.qsize() == 0
     assert mock_get_metric.call_count == 1
     assert mock_get_metric.call_args == mock.call(
         ef_mdl.TASK_QUEUED_TIME_TIMER
@@ -277,7 +280,7 @@ def test_get_tasks_to_launch_insufficient_offer(
     tasks_to_launch = ef.get_tasks_to_launch(fake_offer)
 
     assert len(tasks_to_launch) == 0
-    assert not ef.task_queue.empty()
+    assert ef.task_queue.qsize() == 1
     assert mock_get_metric.call_count == 1
     assert mock_get_metric.call_args == mock.call(
         ef_mdl.TASK_INSUFFICIENT_OFFER_COUNT
@@ -310,23 +313,50 @@ def test_create_new_docker_task(
         available_ports
     )
 
+    new_docker_task = Dict(
+        task_id=Dict(value=task_id),
+        agent_id=Dict(value='fake_agent_id'),
+        name='executor-{id}'.format(id=task_id),
+        resources=[
+            Dict(name='cpus',
+                 type='SCALAR',
+                 role='fake_role',
+                 scalar=Dict(value=10.0)),
+            Dict(name='mem',
+                 type='SCALAR',
+                 role='fake_role',
+                 scalar=Dict(value=1024.0)),
+            Dict(name='disk',
+                 type='SCALAR',
+                 role='fake_role',
+                 scalar=Dict(value=1000.0)),
+            Dict(name='ports',
+                 type='RANGES',
+                 role='fake_role',
+                 ranges=Dict(
+                     range=[Dict(begin=31200, end=31200)]))
+        ],
+        command=Dict(
+            value='echo "fake"',
+            uris=[]
+        ),
+        container=Dict(
+            type='DOCKER',
+            docker=Dict(image='fake_image',
+                        network='BRIDGE',
+                        force_pull_image=True,
+                        port_mappings=[Dict(host_port=31200,
+                                            container_port=8888)]),
+            parameters=[],
+            volumes=[Dict(
+                container_path='fake_container_path',
+                host_path='fake_host_path',
+                mode=2
+            )]
+        )
+    )
     assert ef.task_metadata[task_id].agent_id == 'fake_agent_id'
-    assert docker_task.task_id.value == task_id
-    assert docker_task.agent_id.value == 'fake_agent_id'
-    assert docker_task.name == 'executor-' + task_id
-    for r in docker_task.resources:
-        if r.type == 'SCALAR':
-            assert fake_task[r.name] == r.scalar.value
-        elif r.type == 'RANGES':
-            assert r.ranges.range[0].begin == 31200
-            assert r.ranges.range[0].end == 31200
-    assert docker_task.command.value == 'echo "fake"'
-    assert docker_task.container.docker.image == 'fake_image'
-    assert docker_task.container.docker.port_mappings[0].host_port == 31200
-    assert docker_task.container.volumes[0].container_path ==\
-        'fake_container_path'
-    assert docker_task.container.volumes[0].host_path == 'fake_host_path'
-    assert docker_task.container.volumes[0].mode == 2
+    assert docker_task == new_docker_task
 
 
 def test_stop(ef):
@@ -417,7 +447,10 @@ def test_resource_offers_launch(
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef.resourceOffers(ef.driver, [fake_offer])
 
-    assert ef.driver.launchTasks.call_count == 1
+    assert fake_driver.suppressOffers.call_count == 0
+    assert not ef.are_offers_suppressed
+    assert fake_driver.declineOffer.call_count == 0
+    assert fake_driver.launchTasks.call_count == 1
     assert mock_get_metric.call_count == 2
     mock_get_metric.assert_any_call(ef_mdl.OFFER_DELAY_TIMER)
     mock_get_metric.assert_any_call(ef_mdl.TASK_LAUNCHED_COUNT)
@@ -427,7 +460,12 @@ def test_resource_offers_launch(
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
 
 
-def test_resource_offers_no_tasks_to_launch(ef, fake_offer, fake_driver):
+def test_resource_offers_no_tasks_to_launch(
+    ef,
+    fake_offer,
+    fake_driver,
+    mock_get_metric
+):
     ef.suppress_after = 0.0
 
     ef.resourceOffers(fake_driver, [fake_offer])
@@ -438,13 +476,17 @@ def test_resource_offers_no_tasks_to_launch(ef, fake_offer, fake_driver):
     )
     assert fake_driver.suppressOffers.call_count == 1
     assert ef.are_offers_suppressed
+    assert fake_driver.launchTasks.call_count == 0
+    assert mock_get_metric.call_count == 0
+    assert mock_get_metric.return_value.count.call_count == 0
 
 
 def test_resource_offers_blacklisted_offer(
     ef,
     fake_task,
     fake_offer,
-    fake_driver
+    fake_driver,
+    mock_get_metric
 ):
     ef.blacklisted_slaves = ef.blacklisted_slaves.set(
         fake_offer.agent_id.value,
@@ -458,13 +500,17 @@ def test_resource_offers_blacklisted_offer(
         fake_offer.id,
         ef.offer_decline_filter
     )
+    assert fake_driver.launchTasks.call_count == 0
+    assert mock_get_metric.call_count == 0
+    assert mock_get_metric.return_value.count.call_count == 0
 
 
 def test_resource_offers_not_for_pool(
     ef,
     fake_task,
     fake_offer,
-    fake_driver
+    fake_driver,
+    mock_get_metric
 ):
     ef.offer_matches_pool = mock.Mock(return_value=False)
 
@@ -478,13 +524,17 @@ def test_resource_offers_not_for_pool(
         fake_offer.id,
         ef.offer_decline_filter
     )
+    assert fake_driver.launchTasks.call_count == 0
+    assert mock_get_metric.call_count == 0
+    assert mock_get_metric.return_value.count.call_count == 0
 
 
 def test_resource_offers_unmet_reqs(
     ef,
     fake_task,
     fake_offer,
-    fake_driver
+    fake_driver,
+    mock_get_metric
 ):
     ef.get_tasks_to_launch = mock.Mock(return_value=[])
 
@@ -496,6 +546,9 @@ def test_resource_offers_unmet_reqs(
         fake_offer.id,
         ef.offer_decline_filter
     )
+    assert fake_driver.launchTasks.call_count == 0
+    assert mock_get_metric.call_count == 0
+    assert mock_get_metric.return_value.count.call_count == 0
 
 
 def status_update_test_prep(retries, state):
@@ -549,7 +602,6 @@ def test_status_update_finished(
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef.statusUpdate(fake_driver, update)
 
-    assert not ef.task_update_queue.empty()
     assert task_id not in ef.task_metadata
     assert mock_get_metric.call_count == 1
     assert mock_get_metric.call_args == mock.call(ef_mdl.TASK_FINISHED_COUNT)
