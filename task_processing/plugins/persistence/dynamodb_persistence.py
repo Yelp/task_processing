@@ -34,35 +34,47 @@ class DynamoDBPersister(Persister):
             Item=self._event_to_item(event)
         )
 
-    def _event_to_item(self, event):
-        thawed = thaw(event)
-        resp = {}
-        for k, v in thawed.items():
-            if type(v) is str:
-                resp[k] = {
-                    'S': v
-                }
-            elif type(v) is datetime.datetime:
-                resp[k] = {
-                    'N': str(int(v.timestamp()))
-                }
-            elif type(v) is bool:
-                resp[k] = {
-                    'S': str(v)
-                }
-            elif type(v) is int:
-                resp[k] = {
-                    'N': str(v)
-                }
-            elif type(v) is dict:
-                resp[k] = {
-                    'M': self._event_to_item(v)
-                }
-            elif type(v) is list:
-                resp[k] = {
-                    'L': [self._event_to_item(i) for i in v]
-                }
-        return resp
+    def _event_to_item(self, e):
+        raw = thaw(e)
+        if type(raw) is dict:
+            resp = {}
+            for k, v in raw.items():
+                if type(v) is str:
+                    resp[k] = {
+                        'S': v
+                    }
+                elif type(v) is int:
+                    resp[k] = {
+                        'I': str(v)
+                    }
+                elif type(v) is dict:
+                    resp[k] = {
+                        'M': self._event_to_item(v)
+                    }
+                elif type(v) is list:
+                    if len(v) > 0:
+                        resp[k] = []
+                        for i in v:
+                            resp[k].append(self._event_to_item(i))
+                elif type(v) is datetime.datetime:
+                    resp[k] = {
+                        'N': str(int(v.timestamp()))
+                    }
+                elif type(v) is bool:
+                    resp[k] = {
+                        'BOOL': v
+                    }
+            return resp
+        elif type(raw) is str:
+            return {
+                'S': raw
+            }
+        elif type(raw) is int:
+            return {
+                'I': str(raw)
+            }
+        else:
+            print("Missed converting key %s type %s" % (raw, type(raw)))
 
     def _replace_decimals(self, obj):
         if isinstance(obj, list):
