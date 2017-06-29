@@ -36,10 +36,16 @@ services:
       dockerfile: ./examples/cluster/playground/Dockerfile
     environment:
       MESOS: mesosmaster:5050
+      DYNAMO: http://dynamodb:8000
     depends_on:
       - zookeeper
       - mesosmaster
       - mesosslave
+      - dynamodb
     volumes:
       - ../..:/src
       - /var/run/docker.sock:/var/run/docker.sock
+  dynamodb:
+    image: deangiberson/aws-dynamodb-local
+    ports:
+        - '8000:8000'

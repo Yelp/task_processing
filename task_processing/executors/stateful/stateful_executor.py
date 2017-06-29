@@ -27,7 +27,10 @@ class StatefulTaskExecutor(TaskExecutor):
         return self.downstream_executor.kill(task_id)
 
     def status(self, task_id):
-        return sorted(self.persister.read(task_id), key=lambda x: x.timestamp)
+        return sorted(
+            self.persister.read(task_id),
+            key=lambda x: x['timestamp']
+        )
 
     def stop(self):
         return self.downstream_executor.stop()
