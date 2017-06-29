@@ -1,4 +1,3 @@
-import datetime
 import decimal
 
 import boto3.session as bsession
@@ -26,7 +25,7 @@ class DynamoDBPersister(Persister):
         res = self.table.query(
             KeyConditionExpression=Key('task_id').eq(task_id)
         )
-        return [self._replace_decimals(item) for item in res['Items']]
+        return [self.item_to_event(item) for item in res['Items']]
 
     def write(self, event):
         return self.ddb_client.put_item(
@@ -43,9 +42,13 @@ class DynamoDBPersister(Persister):
                     resp[k] = {
                         'S': v
                     }
-                elif type(v) is int:
+                elif type(v) is bool:
                     resp[k] = {
-                        'I': str(v)
+                        'BOOL': v
+                    }
+                elif isinstance(v, (int, float)):
+                    resp[k] = {
+                        'N': str(v)
                     }
                 elif type(v) is dict:
                     resp[k] = {
@@ -56,14 +59,6 @@ class DynamoDBPersister(Persister):
                         resp[k] = []
                         for i in v:
                             resp[k].append(self._event_to_item(i))
-                elif type(v) is datetime.datetime:
-                    resp[k] = {
-                        'N': str(int(v.timestamp()))
-                    }
-                elif type(v) is bool:
-                    resp[k] = {
-                        'BOOL': v
-                    }
             return resp
         elif type(raw) is str:
             return {
@@ -71,10 +66,13 @@ class DynamoDBPersister(Persister):
             }
         elif type(raw) is int:
             return {
-                'I': str(raw)
+                'N': str(raw)
             }
         else:
             print("Missed converting key %s type %s" % (raw, type(raw)))
+
+    def item_to_event(self, obj):
+        return self._replace_decimals(obj)
 
     def _replace_decimals(self, obj):
         if isinstance(obj, list):

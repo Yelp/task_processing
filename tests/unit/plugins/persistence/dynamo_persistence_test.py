@@ -50,7 +50,8 @@ def test_replaces_decimals_unaffected(x, persister):
 
 
 @given(x=st.builds(Event,
-                   timestamp=st.datetimes(),
+                   timestamp=st.floats(
+                       min_value=0, allow_nan=False, allow_infinity=False),
                    terminal=st.booleans(),
                    success=st.booleans(),
                    task_config=st.dictionaries(
@@ -58,7 +59,7 @@ def test_replaces_decimals_unaffected(x, persister):
                    ))
 def test_event_to_item_timestamp(x, persister):
     res = persister._event_to_item(x)
-    assert 'N' in res['timestamp'].keys()
+    assert 'I' in res['timestamp'].keys()
     assert 'BOOL' in res['success'].keys()
     assert 'BOOL' in res['terminal'].keys()
     assert 'M' in res['task_config'].keys()
@@ -66,7 +67,7 @@ def test_event_to_item_timestamp(x, persister):
 
 @given(x=st.builds(
     Event,
-    timestamp=st.datetimes(),
+    timestamp=st.floats(min_value=0, allow_nan=False, allow_infinity=False),
     terminal=st.booleans(),
     success=st.booleans(),
     task_config=st.dictionaries(

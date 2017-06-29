@@ -1,4 +1,5 @@
-import datetime
+import json
+import uuid
 
 from pyrsistent import field
 from pyrsistent import freeze
@@ -8,7 +9,9 @@ from pyrsistent import PRecord
 
 
 class Event(PRecord):
-    timestamp = field(type=datetime.datetime)
+    # we store timestamps as seconds since epoch.
+    # use time.time() to generate
+    timestamp = field(type=float)
     # reference to platform-specific event object
     raw = field()
     # is this the last event for a task?
@@ -23,17 +26,19 @@ class Event(PRecord):
 
 
 def json_serializer(o):
-    if isinstance(o, datetime.datetime):
-        return o.strftime('%s')
+    if isinstance(o, uuid.UUID):
+        print("encoded value of o %s is %s" % (o, o.hex))
+        return o.hex
+    return json.JSONEncoder.default(o)
 
 
 def json_deserializer(dct):
     for k, v in dct.items():
-        if k == 'timestamp':
+        if k == "uuid":
             try:
-                dct[k] = datetime.datetime.fromtimestamp(float(v))
-            except:
-                pass
+                dct[k] = uuid.UUID(hex=v)
+            except ValueError:
+                dct[k] = freeze(v)
         else:
             dct[k] = freeze(v)
     return dct
