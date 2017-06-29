@@ -37,6 +37,7 @@ def test_creates_execution_framework_and_driver(mock_Thread, mesos_executor):
         name="taskproc-default",
         task_staging_timeout_s=60,
         translator=mesos_status_to_event,
+        pool=None,
         role="role"
     )
 

@@ -234,8 +234,8 @@ class ExecutionFramework(Scheduler):
                 available_ports = self.get_available_ports(resource)
 
         log.info(
-            'Received offer {id} with cpus: {cpu}, mem: {mem},\
-            disk: {disk} role: {role}'.format(
+            "Received offer {id} with cpus: {cpu}, mem: {mem}, "
+            "disk: {disk} role: {role}".format(
                 id=offer.id.value,
                 cpu=remaining_cpus,
                 mem=remaining_mem,
@@ -404,57 +404,55 @@ class ExecutionFramework(Scheduler):
             )
         self._last_offer_time = current_offer_time
 
-        if self.task_queue.empty() and int(time.time()) > self.suppress_after:
-            for offer in offers:
-                log.info("Declining offer {id} because there are no more \
-                    tasks to launch.".format(
-                    id=offer.id.value
-                ))
-                driver.declineOffer(offer.id, self.offer_decline_filter)
-
-            driver.suppressOffers()
-            self.are_offers_suppressed = True
-            log.info(
-                'Supressing offers because we dont have any more tasks to run.'
-            )
-            return
-
         for offer in offers:
+            if self.task_queue.empty():
+                log.info("Declining offer {id} because there are no more "
+                         "tasks to launch.".format(
+                             id=offer.id.value
+                         ))
+                driver.declineOffer(offer.id, self.offer_decline_filter)
+                if (not self.are_offers_suppressed and
+                        int(time.time()) > self.suppress_after):
+                    driver.suppressOffers()
+                    self.are_offers_suppressed = True
+                    log.info("Suppressing offers, no more tasks to run.")
+                continue
+
             with self._lock:
                 if offer.agent_id.value in self.blacklisted_slaves:
-                    log.critical("Ignoring offer {offer_id} from blacklisted \
-                        slave {slave_name}".format(
-                        offer_id=offer.id.value,
-                        slave_name=offer.agent_id.value
-                    ))
+                    log.critical("Ignoring offer {offer_id} from blacklisted "
+                                 "slave {slave_name}".format(
+                                     offer_id=offer.id.value,
+                                     slave_name=offer.agent_id.value
+                                 ))
                     driver.declineOffer(offer.id, self.offer_decline_filter)
                     continue
 
             if not self.offer_matches_pool(offer):
-                log.info("Declining offer {id} because it is not for pool \
-                    {pool}.".format(
-                    id=offer.id.value,
-                    pool=self.pool
-                ))
+                log.info("Declining offer {id} because it is not for pool "
+                         "{pool}.".format(
+                             id=offer.id.value,
+                             pool=self.pool
+                         ))
                 driver.declineOffer(offer.id, self.offer_decline_filter)
                 continue
 
             tasks_to_launch = self.get_tasks_to_launch(offer)
 
             if len(tasks_to_launch) == 0:
-                log.info("Declining offer {id} because it does not match our \
-                    requirements.".format(
-                    id=offer.id.value
-                ))
+                log.info("Declining offer {id} because it does not match our "
+                         "requirements.".format(
+                             id=offer.id.value
+                         ))
                 driver.declineOffer(offer.id, self.offer_decline_filter)
                 continue
 
-            log.info("Launching {number} new docker task(s) using offer {id} \
-                on slave {slave}".format(
-                number=len(tasks_to_launch),
-                id=offer.id.value,
-                slave=offer.agent_id.value
-            ))
+            log.info("Launching {number} new docker task(s) using offer {id} "
+                     "on slave {slave}".format(
+                         number=len(tasks_to_launch),
+                         id=offer.id.value,
+                         slave=offer.agent_id.value
+                     ))
             driver.launchTasks(offer.id, tasks_to_launch)
 
             with self._lock:

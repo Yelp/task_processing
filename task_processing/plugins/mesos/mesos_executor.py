@@ -53,6 +53,7 @@ class MesosExecutor(TaskExecutor):
     def __init__(
         self,
         role,
+        pool=None,
         principal='taskproc',
         secret=None,
         mesos_address='127.0.0.1:5050',
@@ -71,6 +72,7 @@ class MesosExecutor(TaskExecutor):
 
         self.execution_framework = ExecutionFramework(
             role=role,
+            pool=pool,
             name=framework_name,
             translator=framework_translator,
             task_staging_timeout_s=framework_staging_timeout
