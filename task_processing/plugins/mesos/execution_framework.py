@@ -472,8 +472,10 @@ class ExecutionFramework(Scheduler):
 
     def statusUpdate(self, driver, update):
         task_id = update.task_id.value
+        task_state = str(update.state)
+
         log.info("Task update {update} received for task {task}".format(
-            update=update.state,
+            update=task_state,
             task=task_id
         ))
 
@@ -483,7 +485,6 @@ class ExecutionFramework(Scheduler):
         )
 
         # Record state changes
-        task_state = update.state.encode('utf-8')
         if md.task_state != task_state:
             self.task_metadata = self.task_metadata.set(
                 task_id,
