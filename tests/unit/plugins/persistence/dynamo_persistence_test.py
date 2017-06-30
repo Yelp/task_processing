@@ -59,7 +59,7 @@ def test_replaces_decimals_unaffected(x, persister):
                    ))
 def test_event_to_item_timestamp(x, persister):
     res = persister._event_to_item(x)
-    assert 'I' in res['timestamp'].keys()
+    assert 'N' in res['timestamp'].keys()
     assert 'BOOL' in res['success'].keys()
     assert 'BOOL' in res['terminal'].keys()
     assert 'M' in res['task_config'].keys()
