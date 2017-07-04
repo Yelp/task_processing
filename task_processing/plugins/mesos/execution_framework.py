@@ -472,8 +472,10 @@ class ExecutionFramework(Scheduler):
 
     def statusUpdate(self, driver, update):
         task_id = update.task_id.value
+        task_state = str(update.state)
+
         log.info("Task update {update} received for task {task}".format(
-            update=update.state,
+            update=task_state,
             task=task_id
         ))
 
@@ -483,19 +485,19 @@ class ExecutionFramework(Scheduler):
         )
 
         # Record state changes
-        if md.task_state != update.state:
+        if md.task_state != task_state:
             self.task_metadata = self.task_metadata.set(
                 task_id,
                 md.set(
-                    task_state=update.state,
+                    task_state=task_state,
                     task_state_ts=time.time(),
                 )
             )
 
-        if update.state in self._task_states:
+        if task_state in self._task_states:
             with self._lock:
                 self.task_metadata = self.task_metadata.discard(task_id)
-            get_metric(self._task_states[update.state]).count(1)
+            get_metric(self._task_states[task_state]).count(1)
 
         # We have to do this because we are not using implicit
         # acknowledgements.
