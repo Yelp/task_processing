@@ -9,6 +9,7 @@ from pyrsistent import m
 from pyrsistent import PRecord
 from six.moves.queue import Queue
 
+from task_processing.interfaces.event import ControlEvent
 from task_processing.metrics import create_counter
 from task_processing.metrics import create_timer
 from task_processing.metrics import get_metric
@@ -77,7 +78,7 @@ class ExecutionFramework(Scheduler):
         )
 
         self.task_queue = Queue(max_task_queue_size)
-        self.task_update_queue = Queue(max_task_queue_size)
+        self.event_queue = Queue(max_task_queue_size)
         self.driver = None
         self.are_offers_suppressed = False
         self.suppress_after = int(time.time()) + self.suppress_delay
@@ -376,6 +377,17 @@ class ExecutionFramework(Scheduler):
     #                   Mesos driver hooks go here                     #
     ####################################################################
 
+    def error(self, message):
+        event = ControlEvent.set(raw=message)
+
+        # TODO: have a mapper function similar to translator of task events
+        if message == 'Framework has been removed':
+            event = event.set(message='stop')
+        else:
+            event = event.set(message='unknown')
+
+        self.event_queue.put(event)
+
     def slaveLost(self, drive, slaveId):
         log.warning("Slave lost: {id}".format(id=str(slaveId)))
 
@@ -478,7 +490,7 @@ class ExecutionFramework(Scheduler):
         ))
 
         md = self.task_metadata[task_id]
-        self.task_update_queue.put(
+        self.event_queue.put(
             self.translator(update, task_id).set(task_config=md.task_config)
         )
 

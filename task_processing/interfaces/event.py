@@ -9,20 +9,38 @@ from pyrsistent import PRecord
 
 
 class Event(PRecord):
+    type = field(type=str, initial=None)
     # we store timestamps as seconds since epoch.
     # use time.time() to generate
     timestamp = field(type=float)
     # reference to platform-specific event object
     raw = field()
-    # is this the last event for a task?
-    terminal = field(type=bool, mandatory=True)
-    success = field(type=(bool, type(None)), initial=None)
-    # platform-specific event name
-    platform_type = field(type=str)
+    # free-form dictionary for stack-specific data
+    extensions = field(type=PMap, initial=m())
+
+    # task-specific fields
     # task_id this event pertains to
     task_id = field(type=str)
-    task_config = field()
-    extensions = field(type=PMap, initial=m())
+    # task config dict that sourced the task this event refers to
+    task_config = field(type=PMap)
+    # is this the last event for a task?
+    terminal = field(type=bool, mandatory=True)
+    # is this "happy" event?
+    success = field(type=(bool, type(None)), initial=None)
+    # platform-specific event type
+    platform_type = field(type=str)
+
+
+class TaskEvent(Event):
+    def __init__(self, **kwargs):
+        kwargs.setdefault('type', 'task')
+        super(Event, self).__init__(**kwargs)
+
+
+class ControlEvent(Event):
+    def __init__(self, **kwargs):
+        kwargs.setdefault('type', 'control')
+        super(Event, self).__init__(**kwargs)
 
 
 def json_serializer(o):

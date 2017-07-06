@@ -20,6 +20,11 @@ class Sync(Runner):
 
         while True:
             event = event_queue.get()
+
+            if event.type == 'control' and \
+               event.message == 'stop':
+                return event
+
             if event.task_id != task_config.task_id:
                 event_queue.put(event)
                 time.sleep(1)  # hope somebody else picks it up?
