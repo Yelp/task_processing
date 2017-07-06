@@ -27,7 +27,6 @@ class Event(PRecord):
 
 def json_serializer(o):
     if isinstance(o, uuid.UUID):
-        print("encoded value of o %s is %s" % (o, o.hex))
         return o.hex
     return json.JSONEncoder.default(o)
 
