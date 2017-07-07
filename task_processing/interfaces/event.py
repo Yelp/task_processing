@@ -9,7 +9,8 @@ from pyrsistent import PRecord
 
 
 class Event(PRecord):
-    type = field(type=str, initial=None)
+    type = field(type=str,
+                 invariant=lambda x: x in ['task', 'control'])
     # we store timestamps as seconds since epoch.
     # use time.time() to generate
     timestamp = field(type=float)
@@ -17,18 +18,21 @@ class Event(PRecord):
     raw = field()
     # free-form dictionary for stack-specific data
     extensions = field(type=PMap, initial=m())
+    # is this the last event for a task?
+    terminal = field(type=bool, mandatory=True)
 
     # task-specific fields
     # task_id this event pertains to
     task_id = field(type=str)
     # task config dict that sourced the task this event refers to
     task_config = field(type=PMap)
-    # is this the last event for a task?
-    terminal = field(type=bool, mandatory=True)
-    # is this "happy" event?
+    # the task finished with exit code 0
     success = field(type=(bool, type(None)), initial=None)
     # platform-specific event type
     platform_type = field(type=str)
+
+    # control events
+    message = field(type=str)
 
 
 class TaskEvent(Event):
