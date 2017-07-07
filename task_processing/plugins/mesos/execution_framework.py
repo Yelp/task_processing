@@ -58,8 +58,8 @@ class ExecutionFramework(Scheduler):
         translator=mesos_status_to_event,
         slave_blacklist_timeout_s=900,
         offer_backoff=10,
-        suppress_delay=10,
         initial_decline_delay=1,
+        suppress_delay=3600
     ):
         self.name = name
         # wait this long for a task to launch.
@@ -75,7 +75,8 @@ class ExecutionFramework(Scheduler):
             user='root',
             name=self.name,
             checkpoint=True,
-            role=self.role
+            role=self.role,
+            failover_timeout=3600,
         )
 
         self.task_queue = Queue(max_task_queue_size)
@@ -177,6 +178,7 @@ class ExecutionFramework(Scheduler):
                 self.blacklisted_slaves.remove(agent_id)
 
     def enqueue_task(self, task_config):
+        log.error('Launching {}'.format(task_config.task_id))
         with self._lock:
             self.task_metadata = self.task_metadata.set(
                 task_config.task_id,
@@ -251,7 +253,8 @@ class ExecutionFramework(Scheduler):
 
                 if ((remaining_cpus >= task.cpus and
                      remaining_mem >= task.mem and
-                     remaining_disk >= task.disk)):
+                     remaining_disk >= task.disk and
+                     len(available_ports) > 0)):
                     # This offer is sufficient for us to launch task
                     tasks_to_launch.append(
                         self.create_new_docker_task(
@@ -283,7 +286,7 @@ class ExecutionFramework(Scheduler):
         return tasks_to_launch
 
     def create_new_docker_task(self, offer, task_config, available_ports):
-        # Handle the case of multiple port allocations
+        # TODO: Handle the case of multiple port allocations
         port_to_use = available_ports[0]
         available_ports[:] = available_ports[1:]
 
@@ -499,6 +502,7 @@ class ExecutionFramework(Scheduler):
     def statusUpdate(self, driver, update):
         task_id = update.task_id.value
         task_state = str(update.state)
+        log.error("Pairs is {} {}".format(task_id, task_state))
 
         log.info("Task update {update} received for task {task}".format(
             update=task_state,
@@ -530,8 +534,7 @@ class ExecutionFramework(Scheduler):
                 )
 
         if task_state in self._task_states:
-            with self._lock:
-                self.task_metadata = self.task_metadata.discard(task_id)
+            self.task_metadata = self.task_metadata.discard(task_id)
             get_metric(self._task_states[task_state]).count(1)
 
         # We have to do this because we are not using implicit

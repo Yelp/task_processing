@@ -19,6 +19,7 @@
         language_version: python3.6
     -   id: flake8
         language_version: python3.6
+        args: [--max-line-length=131]
     -   id: requirements-txt-fixer
         language_version: python3.6
     -   id: check-added-large-files

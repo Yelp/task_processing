@@ -28,7 +28,7 @@ def parse_sync_args():
     parser.add_argument(
         '-r', '--role',
         dest="role",
-        default='task-proc',
+        default='*',
         help="mesos reservation role to use"
     )
     parser.add_argument(
@@ -44,7 +44,8 @@ def parse_sync_args():
 def main():
     args = parse_sync_args()
     if not args.master:
-        mesos_address = os.environ.get('MESOS', '127.0.0.1:5050')
+        # mesos_address = os.environ.get('MESOS', '10.40.1.51:5050')
+        mesos_address = os.environ.get('MESOS', '169.254.255.254:20716')
     else:
         mesos_address = args.master
 

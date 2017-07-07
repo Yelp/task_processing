@@ -1,0 +1,66 @@
+jobs:
+    -   name: "user_session_metrics"
+        allow_overlap: True
+        node: "batch_sfo2_pool"
+        schedule: 'cron */5 * * * *'
+        actions:
+            -   name: "sleep_60_secs"
+                command: "/bin/sleep 60"
+            -   name: "sleep_120_secs"
+                command: "/bin/sleep 120"
+                requires: [sleep_60_secs]
+            -   name: "sleep_180_secs"
+                command: "/bin/sleep 120"
+                requires: [sleep_60_secs, sleep_120_secs]
+    -   name: "user_session_metrics_01"
+        allow_overlap: True
+        node: "batch_sfo2_pool"
+        schedule: 'cron */5 * * * *'
+        actions:
+            -   name: "sleep_60_secs"
+                command: "/bin/sleep 60"
+            -   name: "sleep_120_secs"
+                command: "/bin/sleep 120"
+                requires: [sleep_60_secs]
+            -   name: "sleep_180_secs"
+                command: "/bin/sleep 120"
+                requires: [sleep_60_secs, sleep_120_secs]
+    -   name: "user_session_metrics_02"
+        allow_overlap: True
+        node: "batch_sfo2_pool"
+        schedule: 'cron */5 * * * *'
+        actions:
+            -   name: "sleep_60_secs"
+                command: "/bin/sleep 60"
+            -   name: "sleep_120_secs"
+                command: "/bin/sleep 120"
+                requires: [sleep_60_secs]
+            -   name: "sleep_180_secs"
+                command: "/bin/sleep 120"
+                requires: [sleep_60_secs, sleep_120_secs]
+    -   name: "user_session_metrics_03"
+        allow_overlap: True
+        node: "batch_sfo2_pool"
+        schedule: 'cron */5 * * * *'
+        actions:
+            -   name: "sleep_60_secs"
+                command: "/bin/sleep 60"
+            -   name: "sleep_120_secs"
+                command: "/bin/sleep 120"
+                requires: [sleep_60_secs]
+            -   name: "sleep_180_secs"
+                command: "/bin/sleep 120"
+                requires: [sleep_60_secs, sleep_120_secs]
+    -   name: "user_session_metrics_04"
+        allow_overlap: True
+        node: "batch_sfo2_pool"
+        schedule: 'cron */5 * * * *'
+        actions:
+            -   name: "sleep_60_secs"
+                command: "/bin/sleep 60"
+            -   name: "sleep_120_secs"
+                command: "/bin/sleep 120"
+                requires: [sleep_60_secs]
+            -   name: "sleep_180_secs"
+                command: "/bin/sleep 120"
+                requires: [sleep_60_secs, sleep_120_secs]

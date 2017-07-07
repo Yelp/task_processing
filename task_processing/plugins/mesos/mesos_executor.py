@@ -72,12 +72,12 @@ class MesosExecutor(TaskExecutor):
         role,
         pool=None,
         principal='taskproc',
-        secret=None,
-        mesos_address='127.0.0.1:5050',
-        initial_decline_delay=1.0,
+        secret='bee5aeJibee5aeJibee5aeJi',
+        mesos_address='10.40.1.50:5050',
         framework_translator=mesos_status_to_event,
         framework_name='taskproc-default',
         framework_staging_timeout=60,
+        initial_decline_delay=10,
     ):
         """
         Constructs the instance of a task execution, encapsulating all state
