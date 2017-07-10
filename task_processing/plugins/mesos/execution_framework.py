@@ -9,7 +9,7 @@ from pyrsistent import m
 from pyrsistent import PRecord
 from six.moves.queue import Queue
 
-from task_processing.interfaces.event import ControlEvent
+from task_processing.interfaces.event import control_event
 from task_processing.metrics import create_counter
 from task_processing.metrics import create_timer
 from task_processing.metrics import get_metric
@@ -378,7 +378,7 @@ class ExecutionFramework(Scheduler):
     ####################################################################
 
     def error(self, message):
-        event = ControlEvent.set(raw=message)
+        event = control_event(raw=message)
 
         # TODO: have a mapper function similar to translator of task events
         if message == 'Framework has been removed':

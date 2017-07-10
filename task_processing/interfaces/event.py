@@ -8,9 +8,13 @@ from pyrsistent import PMap
 from pyrsistent import PRecord
 
 
+EVENT_KINDS = ['task', 'control']
+
+
 class Event(PRecord):
-    type = field(type=str,
-                 invariant=lambda x: x in ['task', 'control'])
+    kind = field(type=str,
+                 invariant=lambda x: (x in EVENT_KINDS,
+                                      'kind not in {}'.format(EVENT_KINDS)))
     # we store timestamps as seconds since epoch.
     # use time.time() to generate
     timestamp = field(type=float)
@@ -25,7 +29,7 @@ class Event(PRecord):
     # task_id this event pertains to
     task_id = field(type=str)
     # task config dict that sourced the task this event refers to
-    task_config = field(type=PMap)
+    task_config = field(type=dict)
     # the task finished with exit code 0
     success = field(type=(bool, type(None)), initial=None)
     # platform-specific event type
@@ -35,16 +39,14 @@ class Event(PRecord):
     message = field(type=str)
 
 
-class TaskEvent(Event):
-    def __init__(self, **kwargs):
-        kwargs.setdefault('type', 'task')
-        super(Event, self).__init__(**kwargs)
+def task_event(**kwargs):
+    kwargs.setdefault('kind', 'task')
+    return Event(**kwargs)
 
 
-class ControlEvent(Event):
-    def __init__(self, **kwargs):
-        kwargs.setdefault('type', 'control')
-        super(Event, self).__init__(**kwargs)
+def control_event(**kwargs):
+    kwargs.setdefault('kind', 'control')
+    return Event(**kwargs)
 
 
 def json_serializer(o):
