@@ -21,7 +21,7 @@ class Sync(Runner):
         while True:
             event = event_queue.get()
 
-            if event.type == 'control' and \
+            if event.kind == 'control' and \
                event.message == 'stop':
                 return event
 

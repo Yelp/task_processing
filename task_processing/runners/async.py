@@ -44,7 +44,7 @@ class Async(Runner):
 
                 # TODO: have a default callback? raise exception when this
                 # event is ignored?
-                if event.type == 'control' and \
+                if event.kind == 'control' and \
                    event.message == 'stop':
                     self.stopping = True
                     continue
