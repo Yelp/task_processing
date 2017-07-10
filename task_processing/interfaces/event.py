@@ -5,6 +5,7 @@ from pyrsistent import field
 from pyrsistent import freeze
 from pyrsistent import m
 from pyrsistent import PMap
+from pyrsistent import pmap
 from pyrsistent import PRecord
 
 
@@ -21,7 +22,7 @@ class Event(PRecord):
     # reference to platform-specific event object
     raw = field()
     # free-form dictionary for stack-specific data
-    extensions = field(type=PMap, initial=m())
+    extensions = field(type=PMap, initial=m(), factory=pmap)
     # is this the last event for a task?
     terminal = field(type=bool, mandatory=True)
 
@@ -29,7 +30,7 @@ class Event(PRecord):
     # task_id this event pertains to
     task_id = field(type=str)
     # task config dict that sourced the task this event refers to
-    task_config = field(type=dict)
+    task_config = field(type=PMap, factory=pmap)
     # the task finished with exit code 0
     success = field(type=(bool, type(None)), initial=None)
     # platform-specific event type
