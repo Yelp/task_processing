@@ -1,8 +1,11 @@
+import logging
 import time
 
 from six.moves.queue import Queue
 
 from task_processing.interfaces.runner import Runner
+
+log = logging.getLogger(__name__)
 
 
 class Sync(Runner):
@@ -23,6 +26,7 @@ class Sync(Runner):
 
             if event.kind == 'control' and \
                event.message == 'stop':
+                log.info('Stop event received: {}'.format(event))
                 return event
 
             if event.task_id != task_config.task_id:

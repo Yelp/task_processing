@@ -24,7 +24,7 @@ class Event(PRecord):
     # free-form dictionary for stack-specific data
     extensions = field(type=PMap, initial=m(), factory=pmap)
     # is this the last event for a task?
-    terminal = field(type=bool, mandatory=True)
+    terminal = field(type=bool)
 
     # task-specific fields
     # task_id this event pertains to

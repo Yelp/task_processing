@@ -377,7 +377,7 @@ class ExecutionFramework(Scheduler):
     #                   Mesos driver hooks go here                     #
     ####################################################################
 
-    def error(self, message):
+    def error(self, driver, message):
         event = control_event(raw=message)
 
         # TODO: have a mapper function similar to translator of task events
