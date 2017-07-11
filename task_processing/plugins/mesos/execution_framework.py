@@ -160,13 +160,13 @@ class ExecutionFramework(Scheduler):
             ))
             self.blacklisted_slaves = \
                 self.blacklisted_slaves.set(agent_id, time.time())
-            unblacklist_thread = threading.Thread(
-                target=self.unblacklist_slave,
-                kwargs={'timeout': timeout, 'agent_id': agent_id},
-            )
-            unblacklist_thread.daemon = True
-            unblacklist_thread.start()
             get_metric(BLACKLISTED_AGENTS_COUNT).count(1)
+        unblacklist_thread = threading.Thread(
+            target=self.unblacklist_slave,
+            kwargs={'timeout': timeout, 'agent_id': agent_id},
+        )
+        unblacklist_thread.daemon = True
+        unblacklist_thread.start()
 
     def unblacklist_slave(self, agent_id, timeout):
         time.sleep(timeout)
