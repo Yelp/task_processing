@@ -173,8 +173,9 @@ class ExecutionFramework(Scheduler):
         log.info(
             'Unblacklisting slave: {id}'.format(id=agent_id)
         )
-        self.blacklisted_slaves = \
-            self.blacklisted_slaves.discard(agent_id)
+        with self._lock:
+            self.blacklisted_slaves = \
+                self.blacklisted_slaves.discard(agent_id)
 
     def enqueue_task(self, task_config):
         with self._lock:
