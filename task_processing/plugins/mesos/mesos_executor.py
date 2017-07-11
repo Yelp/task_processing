@@ -107,4 +107,4 @@ class MesosExecutor(TaskExecutor):
         self.driver.join()
 
     def get_event_queue(self):
-        return self.execution_framework.task_update_queue
+        return self.execution_framework.event_queue

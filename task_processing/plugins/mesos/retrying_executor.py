@@ -64,7 +64,13 @@ class RetryingExecutor(TaskExecutor):
     def retry_loop(self):
         while True:
             while not self.src_queue.empty():
-                e = self.event_with_retries(self.src_queue.get())
+                e = self.src_queue.get()
+
+                if e.kind == 'control':
+                    self.dest_queue.put(e)
+                    continue
+
+                e = self.event_with_retries(e)
 
                 if e.terminal:
                     if self.retry_pred(e):

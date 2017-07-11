@@ -42,6 +42,13 @@ class Async(Runner):
             try:
                 event = event_queue.get(True, 10)
 
+                # TODO: have a default callback? raise exception when this
+                # event is ignored?
+                if event.kind == 'control' and \
+                   event.message == 'stop':
+                    self.stopping = True
+                    continue
+
                 for cb in self.callbacks:
                     if cb.predicate(event):
                         cb.cb(event)

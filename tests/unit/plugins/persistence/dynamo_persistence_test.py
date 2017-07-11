@@ -50,6 +50,7 @@ def test_replaces_decimals_unaffected(x, persister):
 
 
 @given(x=st.builds(Event,
+                   kind=st.sampled_from(['task', 'control']),
                    timestamp=st.floats(
                        min_value=0, allow_nan=False, allow_infinity=False),
                    terminal=st.booleans(),
@@ -67,6 +68,7 @@ def test_event_to_item_timestamp(x, persister):
 
 @given(x=st.builds(
     Event,
+    kind=st.sampled_from(['task', 'control']),
     timestamp=st.floats(min_value=0, allow_nan=False, allow_infinity=False),
     terminal=st.booleans(),
     success=st.booleans(),
