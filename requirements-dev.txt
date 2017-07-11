@@ -1,5 +1,5 @@
-hypothesis
 # Testing dependencies
+hypothesis
 mock
 pre-commit
 pytest

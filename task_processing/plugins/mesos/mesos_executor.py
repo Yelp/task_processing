@@ -14,6 +14,7 @@ from task_processing.plugins.mesos.execution_framework import (
     ExecutionFramework
 )
 from task_processing.plugins.mesos.translator import mesos_status_to_event
+from task_processing.plugins.smartstack import get_mesos_master
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
 LEVEL = logging.DEBUG
 logging.basicConfig(format=FORMAT, level=LEVEL)
@@ -56,7 +57,7 @@ class MesosExecutor(TaskExecutor):
         pool=None,
         principal='taskproc',
         secret=None,
-        mesos_address='127.0.0.1:5050',
+        mesos_info=('norcal_devc', 'uswest1-devc'),
         framework_translator=mesos_status_to_event,
         framework_name='taskproc-default',
         framework_staging_timeout=60,
@@ -78,7 +79,11 @@ class MesosExecutor(TaskExecutor):
             task_staging_timeout_s=framework_staging_timeout
         )
 
-        # TODO: Get mesos master ips from smartstack
+        if isinstance(mesos_info, tuple):
+            mesos_address = get_mesos_master(*mesos_info)
+        elif isinstance(mesos_info, str):
+            mesos_address = mesos_info
+
         self.driver = MesosSchedulerDriver(
             sched=self.execution_framework,
             framework=self.execution_framework.framework_info,

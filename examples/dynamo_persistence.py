@@ -20,7 +20,7 @@ def main():
         secret = f.read().strip()
     mesos_executor = MesosExecutor(
         secret=secret,
-        mesos_address=mesos_address,
+        mesos_info=mesos_address,
         role='task-proc'
     )
     s = session.Session(

@@ -17,7 +17,7 @@ def main():
         secret = f.read().strip()
     executor = MesosExecutor(
         secret=secret,
-        mesos_address=mesos_address,
+        mesos_info=mesos_address,
         role='task-proc'
     )
 

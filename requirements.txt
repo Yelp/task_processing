@@ -2,3 +2,4 @@
 -e .
 boto3
 pyrsistent
+PyYAML

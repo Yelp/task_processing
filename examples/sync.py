@@ -34,6 +34,16 @@ def parse_sync_args():
         dest="secret",
         help="mesos secret to use"
     )
+    parser.add_argument(
+        '-c', '--cluster',
+        dest="cluster",
+        help="mesos master cluster"
+    )
+    parser.add_argument(
+        '-g', '--region',
+        dest="region",
+        help="mesos master region"
+    )
 
     args = parser.parse_args()
     return args
@@ -41,10 +51,12 @@ def parse_sync_args():
 
 def main():
     args = parse_sync_args()
-    if not args.master:
-        mesos_address = os.environ.get('MESOS', '127.0.0.1:5050')
+    if args.cluster and args.region:
+        mesos_info = (args.cluster, args.region)
+    elif args.master:
+        mesos_info = args.master
     else:
-        mesos_address = args.master
+        mesos_info = os.environ.get('MESOS', '127.0.0.1:5050')
 
     if not args.secret:
         with open('./examples/cluster/secret') as f:
@@ -54,7 +66,7 @@ def main():
 
     executor = MesosExecutor(
         secret=secret,
-        mesos_address=mesos_address,
+        mesos_info=mesos_info,
         pool=args.pool,
         role=args.role
     )
