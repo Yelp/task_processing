@@ -8,12 +8,12 @@ from task_processing.interfaces.event import Event
 
 @pytest.fixture
 def event():
-    return Event(terminal=True)
+    return Event(kind='task')
 
 
 def test_event_creation():
     x = object()
-    e = Event(raw=x, terminal=True, platform_type='killed')
+    e = Event(kind='task', raw=x, terminal=True, platform_type='killed')
     assert e.raw == x
     assert e.terminal
     assert e.platform_type == 'killed'

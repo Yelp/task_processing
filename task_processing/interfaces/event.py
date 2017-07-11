@@ -14,6 +14,7 @@ EVENT_KINDS = ['task', 'control']
 
 class Event(PRecord):
     kind = field(type=str,
+                 mandatory=True,
                  invariant=lambda x: (x in EVENT_KINDS,
                                       'kind not in {}'.format(EVENT_KINDS)))
     # we store timestamps as seconds since epoch.
