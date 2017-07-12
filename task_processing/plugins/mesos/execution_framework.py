@@ -7,6 +7,7 @@ from pymesos.interface import Scheduler
 from pyrsistent import field
 from pyrsistent import m
 from pyrsistent import PRecord
+from pyrsistent import thaw
 from six.moves.queue import Queue
 
 from task_processing.interfaces.event import control_event
@@ -335,17 +336,8 @@ class ExecutionFramework(Scheduler):
                             force_pull_image=True,
                             port_mappings=[Dict(host_port=port_to_use,
                                                 container_port=8888)]),
-                parameters=[
-                    Dict(key=param['key'], value=param['value'])
-                    for param in task_config.docker_parameters
-                ],
-                volumes=[
-                    Dict(container_path=container_path,
-                         host_path=host_path,
-                         mode=1 if mode == "RW" else 2)
-                    for mode, paths in task_config.volumes
-                    for container_path, host_path in paths
-                ]
+                parameters=thaw(task_config.docker_parameters),
+                volumes=thaw(task_config.volumes)
             )
         )
 

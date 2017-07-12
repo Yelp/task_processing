@@ -301,10 +301,12 @@ def test_create_new_docker_task(
         task_state='fake_state',
         task_state_ts=time.time()
     )
-    fake_task = fake_task.set(volumes=v((
-        'fake_mode',
-        [('fake_container_path', 'fake_host_path')]
-    )))
+    fake_task = fake_task.set(volumes=v(
+        Dict(
+            mode='RO',
+            container_path='fake_container_path',
+            host_path='fake_host_path'
+        )))
 
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     docker_task = ef.create_new_docker_task(
@@ -351,7 +353,7 @@ def test_create_new_docker_task(
             volumes=[Dict(
                 container_path='fake_container_path',
                 host_path='fake_host_path',
-                mode=2
+                mode='RO'
             )]
         )
     )
@@ -428,6 +430,8 @@ def test_resource_offers_launch(
     fake_driver,
     mock_get_metric,
     mock_time
+
+
 ):
     ef.driver = fake_driver
     ef._last_offer_time = 1.0
