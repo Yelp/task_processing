@@ -29,7 +29,7 @@ def valid_volumes(volumes):
             return (
                 False,
                 'Invalid volume format, must only contain following keys: '
-                '[mode, container_path, host_path], was: {}'.format(vol.keys())
+                '{}, was: {}'.format(VOLUME_KEYS, vol.keys())
             )
     return (True, None)
 
