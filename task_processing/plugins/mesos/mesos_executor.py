@@ -25,7 +25,7 @@ VOLUME_KEYS = set(['mode', 'container_path', 'host_path'])
 
 def valid_volumes(volumes):
     for vol in volumes:
-        if vol.keys() != VOLUME_KEYS:
+        if set(vol.keys()) != VOLUME_KEYS:
             return (
                 False,
                 'Invalid volume format, must only contain following keys: '
