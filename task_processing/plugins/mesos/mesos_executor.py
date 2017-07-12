@@ -20,6 +20,20 @@ logging.basicConfig(format=FORMAT, level=LEVEL)
 log = logging.getLogger(__name__)
 
 
+VOLUME_KEYS = set(['mode', 'container_path', 'host_path'])
+
+
+def valid_volumes(volumes):
+    for vol in volumes:
+        if vol.keys() != VOLUME_KEYS:
+            return (
+                False,
+                'Invalid volume format, must only contain following keys: '
+                '{}, was: {}'.format(VOLUME_KEYS, vol.keys())
+            )
+    return (True, None)
+
+
 class MesosTaskConfig(PRecord):
     uuid = field(type=uuid.UUID, initial=uuid.uuid4)
     name = field(type=str, initial="default")
@@ -34,7 +48,10 @@ class MesosTaskConfig(PRecord):
     disk = field(type=float,
                  initial=10.0,
                  invariant=lambda d: (d > 0, 'disk > 0'))
-    volumes = field(type=PVector, initial=v(), factory=pvector)
+    volumes = field(type=PVector,
+                    initial=v(),
+                    factory=pvector,
+                    invariant=valid_volumes)
     ports = field(type=PVector, initial=v(), factory=pvector)
     cap_add = field(type=PVector, initial=v(), factory=pvector)
     ulimit = field(type=PVector, initial=v(), factory=pvector)
