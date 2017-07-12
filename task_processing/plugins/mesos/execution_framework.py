@@ -58,6 +58,7 @@ class ExecutionFramework(Scheduler):
         slave_blacklist_timeout_s=900,
         offer_backoff=10,
         suppress_delay=10,
+        initial_decline_delay=1,
     ):
         self.name = name
         # wait this long for a task to launch.
@@ -67,7 +68,6 @@ class ExecutionFramework(Scheduler):
         self.translator = translator
         self.slave_blacklist_timeout_s = slave_blacklist_timeout_s
         self.offer_backoff = offer_backoff
-        self.suppress_delay = suppress_delay
 
         # TODO: why does this need to be root, can it be "mesos plz figure out"
         self.framework_info = Dict(
@@ -81,7 +81,8 @@ class ExecutionFramework(Scheduler):
         self.event_queue = Queue(max_task_queue_size)
         self.driver = None
         self.are_offers_suppressed = False
-        self.suppress_after = int(time.time()) + self.suppress_delay
+        self.suppress_after = int(time.time()) + suppress_delay
+        self.decline_after = time.time() + initial_decline_delay
 
         self.offer_decline_filter = Dict(refuse_seconds=self.offer_backoff)
         self._lock = threading.RLock()
@@ -415,6 +416,10 @@ class ExecutionFramework(Scheduler):
                 current_offer_time - self._last_offer_time
             )
         self._last_offer_time = current_offer_time
+
+        # Give user some time to enqueue tasks
+        if self.task_queue.empty() and current_offer_time < self.decline_after:
+            time.sleep(self.decline_after - current_offer_time)
 
         for offer in offers:
             if self.task_queue.empty():
