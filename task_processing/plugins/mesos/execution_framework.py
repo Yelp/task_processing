@@ -8,6 +8,7 @@ from pyrsistent import field
 from pyrsistent import m
 from pyrsistent import PRecord
 from pyrsistent import thaw
+from pyrsistent import v
 from six.moves.queue import Queue
 
 from task_processing.interfaces.event import control_event
@@ -87,7 +88,7 @@ class ExecutionFramework(Scheduler):
 
         self.offer_decline_filter = Dict(refuse_seconds=self.offer_backoff)
         self._lock = threading.RLock()
-        self.blacklisted_slaves = m()
+        self.blacklisted_slaves = v()
         self.task_metadata = m()
 
         self._initialize_metrics()
@@ -152,14 +153,13 @@ class ExecutionFramework(Scheduler):
             if agent_id in self.blacklisted_slaves:
                 # Punish this slave for more time.
                 self.blacklisted_slaves = \
-                    self.blacklisted_slaves.discard(agent_id)
+                    self.blacklisted_slaves.remove(agent_id)
 
             log.info('Blacklisting slave: {id} for {secs} seconds.'.format(
                 id=agent_id,
                 secs=timeout
             ))
-            self.blacklisted_slaves = \
-                self.blacklisted_slaves.set(agent_id, time.time())
+            self.blacklisted_slaves = self.blacklisted_slaves.append(agent_id)
             get_metric(BLACKLISTED_AGENTS_COUNT).count(1)
         unblacklist_thread = threading.Thread(
             target=self.unblacklist_slave,
@@ -175,7 +175,7 @@ class ExecutionFramework(Scheduler):
         )
         with self._lock:
             self.blacklisted_slaves = \
-                self.blacklisted_slaves.discard(agent_id)
+                self.blacklisted_slaves.remove(agent_id)
 
     def enqueue_task(self, task_config):
         with self._lock:
