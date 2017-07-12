@@ -2,8 +2,10 @@ import threading
 
 import mock
 import pytest
+import yaml
 
 import task_processing.plugins.mesos.mesos_executor as me_module
+import task_processing.plugins.smartstack as smartstack
 from task_processing.plugins.mesos.translator import mesos_status_to_event
 
 
@@ -14,14 +16,31 @@ def mock_Thread():
 
 
 @pytest.fixture
-def mesos_executor(mocker, request, mock_Thread):
+def mock_yamlload():
+    fake_conf = {
+        'mesos_leader_paasta_fake_cluster_fake_region': {
+            'proxy_port': 'fake_port'
+        }
+    }
+
+    with mock.patch.object(yaml, 'load', return_value=fake_conf) as\
+            mock_yamlload:
+        yield mock_yamlload
+
+
+@pytest.fixture
+def mesos_executor(mocker, request, mock_Thread, mock_yamlload):
     mocker.patch.object(me_module, 'ExecutionFramework')
     mocker.patch.object(me_module, 'MesosSchedulerDriver')
+    smartstack.TASKPROC_SERVICE_FILE = '/dev/null'
 
     ef = me_module.ExecutionFramework.return_value
     fi = mocker.Mock()
     ef.framework_info = fi
-    me = me_module.MesosExecutor("role")
+    me = me_module.MesosExecutor(
+        "role",
+        mesos_info=('fake_cluster', 'fake_region')
+    )
 
     def mesos_executor_teardown():
         me.stop()
@@ -47,7 +66,7 @@ def test_creates_execution_framework_and_driver(mock_Thread, mesos_executor):
         sched=ef,
         framework=ef.framework_info,
         use_addict=True,
-        master_uri='127.0.0.1:5050',
+        master_uri='169.254.255.254:fake_port',
         implicit_acknowledgements=False,
         principal='taskproc',
         secret=None,
