@@ -36,6 +36,7 @@ def test_creates_execution_framework_and_driver(mock_Thread, mesos_executor):
     assert me_module.ExecutionFramework.call_args == mock.call(
         name="taskproc-default",
         task_staging_timeout_s=60,
+        initial_decline_delay=1.0,
         translator=mesos_status_to_event,
         pool=None,
         role="role"

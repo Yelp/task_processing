@@ -74,6 +74,7 @@ class MesosExecutor(TaskExecutor):
         principal='taskproc',
         secret=None,
         mesos_address='127.0.0.1:5050',
+        initial_decline_delay=1.0,
         framework_translator=mesos_status_to_event,
         framework_name='taskproc-default',
         framework_staging_timeout=60,
@@ -92,7 +93,8 @@ class MesosExecutor(TaskExecutor):
             pool=pool,
             name=framework_name,
             translator=framework_translator,
-            task_staging_timeout_s=framework_staging_timeout
+            task_staging_timeout_s=framework_staging_timeout,
+            initial_decline_delay=initial_decline_delay
         )
 
         # TODO: Get mesos master ips from smartstack
