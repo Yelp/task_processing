@@ -26,10 +26,8 @@ def main():
 
     tasks = set()
     TaskConfig = MesosExecutor.TASK_CONFIG_INTERFACE
-    for _ in range(1, 20):
-        task_config = TaskConfig(
-            image='ubuntu:14.04', cmd='/bin/sleep 2'
-        )
+    for _ in range(2):
+        task_config = TaskConfig(image='busybox', cmd='/bin/true')
         tasks.add(task_config.task_id)
         runner.run(task_config)
 
@@ -41,16 +39,14 @@ def main():
             event = None
 
         if event is None:
-            print(
-                'Timeout on subscription queue, still waiting for {}'.format(
-                    tasks
-                )
-            )
+            print('Timeout while waiting for {}'.format(tasks))
+            break
         else:
             if event.terminal:
                 tasks.discard(event.task_id)
 
     runner.stop()
+    return 0 if len(tasks) == 0 else 1
 
 
 if __name__ == '__main__':

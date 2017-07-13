@@ -52,20 +52,21 @@ def main():
     else:
         secret = args.secret
 
+    TaskConfig = MesosExecutor.TASK_CONFIG_INTERFACE
+    task_config = TaskConfig(image="busybox", cmd='/bin/true')
     executor = MesosExecutor(
         secret=secret,
         mesos_address=mesos_address,
         pool=args.pool,
         role=args.role
     )
-
-    TaskConfig = MesosExecutor.TASK_CONFIG_INTERFACE
-    task_config = TaskConfig(image="ubuntu:14.04", cmd="/bin/sleep 10")
     runner = Sync(executor)
     result = runner.run(task_config)
     print(result)
     print(result.raw)
     runner.stop()
+
+    return 0 if result.success else 1
 
 
 if __name__ == "__main__":
