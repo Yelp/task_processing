@@ -18,7 +18,7 @@ def main():
         mesos_address=mesos_address,
         role='task-proc'
     )
-    task_config = make_task_config(image="ubuntu:14.04", cmd="/bin/sleep 10")
+    task_config = make_task_config(image="busybox", cmd="/bin/true")
     runner = Promise(executor)
     future = runner.run(task_config)
     print(future.get())

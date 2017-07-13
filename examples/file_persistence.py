@@ -24,16 +24,14 @@ def main():
     executor = StatefulTaskExecutor(
         downstream_executor=mesos_executor,
         persister=FilePersistence(
-            output_file='foo'
+            output_file='/tmp/foo'
         )
     )
     runner = Sync(executor=executor)
     tasks = set()
     TaskConfig = MesosExecutor.TASK_CONFIG_INTERFACE
     for _ in range(1, 2):
-        task_config = TaskConfig(
-            image='ubuntu:14.04', cmd='/bin/sleep 2'
-        )
+        task_config = TaskConfig(image='busybox', cmd='/bin/true')
         tasks.add(task_config.task_id)
         runner.run(task_config)
         print(executor.status(task_config.task_id))
