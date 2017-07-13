@@ -135,7 +135,10 @@ def test_ef_kills_stuck_tasks(
     assert ef.kill_task.call_count == 1
     assert ef.kill_task.call_args == mock.call(task_id)
     assert ef.blacklist_slave.call_count == 1
-    assert ef.blacklist_slave.call_args == mock.call(task_metadata.agent_id)
+    assert ef.blacklist_slave.call_args == mock.call(
+        agent_id='fake_agent_id',
+        timeout=900
+    )
     assert mock_get_metric.call_count == 1
     assert mock_get_metric.call_args == mock.call(ef_mdl.TASK_STUCK_COUNT)
     assert mock_get_metric.return_value.count.call_count == 1
@@ -177,11 +180,10 @@ def test_blacklist_slave(
     agent_id = 'fake_agent_id'
     mock_time.return_value = 2.0
 
-    ef.blacklisted_slaves = ef.blacklisted_slaves.set(agent_id, 1.0)
-    ef.blacklist_slave(agent_id)
+    ef.blacklisted_slaves = ef.blacklisted_slaves.append(agent_id)
+    ef.blacklist_slave(agent_id, timeout=2.0)
 
-    assert ef.blacklisted_slaves[agent_id] != 1.0
-    assert ef.blacklisted_slaves[agent_id] == 2.0
+    assert agent_id in ef.blacklisted_slaves
     assert mock_get_metric.call_count == 1
     assert mock_get_metric.call_args == mock.call(
         ef_mdl.BLACKLISTED_AGENTS_COUNT
@@ -190,16 +192,15 @@ def test_blacklist_slave(
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
 
 
-def test_unblacklist_slaves(
+def test_unblacklist_slave(
     ef,
     mock_time,
     mock_sleep
 ):
     agent_id = 'fake_agent_id'
-    mock_time.return_value = 0.0
 
-    ef.blacklisted_slaves = ef.blacklisted_slaves.set(agent_id, 1.0)
-    ef.unblacklist_slaves()
+    ef.blacklisted_slaves = ef.blacklisted_slaves.append(agent_id)
+    ef.unblacklist_slave(agent_id, timeout=0.0)
 
     assert agent_id not in ef.blacklisted_slaves
 
@@ -492,9 +493,8 @@ def test_resource_offers_blacklisted_offer(
     fake_driver,
     mock_get_metric
 ):
-    ef.blacklisted_slaves = ef.blacklisted_slaves.set(
+    ef.blacklisted_slaves = ef.blacklisted_slaves.append(
         fake_offer.agent_id.value,
-        time.time()
     )
     ef.task_queue.put(fake_task)
     ef.resourceOffers(fake_driver, [fake_offer])

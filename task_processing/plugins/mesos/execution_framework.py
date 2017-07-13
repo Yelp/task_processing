@@ -8,6 +8,7 @@ from pyrsistent import field
 from pyrsistent import m
 from pyrsistent import PRecord
 from pyrsistent import thaw
+from pyrsistent import v
 from six.moves.queue import Queue
 
 from task_processing.interfaces.event import control_event
@@ -87,7 +88,7 @@ class ExecutionFramework(Scheduler):
 
         self.offer_decline_filter = Dict(refuse_seconds=self.offer_backoff)
         self._lock = threading.RLock()
-        self.blacklisted_slaves = m()
+        self.blacklisted_slaves = v()
         self.task_metadata = m()
 
         self._initialize_metrics()
@@ -105,10 +106,6 @@ class ExecutionFramework(Scheduler):
             target=self.kill_tasks_stuck_in_staging, args=())
         task_kill_thread.daemon = True
         task_kill_thread.start()
-        blacklist_thread = threading.Thread(
-            target=self.unblacklist_slaves, args=())
-        blacklist_thread.daemon = True
-        blacklist_thread.start()
 
     def kill_tasks_stuck_in_staging(self):
         while True:
@@ -132,7 +129,8 @@ class ExecutionFramework(Scheduler):
                         )
                         self.kill_task(task_id)
                         self.blacklist_slave(
-                            self.task_metadata[task_id].agent_id
+                            agent_id=self.task_metadata[task_id].agent_id,
+                            timeout=self.slave_blacklist_timeout_s,
                         )
                         get_metric(TASK_STUCK_COUNT).count(1)
 
@@ -150,39 +148,34 @@ class ExecutionFramework(Scheduler):
     def kill_task(self, task_id):
         self.driver.killTask(Dict(value=task_id))
 
-    def blacklist_slave(self, agent_id):
+    def blacklist_slave(self, agent_id, timeout):
         with self._lock:
             if agent_id in self.blacklisted_slaves:
                 # Punish this slave for more time.
                 self.blacklisted_slaves = \
-                    self.blacklisted_slaves.discard(agent_id)
+                    self.blacklisted_slaves.remove(agent_id)
 
             log.info('Blacklisting slave: {id} for {secs} seconds.'.format(
                 id=agent_id,
-                secs=self.slave_blacklist_timeout_s
+                secs=timeout
             ))
-            self.blacklisted_slaves = \
-                self.blacklisted_slaves.set(agent_id, time.time())
+            self.blacklisted_slaves = self.blacklisted_slaves.append(agent_id)
             get_metric(BLACKLISTED_AGENTS_COUNT).count(1)
+        unblacklist_thread = threading.Thread(
+            target=self.unblacklist_slave,
+            kwargs={'timeout': timeout, 'agent_id': agent_id},
+        )
+        unblacklist_thread.daemon = True
+        unblacklist_thread.start()
 
-    def unblacklist_slaves(self):
-        while True:
-            if self.stopping:
-                return
-
-            with self._lock:
-                time_now = time.time()
-                for agent_id in self.blacklisted_slaves.keys():
-                    if time_now < (
-                        self.blacklisted_slaves[agent_id] +
-                        self.slave_blacklist_timeout_s
-                    ):
-                        log.info(
-                            'Unblacklisting slave: {id}'.format(id=agent_id)
-                        )
-                        self.blacklisted_slaves = \
-                            self.blacklisted_slaves.discard(agent_id)
-            time.sleep(10)
+    def unblacklist_slave(self, agent_id, timeout):
+        time.sleep(timeout)
+        log.info(
+            'Unblacklisting slave: {id}'.format(id=agent_id)
+        )
+        with self._lock:
+            self.blacklisted_slaves = \
+                self.blacklisted_slaves.remove(agent_id)
 
     def enqueue_task(self, task_config):
         with self._lock:
@@ -427,6 +420,28 @@ class ExecutionFramework(Scheduler):
                     log.info("Suppressing offers, no more tasks to run.")
                 continue
 
+        with_maintenance_window = [
+            offer for offer in offers
+            if offer.unavailability
+        ]
+
+        for offer in with_maintenance_window:
+            start_time = offer.unavailability.start['nanoseconds']
+            completion_time = int(
+                (start_time + offer.unavailability.duration['nanoseconds'])
+                / 1000000000
+            )
+            now = int(time.time())
+            duration = completion_time - now
+            if duration > 0:
+                self.blacklist_slave(
+                    agent_id=offer.agent_id.value,
+                    timeout=duration,
+                )
+
+        without_maintenance_window = [
+            offer for offer in offers if offer not in with_maintenance_window]
+        for offer in without_maintenance_window:
             with self._lock:
                 if offer.agent_id.value in self.blacklisted_slaves:
                     log.critical("Ignoring offer {offer_id} from blacklisted "
