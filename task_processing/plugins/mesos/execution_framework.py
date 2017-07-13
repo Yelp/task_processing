@@ -433,7 +433,7 @@ class ExecutionFramework(Scheduler):
             )
             now = int(time.time())
             duration = completion_time - now
-            if not time.time() > completion_time:
+            if duration > 0:
                 self.blacklist_slave(
                     agent_id=offer.agent_id.value,
                     timeout=duration,
