@@ -3,10 +3,12 @@ import argparse
 import logging
 import os
 
-from task_processing.plugins.mesos.mesos_executor import MesosExecutor
 from task_processing.runners.sync import Sync
+from task_processing.task_processor import TaskProcessor
 
-logging.basicConfig()
+FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
+LEVEL = logging.DEBUG
+logging.basicConfig(format=FORMAT, level=LEVEL)
 
 
 def parse_sync_args():
@@ -52,14 +54,21 @@ def main():
     else:
         secret = args.secret
 
-    TaskConfig = MesosExecutor.TASK_CONFIG_INTERFACE
-    task_config = TaskConfig(image="busybox", cmd='/bin/true')
-    executor = MesosExecutor(
-        secret=secret,
-        mesos_address=mesos_address,
-        pool=args.pool,
-        role=args.role
+    processor = TaskProcessor()
+    processor.load_plugin(provider_module='task_processing.plugins.mesos')
+    executor = processor.executor_from_config(
+        provider='mesos',
+        provider_config={
+            'secret': secret,
+            'mesos_address': mesos_address,
+            'pool': args.pool,
+            'role': args.role,
+        }
     )
+
+    TaskConfig = executor.TASK_CONFIG_INTERFACE
+    task_config = TaskConfig(image="busybox", cmd='/bin/true')
+
     runner = Sync(executor)
     result = runner.run(task_config)
     print(result)
