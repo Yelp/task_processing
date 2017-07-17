@@ -501,7 +501,12 @@ class ExecutionFramework(Scheduler):
             task=task_id
         ))
 
-        md = self.task_metadata[task_id]
+        try:
+            md = self.task_metadata[task_id]
+        except KeyError:
+            driver.acknowledgeStatusUpdate(update)
+            return
+
         self.event_queue.put(
             self.translator(update, task_id).set(task_config=md.task_config)
         )
