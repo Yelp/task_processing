@@ -96,7 +96,7 @@ class TaskProcessor(object):
             conflict_check, plugin_update, name_update
         )
 
-    def executor_from_config(self, provider, provider_config=None):
+    def executor_cls(self, provider):
         """Called by users of TaskProcessing to obtain :class:`TaskExecutor`s
 
         :param str provider: The kind of executor the user wants to run.
@@ -109,8 +109,10 @@ class TaskProcessor(object):
                     provider, self.registry.task_executors.keys().tolist()
                 )
             )
+        return self.registry.task_executors[provider]
+
+    def executor_from_config(self, provider, provider_config=None):
         if provider_config is None:
             provider_config = dict()
 
-        executor_cls = self.registry.task_executors[provider]
-        return executor_cls(**provider_config)
+        return self.executor_cls(provider)(**provider_config)
