@@ -42,7 +42,6 @@ log = logging.getLogger(__name__)
 
 class TaskMetadata(PRecord):
     agent_id = field(type=str, initial='')
-    retries = field(type=int, initial=0)
     task_config = field(type=PRecord, mandatory=True)
     task_state = field(type=str, mandatory=True)
     task_state_ts = field(type=float, mandatory=True)
@@ -288,6 +287,7 @@ class ExecutionFramework(Scheduler):
         port_to_use = available_ports[0]
         available_ports[:] = available_ports[1:]
 
+        # TODO: this probably belongs in the caller
         with self._lock:
             md = self.task_metadata[task_config.task_id]
             self.task_metadata = self.task_metadata.set(
@@ -406,12 +406,14 @@ class ExecutionFramework(Scheduler):
         if self.task_queue.empty() and current_offer_time < self.decline_after:
             time.sleep(self.decline_after - current_offer_time)
 
+        declined = {'blacklisted': [],
+                    'bad pool': [],
+                    'bad resources': [],
+                    'no tasks': []}
+        accepted = []
         for offer in offers:
             if self.task_queue.empty():
-                log.info("Declining offer {id} because there are no more "
-                         "tasks to launch.".format(
-                             id=offer.id.value
-                         ))
+                declined['no tasks'].append(offer.id.value)
                 driver.declineOffer(offer.id, self.offer_decline_filter)
                 if (not self.are_offers_suppressed and
                         int(time.time()) > self.suppress_after):
@@ -444,11 +446,9 @@ class ExecutionFramework(Scheduler):
         for offer in without_maintenance_window:
             with self._lock:
                 if offer.agent_id.value in self.blacklisted_slaves:
-                    log.critical("Ignoring offer {offer_id} from blacklisted "
-                                 "slave {slave_name}".format(
-                                     offer_id=offer.id.value,
-                                     slave_name=offer.agent_id.value
-                                 ))
+                    declined['blacklisted'].append('offer {} agent {}'.format(
+                        offer.id.value, offer.agent_id.value
+                    ))
                     driver.declineOffer(offer.id, self.offer_decline_filter)
                     continue
 
@@ -458,25 +458,22 @@ class ExecutionFramework(Scheduler):
                              id=offer.id.value,
                              pool=self.pool
                          ))
+                declined['bad pool'].append(offer.id.value)
                 driver.declineOffer(offer.id, self.offer_decline_filter)
                 continue
 
             tasks_to_launch = self.get_tasks_to_launch(offer)
 
             if len(tasks_to_launch) == 0:
-                log.info("Declining offer {id} because it does not match our "
-                         "requirements.".format(
-                             id=offer.id.value
-                         ))
+                if self.task_queue.empty():
+                    declined['no tasks'].append(offer.id.value)
+                else:
+                    declined['bad resources'].append(offer.id.value)
                 driver.declineOffer(offer.id, self.offer_decline_filter)
                 continue
 
-            log.info("Launching {number} new docker task(s) using offer {id} "
-                     "on slave {slave}".format(
-                         number=len(tasks_to_launch),
-                         id=offer.id.value,
-                         slave=offer.agent_id.value
-                     ))
+            accepted.append('offer: {} agent: {} tasks: {}'.format(
+                offer.id.value, offer.agent_id.value, len(tasks_to_launch)))
             driver.launchTasks(offer.id, tasks_to_launch)
 
             with self._lock:
@@ -485,12 +482,18 @@ class ExecutionFramework(Scheduler):
                     self.task_metadata = self.task_metadata.set(
                         task.task_id.value,
                         md.set(
-                            retries=md.retries + 1,
                             task_state='TASK_STAGING',
                             task_state_ts=time.time(),
                         )
                     )
                     get_metric(TASK_LAUNCHED_COUNT).count(1)
+
+        for reason, items in declined.items():
+            if items:
+                log.info(
+                    "Offers declined because {}: {}".format(reason, items))
+        if accepted:
+            log.info("Offers accepted: {}".format(', '.join(accepted)))
 
     def statusUpdate(self, driver, update):
         task_id = update.task_id.value
