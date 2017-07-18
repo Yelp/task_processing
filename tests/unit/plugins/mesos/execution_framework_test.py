@@ -555,7 +555,7 @@ def test_resource_offers_unmet_reqs(
     assert mock_get_metric.return_value.count.call_count == 0
 
 
-def status_update_test_prep(retries, state):
+def status_update_test_prep(state):
     task = me_mdl.MesosTaskConfig(name='fake_name')
     task_id = task.task_id
     update = Dict(
@@ -566,7 +566,6 @@ def status_update_test_prep(retries, state):
         task_config=task,
         task_state=state,
         task_state_ts=time.time(),
-        retries=retries
     )
 
     return update, task_id, task_metadata
@@ -576,10 +575,7 @@ def test_status_update_record_only(
     ef,
     fake_driver
 ):
-    update, task_id, task_metadata = status_update_test_prep(
-        0,
-        'fake_state1'
-    )
+    update, task_id, task_metadata = status_update_test_prep('fake_state1')
     task_metadata = task_metadata.set(task_state='fake_state2')
     ef.translator = mock.Mock()
 
@@ -597,10 +593,7 @@ def test_status_update_finished(
     mock_get_metric
 ):
     # finished task does same thing as other states
-    update, task_id, task_metadata = status_update_test_prep(
-        0,
-        'TASK_FINISHED'
-    )
+    update, task_id, task_metadata = status_update_test_prep('TASK_FINISHED')
     ef.translator = mock.Mock()
 
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
