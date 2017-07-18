@@ -385,9 +385,9 @@ class ExecutionFramework(Scheduler):
             role=self.role
         ))
 
-    def reregistered(self, driver, frameworkId, masterInfo):
-        log.warning("Registered with framework ID {id} and role {role}".format(
-            id=frameworkId.value,
+    def reregistered(self, driver, masterInfo):
+        log.warning("Re-registered to {master} with role {role}".format(
+            master=masterInfo,
             role=self.role
         ))
 
@@ -501,11 +501,14 @@ class ExecutionFramework(Scheduler):
             task=task_id
         ))
 
-        try:
-            md = self.task_metadata[task_id]
-        except KeyError:
+        if task_id not in self.task_metadata:
+            # We assume that a terminal status update has been
+            # received for this task already.
+            log.info('Ignoring this status update because a terminal status \
+                update has been receiced for this task already.')
             driver.acknowledgeStatusUpdate(update)
             return
+        md = self.task_metadata[task_id]
 
         self.event_queue.put(
             self.translator(update, task_id).set(task_config=md.task_config)

@@ -419,7 +419,6 @@ def test_registered(ef, fake_driver):
 def test_reregistered(ef, fake_driver):
     ef.reregistered(
         fake_driver,
-        Dict(value='fake_framework_id'),
         'fake_master_info'
     )
 
@@ -613,3 +612,22 @@ def test_status_update_finished(
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
     assert fake_driver.acknowledgeStatusUpdate.call_count == 1
     assert fake_driver.acknowledgeStatusUpdate.call_args == mock.call(update)
+
+
+def test_duplicate_status_update(
+    ef,
+    fake_driver,
+    mock_get_metric
+):
+    update, task_id, task_metadata = status_update_test_prep(
+        0,
+        'TASK_FINISHED'
+    )
+    ef.translator = mock.Mock()
+
+    ef.statusUpdate(fake_driver, update)
+
+    assert task_id not in ef.task_metadata
+    assert mock_get_metric.call_count == 0
+    assert mock_get_metric.return_value.count.call_count == 0
+    assert fake_driver.acknowledgeStatusUpdate.call_count == 1
