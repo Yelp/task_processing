@@ -27,7 +27,6 @@ class RetryingExecutor(TaskExecutor):
         self.src_queue = executor.get_event_queue()
         self.dest_queue = Queue()
         self.stopping = False
-        self.TASK_CONFIG_INTERFACE = executor.TASK_CONFIG_INTERFACE
 
         self.retry_thread = Thread(target=self.retry_loop)
         self.retry_thread.daemon = True
@@ -66,7 +65,7 @@ class RetryingExecutor(TaskExecutor):
             while not self.src_queue.empty():
                 e = self.src_queue.get()
 
-                if e.kind == 'control':
+                if e.kind != 'task':
                     self.dest_queue.put(e)
                     continue
 
