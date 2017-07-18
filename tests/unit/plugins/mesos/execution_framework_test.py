@@ -612,10 +612,7 @@ def test_duplicate_status_update(
     fake_driver,
     mock_get_metric
 ):
-    update, task_id, task_metadata = status_update_test_prep(
-        0,
-        'TASK_FINISHED'
-    )
+    update, task_id, task_metadata = status_update_test_prep('TASK_FINISHED')
     ef.translator = mock.Mock()
 
     ef.statusUpdate(fake_driver, update)
