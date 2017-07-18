@@ -466,7 +466,8 @@ class ExecutionFramework(Scheduler):
 
             if len(tasks_to_launch) == 0:
                 if self.task_queue.empty():
-                    declined['no tasks'].append(offer.id.value)
+                    if offer.id.value not in declined['no tasks']:
+                        declined['no tasks'].append(offer.id.value)
                 else:
                     declined['bad resources'].append(offer.id.value)
                 driver.declineOffer(offer.id, self.offer_decline_filter)
@@ -490,8 +491,8 @@ class ExecutionFramework(Scheduler):
 
         for reason, items in declined.items():
             if items:
-                log.info(
-                    "Offers declined because {}: {}".format(reason, items))
+                log.info("Offers declined because {}: {}".format(
+                    reason, ', '.join(items)))
         if accepted:
             log.info("Offers accepted: {}".format(', '.join(accepted)))
 
