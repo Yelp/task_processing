@@ -5,27 +5,35 @@ import os
 from six.moves.queue import Empty
 from six.moves.queue import Queue
 
-from task_processing.plugins.mesos.mesos_executor import MesosExecutor
 from task_processing.runners.subscription import Subscription
+from task_processing.task_processor import TaskProcessor
 
-logging.basicConfig()
+FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
+LEVEL = logging.DEBUG
+logging.basicConfig(format=FORMAT, level=LEVEL)
 
 
 def main():
     mesos_address = os.environ['MESOS']
     with open('./examples/cluster/secret') as f:
         secret = f.read().strip()
-    executor = MesosExecutor(
-        secret=secret,
-        mesos_address=mesos_address,
-        role='task-proc'
+
+    processor = TaskProcessor()
+    processor.load_plugin(provider_module='task_processing.plugins.mesos')
+    executor = processor.executor_from_config(
+        provider='mesos',
+        provider_config={
+            'secret': secret,
+            'mesos_address': mesos_address,
+            'role': 'task-proc',
+        }
     )
 
     queue = Queue(100)
     runner = Subscription(executor, queue)
 
     tasks = set()
-    TaskConfig = MesosExecutor.TASK_CONFIG_INTERFACE
+    TaskConfig = executor.TASK_CONFIG_INTERFACE
     for _ in range(2):
         task_config = TaskConfig(image='busybox', cmd='/bin/true')
         tasks.add(task_config.task_id)

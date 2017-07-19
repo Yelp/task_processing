@@ -19,11 +19,12 @@ RUN mkdir /var/run/sshd
 RUN pip3 install --upgrade pip==9.0.1
 RUN pip3 install --upgrade virtualenv==15.1.0
 
-# FIXME use actual virtualenv
-RUN pip3 install pymesos pyrsistent boto3
-
 ADD . /src
 ENV PYTHONPATH=/src
 WORKDIR /src
+
+RUN pip3 install -r requirements.txt
+RUN pip3 install -r requirements-dev.txt
+RUN pip3 install pymesos
 
 CMD /bin/bash
