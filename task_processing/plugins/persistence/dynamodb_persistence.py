@@ -30,7 +30,7 @@ class DynamoDBPersister(Persister):
     def write(self, event):
         return self.ddb_client.put_item(
             TableName=self.table_name,
-            Item=self._event_to_item(event)
+            Item=self._event_to_item(event)['M']
         )
 
     def _event_to_item(self, e):
@@ -51,15 +51,16 @@ class DynamoDBPersister(Persister):
                         'N': str(v)
                     }
                 elif type(v) is dict:
-                    resp[k] = {
-                        'M': self._event_to_item(v)
-                    }
+                    resp[k] = self._event_to_item(v)
                 elif type(v) is list:
                     if len(v) > 0:
-                        resp[k] = []
+                        vals = []
                         for i in v:
-                            resp[k].append(self._event_to_item(i))
-            return resp
+                            vals.append(self._event_to_item(i))
+                        resp[k] = {
+                            'L': vals
+                        }
+            return {'M': resp}
         elif type(raw) is str:
             return {
                 'S': raw
