@@ -520,13 +520,14 @@ class ExecutionFramework(Scheduler):
 
         # Record state changes
         if md.task_state != task_state:
-            self.task_metadata = self.task_metadata.set(
-                task_id,
-                md.set(
-                    task_state=task_state,
-                    task_state_ts=time.time(),
+            with self._lock:
+                self.task_metadata = self.task_metadata.set(
+                    task_id,
+                    md.set(
+                        task_state=task_state,
+                        task_state_ts=time.time(),
+                    )
                 )
-            )
 
         if task_state in self._task_states:
             with self._lock:
