@@ -65,7 +65,7 @@ class DynamoDBPersister(Persister):
             return {
                 'S': raw
             }
-        elif type(raw) is int:
+        elif type(raw) in [int, float]:
             return {
                 'N': str(raw)
             }
