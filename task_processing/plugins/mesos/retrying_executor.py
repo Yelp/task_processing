@@ -1,6 +1,4 @@
 import logging
-import time
-from operator import sub
 from threading import Lock
 from threading import Thread
 
@@ -26,7 +24,6 @@ class RetryingExecutor(TaskExecutor):
 
         self.src_queue = executor.get_event_queue()
         self.dest_queue = Queue()
-        self.stopping = False
 
         self.retry_thread = Thread(target=self.retry_loop)
         self.retry_thread.daemon = True
@@ -34,77 +31,67 @@ class RetryingExecutor(TaskExecutor):
 
     def event_with_retries(self, event):
         return event.transform(
-            ('extensions', 'RetryingExecutor/tries'),
-            "{}/{}".format(
-                1 + self.retries - self.task_retries.get(event.task_id, -1),
-                self.retries
-            )
+            ('extensions', 'RetryingExecutor/try'),
+            self.task_retries.get(event.task_id, 0)
         )
 
     def retry(self, event):
-        current_retries = self.task_retries.get(event.task_id, -1)
-        if current_retries <= 0:
+        task_id = event.task_id
+        current_retry = self.task_retries.get(task_id, 0) + 1
+        if current_retry > self.retries:
+            log.info('failing {}, maximum retries {} of {} reached'.format(
+                task_id, current_retry, self.retries
+            ))
             return False
 
-        log.info(
-            'Retrying task {}, {} of {}, fail event: {}'.format(
-                event.task_config.name, 1 + self.retries - current_retries,
-                self.retries, event.raw
-            )
-        )
+        log.info('retrying {}, {} of {}, fail event: {}'.format(
+            task_id, current_retry, self.retries, event.raw
+        ))
 
         self.run(event.task_config)
+
         with self.task_retries_lock:
-            self.task_retries = self.task_retries.update_with(
-                sub, {event.task_id: 1}
-            )
+            self.task_retries = self.task_retries.set(task_id, current_retry)
+
         return True
 
     def retry_loop(self):
         while True:
-            while not self.src_queue.empty():
-                e = self.src_queue.get()
+            e = self.src_queue.get()
 
-                if e.kind != 'task':
-                    self.dest_queue.put(e)
+            if e.kind != 'task':
+                self.dest_queue.put(e)
+                continue
+
+            e = self.event_with_retries(e)
+
+            if e.terminal:
+                if self.retry_pred(e) and self.retry(e):
                     continue
 
-                e = self.event_with_retries(e)
+                with self.task_retries_lock:
+                    self.task_retries = self.task_retries.remove(e.task_id)
 
-                if e.terminal:
-                    if self.retry_pred(e):
-                        if self.retry(e):
-                            continue
-                    else:
-                        with self.task_retries_lock:
-                            self.task_retries = \
-                                self.task_retries.remove(e.task_id)
-
-                self.dest_queue.put(e)
-
-            if self.stopping:
-                return
-
-            time.sleep(1)
+            self.dest_queue.put(e)
 
     def run(self, task_config):
-        if task_config.task_id not in self.task_retries:
-            with self.task_retries_lock:
+        with self.task_retries_lock:
+            if task_config.task_id not in self.task_retries:
                 self.task_retries = self.task_retries.set(
-                    task_config.task_id, self.retries)
-        self.executor.run(task_config)
+                    task_config.task_id, 0)
+
+        return self.executor.run(task_config)
 
     def kill(self, task_id):
-        # retries = -1 so that manually killed tasks can be distinguished
+        # retries = max+1 so that manually killed tasks can be distinguished
         with self.task_retries_lock:
-            self.tasks_retries = self.task_retries.update_with(
-                sub, {task_id: 1})
-        self.executor.kill(task_id)
+            self.tasks_retries = self.task_retries.set(
+                task_id, self.retries + 1)
+
+        return self.executor.kill(task_id)
 
     def stop(self):
-        self.executor.stop()
-        self.stopping = True
-        self.retry_thread.join()
+        return self.executor.stop()
 
     def get_event_queue(self):
         return self.dest_queue
