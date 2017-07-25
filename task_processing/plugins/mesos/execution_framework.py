@@ -1,11 +1,13 @@
 import logging
 import threading
 import time
+import uuid
 
 from addict import Dict
 from pymesos.interface import Scheduler
 from pyrsistent import field
 from pyrsistent import m
+from pyrsistent import pmap
 from pyrsistent import PRecord
 from pyrsistent import thaw
 from pyrsistent import v
@@ -337,7 +339,10 @@ class ExecutionFramework(Scheduler):
                                                 container_port=8888)]),
                 parameters=thaw(task_config.docker_parameters),
                 volumes=thaw(task_config.volumes)
-            )
+            ),
+            labels=[
+                Dict(key='MesosExecutor/uuid', value=uuid.uuid4())
+            ]
         )
 
     def stop(self):
@@ -528,7 +533,16 @@ class ExecutionFramework(Scheduler):
                 update has been receiced for this task already.')
             driver.acknowledgeStatusUpdate(update)
             return
+
         md = self.task_metadata[task_id]
+        extensions = pmap({
+            str(l.key): str(l.value) for l in update.labels})
+        log.info("task extensions: {}".format(extensions))
+
+        if md.extensions != extensions:
+            with self._lock:
+                md = md.set('extensions', extensions)
+                self.task_metadata = self.task_metadata.set(task_id, md)
 
         self.event_queue.put(
             self.translator(update, task_id).set(task_config=md.task_config)

@@ -1,14 +1,13 @@
 import logging
 import threading
-import uuid
 
 from pymesos import MesosSchedulerDriver
 from pyrsistent import field
-from pyrsistent import PRecord
 from pyrsistent import PVector
 from pyrsistent import pvector
 from pyrsistent import v
 
+from task_processing.interfaces.task_executor import DefaultTaskConfigInterface
 from task_processing.interfaces.task_executor import TaskExecutor
 from task_processing.plugins.mesos.execution_framework import (
     ExecutionFramework
@@ -34,9 +33,7 @@ def valid_volumes(volumes):
     return (True, None)
 
 
-class MesosTaskConfig(PRecord):
-    uuid = field(type=uuid.UUID, initial=uuid.uuid4)
-    name = field(type=str, initial="default")
+class MesosTaskConfig(DefaultTaskConfigInterface):
     image = field(type=str, initial="ubuntu:xenial")
     cmd = field(type=str, initial="/bin/true")
     cpus = field(type=float,
@@ -58,10 +55,6 @@ class MesosTaskConfig(PRecord):
     uris = field(type=PVector, initial=v(), factory=pvector)
     # TODO: containerization + containerization_args ?
     docker_parameters = field(type=PVector, initial=v(), factory=pvector)
-
-    @property
-    def task_id(self):
-        return "{}.{}".format(self.name, str(self.uuid))
 
 
 class MesosExecutor(TaskExecutor):
