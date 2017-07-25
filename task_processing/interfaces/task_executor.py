@@ -3,12 +3,19 @@ import uuid
 
 import six
 from pyrsistent import field
+from pyrsistent import m
+from pyrsistent import PMap
 from pyrsistent import PRecord
 
 
 class DefaultTaskConfigInterface(PRecord):
-    task_id = field(type=uuid.UUID, initial=uuid.uuid4)
-    name = field(type=str, initial='default')
+    uuid = field(type=uuid.UUID, initial=uuid.uuid4)
+    name = field(type=str, initial="default")
+    extensions = field(type=PMap, initial=m())
+
+    @property
+    def task_id(self):
+        return "{}.{}".format(self.name, str(self.uuid))
 
 
 @six.add_metaclass(abc.ABCMeta)

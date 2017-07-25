@@ -8,6 +8,8 @@ from pyrsistent import PMap
 from pyrsistent import pmap
 from pyrsistent import PRecord
 
+from task_processing.interfaces.task_executor import DefaultTaskConfigInterface
+
 
 EVENT_KINDS = ['task', 'control']
 
@@ -32,8 +34,9 @@ class Event(PRecord):
     task_id = field(type=str)
     # task config dict that sourced the task this event refers to
     task_config = field(
-        invariant=lambda x: (isinstance(x, PMap),
-                             'task_config must inherit from PMap'),
+        invariant=lambda x: (
+            isinstance(x, DefaultTaskConfigInterface),
+            'task_config must inherit from DefaultTaskConfigInterface'),
         factory=lambda x: pmap(x) if not isinstance(x, PMap) else x)
     # the task finished with exit code 0
     success = field(type=(bool, type(None)), initial=None)
