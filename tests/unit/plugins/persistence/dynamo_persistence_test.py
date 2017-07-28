@@ -59,7 +59,8 @@ def test_replaces_decimals_unaffected(x, persister):
                        keys=st.text(), values=st.text()),
                    ))
 def test_event_to_item_timestamp(x, persister):
-    res = persister._event_to_item(x)
+    res = persister._event_to_item(x)['M']
+    print(res)
     assert 'N' in res['timestamp'].keys()
     assert 'BOOL' in res['success'].keys()
     assert 'BOOL' in res['terminal'].keys()
@@ -75,12 +76,18 @@ def test_event_to_item_timestamp(x, persister):
     task_config=st.dictionaries(
        keys=st.text(),
        values=st.lists(
-           st.text()
+           st.one_of(
+               st.text(),
+               st.dictionaries(
+                   keys=st.text(),
+                   values=st.text(),
+               )
+           )
        )
        ),
 ))
 def test_event_to_item_list(x, persister):
-    res = persister._event_to_item(x)
+    res = persister._event_to_item(x)['M']
     for k, v in x.task_config.items():
         if len(v) > 0:
             assert k in res['task_config']['M']
