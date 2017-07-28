@@ -82,7 +82,7 @@ class ExecutionFramework(Scheduler):
         self.event_queue = Queue(max_task_queue_size)
         self.driver = None
         self.are_offers_suppressed = False
-        self.suppress_after = int(time.time()) + suppress_delay
+        self.suppress_after = time.time() + suppress_delay
         self.decline_after = time.time() + initial_decline_delay
 
         self.offer_decline_filter = Dict(refuse_seconds=self.offer_backoff)
@@ -101,10 +101,21 @@ class ExecutionFramework(Scheduler):
         }
 
         self.stopping = False
+
         task_kill_thread = threading.Thread(
             target=self.kill_tasks_stuck_in_staging, args=())
         task_kill_thread.daemon = True
         task_kill_thread.start()
+
+        # metadata is not removed immediately upon terminal event because mesos
+        # sometimes sends more than one terminal event for a task
+        #
+        # instead we cleanup metadata with more than hour old terminal state
+        # every minute
+        task_metadata_cleanup_thread = threading.Thread(
+            target=self.task_metadata_cleanup, args=())
+        task_metadata_cleanup_thread.daemon = True
+        task_metadata_cleanup_thread.start()
 
     def kill_tasks_stuck_in_staging(self):
         while True:
@@ -277,6 +288,8 @@ class ExecutionFramework(Scheduler):
                     tasks_to_put_back_in_queue.append(task)
 
         for task in tasks_to_put_back_in_queue:
+            # TODO: replace task_queue with deque and prepend here to preserve
+            # original enqueue order
             self.task_queue.put(task)
             get_metric(TASK_INSUFFICIENT_OFFER_COUNT).count(1)
 
@@ -286,14 +299,6 @@ class ExecutionFramework(Scheduler):
         # Handle the case of multiple port allocations
         port_to_use = available_ports[0]
         available_ports[:] = available_ports[1:]
-
-        # TODO: this probably belongs in the caller
-        with self._lock:
-            md = self.task_metadata[task_config.task_id]
-            self.task_metadata = self.task_metadata.set(
-                task_config.task_id,
-                md.set(agent_id=str(offer.agent_id.value))
-            )
 
         return Dict(
             task_id=Dict(value=task_config.task_id),
@@ -358,6 +363,16 @@ class ExecutionFramework(Scheduler):
         timers = [OFFER_DELAY_TIMER, TASK_QUEUED_TIME_TIMER]
         for tmr in timers:
             create_timer(tmr, default_dimensions)
+
+    def task_metadata_cleanup(self):
+        while True:
+            time.sleep(60)
+            now = time.time()
+            for id, md in self.task_metadata.items():
+                if md.task_state in self._task_states and \
+                   now > md.task_state_ts + 3600:
+                    with self._lock:
+                        self.task_metadata = self.task_metadata.discard(id)
 
     ####################################################################
     #                   Mesos driver hooks go here                     #
@@ -485,6 +500,7 @@ class ExecutionFramework(Scheduler):
                         md.set(
                             task_state='TASK_STAGING',
                             task_state_ts=time.time(),
+                            agent_id=str(offer.agent_id.value),
                         )
                     )
                     get_metric(TASK_LAUNCHED_COUNT).count(1)
@@ -530,8 +546,6 @@ class ExecutionFramework(Scheduler):
                 )
 
         if task_state in self._task_states:
-            with self._lock:
-                self.task_metadata = self.task_metadata.discard(task_id)
             get_metric(self._task_states[task_state]).count(1)
 
         # We have to do this because we are not using implicit
