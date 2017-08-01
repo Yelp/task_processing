@@ -48,6 +48,9 @@ class MesosTaskConfig(PRecord):
     disk = field(type=float,
                  initial=10.0,
                  invariant=lambda d: (d > 0, 'disk > 0'))
+    gpus = field(type=float,
+                 initial=0.0,
+                 invariant=lambda g: (g >= 0, 'gpus >= 0'))
     volumes = field(type=PVector,
                     initial=v(),
                     factory=pvector,
@@ -58,6 +61,11 @@ class MesosTaskConfig(PRecord):
     uris = field(type=PVector, initial=v(), factory=pvector)
     # TODO: containerization + containerization_args ?
     docker_parameters = field(type=PVector, initial=v(), factory=pvector)
+    containerizer = field(type=str,
+                          initial='DOCKER',
+                          invariant=lambda c:
+                          (c == 'DOCKER' or c == 'MESOS',
+                           'containerizer is docker or mesos'))
 
     @property
     def task_id(self):

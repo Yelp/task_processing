@@ -28,6 +28,7 @@ def fake_task():
         cpus=10.0,
         mem=1024.0,
         disk=1000.0,
+        gpus=1.0,
         image='fake_image',
         cmd='echo "fake"'
     )
@@ -56,6 +57,12 @@ def fake_offer():
                 role='fake_role',
                 name='disk',
                 scalar=Dict(value=1000),
+                type='SCALAR',
+            ),
+            Dict(
+                role='fake_role',
+                name='gpus',
+                scalar=Dict(value=1.0),
                 type='SCALAR',
             ),
             Dict(
@@ -275,6 +282,7 @@ def test_get_tasks_to_launch_insufficient_offer(
         cpus=20.0,
         mem=2048.0,
         disk=2000.0,
+        gpus=2.0,
     )
 
     ef.task_queue.put(task)
@@ -290,10 +298,50 @@ def test_get_tasks_to_launch_insufficient_offer(
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
 
 
+@pytest.mark.parametrize('gpus_count,containerizer,container', [
+    (1.0, 'MESOS', Dict(
+        type='MESOS',
+        mesos=Dict(image=Dict(
+            type='DOCKER',
+            docker=Dict(
+                name='fake_image',
+                network='BRIDGE',
+                force_pull_image=True,
+                port_mappings=[Dict(host_port=31200,
+                                    container_port=8888)]
+            ),
+            parameters=[],
+            volumes=[Dict(
+                container_path='fake_container_path',
+                host_path='fake_host_path',
+                mode='RO'
+            )],
+        )),
+    )),
+    (0.0, 'DOCKER', Dict(
+        type='DOCKER',
+        docker=Dict(
+            image='fake_image',
+            network='BRIDGE',
+            force_pull_image=True,
+            port_mappings=[Dict(host_port=31200,
+                                container_port=8888)]
+        ),
+        parameters=[],
+        volumes=[Dict(
+            container_path='fake_container_path',
+            host_path='fake_host_path',
+            mode='RO'
+        )],
+    )),
+])
 def test_create_new_docker_task(
     ef,
     fake_offer,
-    fake_task
+    fake_task,
+    gpus_count,
+    containerizer,
+    container,
 ):
     available_ports = [31200]
     task_id = fake_task.task_id
@@ -302,12 +350,17 @@ def test_create_new_docker_task(
         task_state='fake_state',
         task_state_ts=time.time()
     )
-    fake_task = fake_task.set(volumes=v(
-        Dict(
-            mode='RO',
-            container_path='fake_container_path',
-            host_path='fake_host_path'
-        )))
+    fake_task = fake_task.set(
+        volumes=v(
+            Dict(
+                mode='RO',
+                container_path='fake_container_path',
+                host_path='fake_host_path'
+            )
+        ),
+        gpus=gpus_count,
+        containerizer=containerizer,
+    )
 
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     docker_task = ef.create_new_docker_task(
@@ -333,6 +386,10 @@ def test_create_new_docker_task(
                  type='SCALAR',
                  role='fake_role',
                  scalar=Dict(value=1000.0)),
+            Dict(name='gpus',
+                 type='SCALAR',
+                 role='fake_role',
+                 scalar=Dict(value=gpus_count)),
             Dict(name='ports',
                  type='RANGES',
                  role='fake_role',
@@ -343,20 +400,7 @@ def test_create_new_docker_task(
             value='echo "fake"',
             uris=[]
         ),
-        container=Dict(
-            type='DOCKER',
-            docker=Dict(image='fake_image',
-                        network='BRIDGE',
-                        force_pull_image=True,
-                        port_mappings=[Dict(host_port=31200,
-                                            container_port=8888)]),
-            parameters=[],
-            volumes=[Dict(
-                container_path='fake_container_path',
-                host_path='fake_host_path',
-                mode='RO'
-            )]
-        )
+        container=container,
     )
     assert ef.task_metadata[task_id].agent_id == 'fake_agent_id'
     assert docker_task == new_docker_task
