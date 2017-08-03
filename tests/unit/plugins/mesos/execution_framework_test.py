@@ -301,38 +301,37 @@ def test_get_tasks_to_launch_insufficient_offer(
 @pytest.mark.parametrize('gpus_count,containerizer,container', [
     (1.0, 'MESOS', Dict(
         type='MESOS',
-        mesos=Dict(image=Dict(
-            type='DOCKER',
-            docker=Dict(
-                name='fake_image',
-                network='BRIDGE',
-                force_pull_image=True,
-                port_mappings=[Dict(host_port=31200,
-                                    container_port=8888)]
-            ),
-            parameters=[],
-            volumes=[Dict(
-                container_path='fake_container_path',
-                host_path='fake_host_path',
-                mode='RO'
-            )],
-        )),
-    )),
-    (0.0, 'DOCKER', Dict(
-        type='DOCKER',
-        docker=Dict(
-            image='fake_image',
-            network='BRIDGE',
-            force_pull_image=True,
-            port_mappings=[Dict(host_port=31200,
-                                container_port=8888)]
-        ),
-        parameters=[],
         volumes=[Dict(
             container_path='fake_container_path',
             host_path='fake_host_path',
             mode='RO'
         )],
+        mesos=Dict(
+            image=Dict(
+                type='DOCKER',
+                docker=Dict(name='fake_image'),
+            ),
+        ),
+        network_infos=Dict(
+            port_mappings=[Dict(host_port=31200,
+                                container_port=8888)],
+        ),
+    )),
+    (0.0, 'DOCKER', Dict(
+        type='DOCKER',
+        volumes=[Dict(
+            container_path='fake_container_path',
+            host_path='fake_host_path',
+            mode='RO'
+        )],
+        docker=Dict(
+            image='fake_image',
+            network='BRIDGE',
+            force_pull_image=True,
+            port_mappings=[Dict(host_port=31200,
+                                container_port=8888)],
+            parameters=[],
+        ),
     )),
 ])
 def test_create_new_docker_task(

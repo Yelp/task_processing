@@ -299,25 +299,34 @@ class ExecutionFramework(Scheduler):
                 md.set(agent_id=str(offer.agent_id.value))
             )
 
-        docker = Dict(
-            type='DOCKER',
-            docker=Dict(
-                image=task_config.image,
-                network='BRIDGE',
-                force_pull_image=True,
-                port_mappings=[Dict(host_port=port_to_use,
-                                    container_port=8888)]
-            ),
-            parameters=thaw(task_config.docker_parameters),
-            volumes=thaw(task_config.volumes),
-        )
         if task_config.containerizer == 'DOCKER':
-            container = docker
+            container = Dict(
+                type='DOCKER',
+                volumes=thaw(task_config.volumes),
+                docker=Dict(
+                    image=task_config.image,
+                    network='BRIDGE',
+                    port_mappings=[Dict(host_port=port_to_use,
+                                        container_port=8888)],
+                    parameters=thaw(task_config.docker_parameters),
+                    force_pull_image=True,
+                ),
+            )
         elif task_config.containerizer == 'MESOS':
-            docker.docker.name = docker.docker.pop('image')
             container = Dict(
                 type='MESOS',
-                mesos=Dict(image=docker),
+                # for docker, volumes should include parameters
+                volumes=thaw(task_config.volumes),
+                mesos=Dict(
+                    image=Dict(
+                        type='DOCKER',
+                        docker=Dict(name=task_config.image),
+                    ),
+                ),
+                network_infos=Dict(
+                    port_mappings=[Dict(host_port=port_to_use,
+                                        container_port=8888)],
+                ),
             )
 
         return Dict(
