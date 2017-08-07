@@ -216,6 +216,7 @@ class ExecutionFramework(Scheduler):
         remaining_cpus = 0
         remaining_mem = 0
         remaining_disk = 0
+        remaining_gpus = 0
         available_ports = []
         for resource in offer.resources:
             if resource.name == "cpus" and resource.role == self.role:
@@ -224,17 +225,20 @@ class ExecutionFramework(Scheduler):
                 remaining_mem += resource.scalar.value
             elif resource.name == "disk" and resource.role == self.role:
                 remaining_disk += resource.scalar.value
+            elif resource.name == "gpus" and resource.role == self.role:
+                remaining_gpus += resource.scalar.value
             elif resource.name == "ports" and resource.role == self.role:
                 # TODO: Validate if the ports available > ports required
                 available_ports = self.get_available_ports(resource)
 
         log.info(
             "Received offer {id} with cpus: {cpu}, mem: {mem}, "
-            "disk: {disk} role: {role}".format(
+            "disk: {disk} gpus: {gpu} role: {role}".format(
                 id=offer.id.value,
                 cpu=remaining_cpus,
                 mem=remaining_mem,
                 disk=remaining_disk,
+                gpu=remaining_gpus,
                 role=self.role
             )
         )
@@ -295,6 +299,36 @@ class ExecutionFramework(Scheduler):
                 md.set(agent_id=str(offer.agent_id.value))
             )
 
+        if task_config.containerizer == 'DOCKER':
+            container = Dict(
+                type='DOCKER',
+                volumes=thaw(task_config.volumes),
+                docker=Dict(
+                    image=task_config.image,
+                    network='BRIDGE',
+                    port_mappings=[Dict(host_port=port_to_use,
+                                        container_port=8888)],
+                    parameters=thaw(task_config.docker_parameters),
+                    force_pull_image=True,
+                ),
+            )
+        elif task_config.containerizer == 'MESOS':
+            container = Dict(
+                type='MESOS',
+                # for docker, volumes should include parameters
+                volumes=thaw(task_config.volumes),
+                mesos=Dict(
+                    image=Dict(
+                        type='DOCKER',
+                        docker=Dict(name=task_config.image),
+                    ),
+                ),
+                network_infos=Dict(
+                    port_mappings=[Dict(host_port=port_to_use,
+                                        container_port=8888)],
+                ),
+            )
+
         return Dict(
             task_id=Dict(value=task_config.task_id),
             agent_id=Dict(value=offer.agent_id.value),
@@ -312,6 +346,10 @@ class ExecutionFramework(Scheduler):
                      type='SCALAR',
                      role=self.role,
                      scalar=Dict(value=task_config.disk)),
+                Dict(name='gpus',
+                     type='SCALAR',
+                     role=self.role,
+                     scalar=Dict(value=task_config.gpus)),
                 Dict(name='ports',
                      type='RANGES',
                      role=self.role,
@@ -323,16 +361,7 @@ class ExecutionFramework(Scheduler):
                 uris=[Dict(value=uri, extract=False)
                       for uri in task_config.uris]
             ),
-            container=Dict(
-                type='DOCKER',
-                docker=Dict(image=task_config.image,
-                            network='BRIDGE',
-                            force_pull_image=True,
-                            port_mappings=[Dict(host_port=port_to_use,
-                                                container_port=8888)]),
-                parameters=thaw(task_config.docker_parameters),
-                volumes=thaw(task_config.volumes)
-            )
+            container=container,
         )
 
     def stop(self):
