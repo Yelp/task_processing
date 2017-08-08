@@ -255,7 +255,8 @@ class ExecutionFramework(Scheduler):
 
                 if ((remaining_cpus >= task.cpus and
                      remaining_mem >= task.mem and
-                     remaining_disk >= task.disk)):
+                     remaining_disk >= task.disk and
+                     remaining_gpus >= task.gpus)):
                     # This offer is sufficient for us to launch task
                     tasks_to_launch.append(
                         self.create_new_docker_task(
@@ -270,6 +271,7 @@ class ExecutionFramework(Scheduler):
                     remaining_cpus -= task.cpus
                     remaining_mem -= task.mem
                     remaining_disk -= task.disk
+                    remaining_gpus -= task.gpus
 
                     get_metric(TASK_QUEUED_TIME_TIMER).record(
                         time.time() -
