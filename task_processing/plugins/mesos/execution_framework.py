@@ -370,7 +370,7 @@ class ExecutionFramework(Scheduler):
     # TODO: add mesos cluster dimension when available
     def _initialize_metrics(self):
         default_dimensions = {
-            'framework_name': self.name,
+            'framework_name': '.'.join(self.name.split()[:2]),
             'framework_role': self.role
         }
 
