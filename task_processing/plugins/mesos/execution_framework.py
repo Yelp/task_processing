@@ -391,6 +391,9 @@ class ExecutionFramework(Scheduler):
     ####################################################################
     #                   Mesos driver hooks go here                     #
     ####################################################################
+    def offerRescinded(self, driver, offerId):
+        # TODO(sagarp): Executor should be able to deal with this.
+        log.warning('Offer {offer} rescinded'.format(offer=offerId))
 
     def error(self, driver, message):
         event = control_event(raw=message)
