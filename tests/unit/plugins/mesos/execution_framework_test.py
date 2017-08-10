@@ -271,18 +271,29 @@ def test_get_tasks_to_launch_sufficient_offer(
     assert mock_get_metric.return_value.record.call_args == mock.call(1.0)
 
 
+@pytest.mark.parametrize(
+    "task_cpus,task_mem,task_disk,task_gpus",
+    [(20.0, 1024.0, 1000.0, 1.0),
+     (10.0, 2048.0, 1000.0, 1.0),
+     (10.0, 1024.0, 2000.0, 1.0),
+     (10.0, 1024.0, 1000.0, 2.0)]
+)
 def test_get_tasks_to_launch_insufficient_offer(
     ef,
     fake_offer,
-    mock_get_metric
+    mock_get_metric,
+    task_cpus,
+    task_mem,
+    task_disk,
+    task_gpus,
 ):
     ef.create_new_docker_task = mock.Mock()
     task = me_mdl.MesosTaskConfig(
         name='fake_name',
-        cpus=20.0,
-        mem=2048.0,
-        disk=2000.0,
-        gpus=2.0,
+        cpus=task_cpus,
+        mem=task_mem,
+        disk=task_disk,
+        gpus=task_gpus,
     )
 
     ef.task_queue.put(task)
@@ -293,6 +304,9 @@ def test_get_tasks_to_launch_insufficient_offer(
     assert mock_get_metric.call_count == 1
     assert mock_get_metric.call_args == mock.call(
         ef_mdl.TASK_INSUFFICIENT_OFFER_COUNT
+    )
+    assert mock_get_metric.call_args != mock.call(
+        ef_mdl.TASK_QUEUED_TIME_TIMER
     )
     assert mock_get_metric.return_value.count.call_count == 1
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
