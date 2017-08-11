@@ -44,25 +44,19 @@ def parse_sync_args():
 def main():
     args = parse_sync_args()
     if not args.master:
-        mesos_address = os.environ.get('MESOS', '127.0.0.1:5050')
+        mesos_address = os.environ.get('MESOS', '10.40.19.239:5050')
     else:
         mesos_address = args.master
-
-    if not args.secret:
-        with open('./examples/cluster/secret') as f:
-            secret = f.read().strip()
-    else:
-        secret = args.secret
 
     processor = TaskProcessor()
     processor.load_plugin(provider_module='task_processing.plugins.mesos')
     executor = processor.executor_from_config(
         provider='mesos',
         provider_config={
-            'secret': secret,
+            'secret': '',
             'mesos_address': mesos_address,
-            'pool': args.pool,
-            'role': args.role,
+            'pool': None,
+            'role': '*',
         }
     )
 
@@ -70,9 +64,12 @@ def main():
     task_config = TaskConfig(image="busybox", cmd='/bin/true')
 
     runner = Sync(executor)
-    result = runner.run(task_config)
-    print(result)
-    print(result.raw)
+    while True:
+        result = runner.run(task_config)
+        print(result)
+        print(result.raw)
+        import time
+        time.sleep(2)
     runner.stop()
 
     return 0 if result.success else 1

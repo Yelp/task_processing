@@ -424,6 +424,8 @@ class ExecutionFramework(Scheduler):
         ))
 
     def resourceOffers(self, driver, offers):
+        import time
+        time.sleep(30)
         if self.driver is None:
             self.driver = driver
 
