@@ -1,10 +1,10 @@
 import abc
-import uuid
 
 import six
 from pyrsistent import pvec
 
 from task_processing.interfaces.task_executor import DefaultTaskConfigInterface
+from task_processing.utils.base62 import base62_random
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -24,4 +24,4 @@ class Runner(object):
         pass
 
     def new_task_id():
-        return pvec(uuid.uuid4())
+        return pvec(base62_random())
