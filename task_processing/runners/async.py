@@ -26,10 +26,13 @@ class Async(Runner):
         self.callback_t.daemon = True
         self.callback_t.start()
 
-    def run(self, task_config):
-        return self.executor.run(task_config)
+    def run(self, task_config, task_id=None):
+        if task_id is None:
+            task_id = self.new_task_id()
 
-    def kill(self, task_config):
+        return self.executor.run(task_config, task_id)
+
+    def kill(self, task_id):
         pass
 
     def callback_loop(self):

@@ -29,8 +29,11 @@ class Subscription(Runner):
             except Full:
                 pass
 
-    def run(self, task_config):
-        return self.executor.run(task_config)
+    def run(self, task_config, task_id=None):
+        if task_id is None:
+            task_id = self.new_task_id()
+
+        return self.executor.run(task_config, task_id)
 
     def kill(self, task_id):
         return self.executor.kill(task_id)
