@@ -28,7 +28,7 @@ def fake_task():
         cpus=10.0,
         mem=1024.0,
         disk=1000.0,
-        gpus=1.0,
+        gpus=1,
         image='fake_image',
         cmd='echo "fake"'
     )
@@ -62,7 +62,7 @@ def fake_offer():
             Dict(
                 role='fake_role',
                 name='gpus',
-                scalar=Dict(value=1.0),
+                scalar=Dict(value=1),
                 type='SCALAR',
             ),
             Dict(
@@ -273,10 +273,10 @@ def test_get_tasks_to_launch_sufficient_offer(
 
 @pytest.mark.parametrize(
     "task_cpus,task_mem,task_disk,task_gpus",
-    [(20.0, 1024.0, 1000.0, 1.0),
-     (10.0, 2048.0, 1000.0, 1.0),
-     (10.0, 1024.0, 2000.0, 1.0),
-     (10.0, 1024.0, 1000.0, 2.0)]
+    [(20.0, 1024.0, 1000.0, 1),
+     (10.0, 2048.0, 1000.0, 1),
+     (10.0, 1024.0, 2000.0, 1),
+     (10.0, 1024.0, 1000.0, 2)]
 )
 def test_get_tasks_to_launch_insufficient_offer(
     ef,
@@ -313,7 +313,7 @@ def test_get_tasks_to_launch_insufficient_offer(
 
 
 @pytest.mark.parametrize('gpus_count,containerizer,container', [
-    (1.0, 'MESOS', Dict(
+    (1, 'MESOS', Dict(
         type='MESOS',
         volumes=[Dict(
             container_path='fake_container_path',
@@ -331,7 +331,7 @@ def test_get_tasks_to_launch_insufficient_offer(
                                 container_port=8888)],
         ),
     )),
-    (0.0, 'DOCKER', Dict(
+    (0, 'DOCKER', Dict(
         type='DOCKER',
         volumes=[Dict(
             container_path='fake_container_path',

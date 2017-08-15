@@ -48,8 +48,8 @@ class MesosTaskConfig(PRecord):
     disk = field(type=float,
                  initial=10.0,
                  invariant=lambda d: (d > 0, 'disk > 0'))
-    gpus = field(type=float,
-                 initial=0.0,
+    gpus = field(type=int,
+                 initial=0,
                  invariant=lambda g: (g >= 0, 'gpus >= 0'))
     volumes = field(type=PVector,
                     initial=v(),
