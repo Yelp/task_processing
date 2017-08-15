@@ -48,21 +48,15 @@ def main():
     else:
         mesos_address = args.master
 
-    if not args.secret:
-        with open('./examples/cluster/secret') as f:
-            secret = f.read().strip()
-    else:
-        secret = args.secret
-
     processor = TaskProcessor()
     processor.load_plugin(provider_module='task_processing.plugins.mesos')
     executor = processor.executor_from_config(
         provider='mesos',
         provider_config={
-            'secret': secret,
+            'secret': '',
             'mesos_address': mesos_address,
-            'pool': args.pool,
-            'role': args.role,
+            'pool': None,
+            'role': '*',
         }
     )
 
