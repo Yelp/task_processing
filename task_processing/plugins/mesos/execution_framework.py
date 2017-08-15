@@ -545,8 +545,8 @@ class ExecutionFramework(Scheduler):
         if task_id not in self.task_metadata:
             # We assume that a terminal status update has been
             # received for this task already.
-            log.info('Ignoring this status update because a terminal status'
-                     'update has been receiced for this task already.')
+            log.info('Ignoring this status update because a terminal status '
+                     'update has been received for this task already.')
             driver.acknowledgeStatusUpdate(update)
             return
 
@@ -561,8 +561,9 @@ class ExecutionFramework(Scheduler):
             # This task has not been launched. Therefore, we are going to
             # reenqueue it. We are not propogating any event up to the
             # application.
-            log.warning('Received TASK_LOST from mesos master because we'
-                        'attemted to accept an invalid offer.')
+            log.warning('Received TASK_LOST from mesos master because we '
+                        'attempted to accept an invalid offer. Going to re-'
+                        'enqueue this task {id}'.format(id=task_id))
             self.task_metadata = self.task_metadata.discard(task_id)
             self.enqueue_task(md.task_config)
             get_metric(TASK_LOST_DUE_TO_INVALID_OFFER_COUNT).count(1)

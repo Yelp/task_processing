@@ -700,7 +700,6 @@ def test_task_lost_due_to_invalid_offers(
 
     assert task_id in ef.task_metadata
     assert mock_get_metric.call_count == 2
-    assert len(ef.event_queue) == 0
-    assert len(ef.task_queue) == 1
-    assert ef.enqeueue_task.call_args == mock.call(task_metadata)
+    assert ef.event_queue.qsize() == 0
+    assert ef.task_queue.qsize() == 1
     assert fake_driver.acknowledgeStatusUpdate.call_count == 1
