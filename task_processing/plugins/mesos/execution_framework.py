@@ -9,6 +9,8 @@ from pyrsistent import m
 from pyrsistent import PMap
 from pyrsistent import pmap
 from pyrsistent import PRecord
+from pyrsistent import PVector
+from pyrsistent import pvector
 from pyrsistent import thaw
 from pyrsistent import v
 from six.moves.queue import Queue
@@ -45,6 +47,7 @@ log = logging.getLogger(__name__)
 
 
 class TaskMetadata(PRecord):
+    task_id = field(type=PVector, factory=pvector, mandatory=True)
     agent_id = field(type=str, initial='')
     task_config = field(type=PRecord, mandatory=True)
     task_state = field(type=str, mandatory=True)
@@ -181,13 +184,16 @@ class ExecutionFramework(Scheduler):
             self.blacklisted_slaves = \
                 self.blacklisted_slaves.remove(agent_id)
 
-    def enqueue_task(self, task_config):
+    def enqueue_task(self, task_config, task_id):
+        mesos_task_id = ':'.join(task_id)
+
         with self._lock:
             # task_state and task_state_history get reset every time
             # a task is enqueued.
             self.task_metadata = self.task_metadata.set(
-                task_config.task_id,
+                mesos_task_id,
                 TaskMetadata(
+                    task_id=task_id,
                     task_config=task_config,
                     task_state='TASK_INITED',
                     task_state_history=m(TASK_INITED=time.time()),
@@ -195,7 +201,7 @@ class ExecutionFramework(Scheduler):
             )
             # Need to lock on task_queue to prevent enqueues when getting
             # tasks to launch
-            self.task_queue.put(task_config)
+            self.task_queue.put((task_config, mesos_task_id))
 
         if self.are_offers_suppressed:
             self.driver.reviveOffers()
@@ -258,7 +264,7 @@ class ExecutionFramework(Scheduler):
         with self._lock:
             # Get all the tasks of the queue
             while not self.task_queue.empty():
-                task = self.task_queue.get()
+                task, task_id = self.task_queue.get()
 
                 if ((remaining_cpus >= task.cpus and
                      remaining_mem >= task.mem and
@@ -267,10 +273,10 @@ class ExecutionFramework(Scheduler):
                      len(available_ports) > 0)):
                     # This offer is sufficient for us to launch task
                     tasks_to_launch.append(
-                        self.create_new_docker_task(
-                            offer,
-                            task,
-                            available_ports
+                        (
+                            self.create_new_docker_task(
+                                offer, task, task_id, available_ports),
+                            task_id
                         )
                     )
 
@@ -288,26 +294,24 @@ class ExecutionFramework(Scheduler):
                 else:
                     # This offer is insufficient for this task. We need to put
                     # it back in the queue
-                    tasks_to_put_back_in_queue.append(task)
+                    tasks_to_put_back_in_queue.append((task, task_id))
 
-        for task in tasks_to_put_back_in_queue:
-            self.task_queue.put(task)
+        for task_config, task_id in tasks_to_put_back_in_queue:
+            self.task_queue.put((task_config, task_id))
             get_metric(TASK_INSUFFICIENT_OFFER_COUNT).count(1)
 
         return tasks_to_launch
 
-    def create_new_docker_task(self, offer, task_config, available_ports):
+    def create_new_docker_task(
+        self,
+        offer,
+        task_config,
+        task_id,
+        available_ports,
+    ):
         # Handle the case of multiple port allocations
         port_to_use = available_ports[0]
         available_ports[:] = available_ports[1:]
-
-        # TODO: this probably belongs in the caller
-        with self._lock:
-            md = self.task_metadata[task_config.task_id]
-            self.task_metadata = self.task_metadata.set(
-                task_config.task_id,
-                md.set(agent_id=str(offer.agent_id.value))
-            )
 
         if task_config.containerizer == 'DOCKER':
             container = Dict(
@@ -340,9 +344,9 @@ class ExecutionFramework(Scheduler):
             )
 
         return Dict(
-            task_id=Dict(value=task_config.task_id),
+            task_id=Dict(value=task_id),
             agent_id=Dict(value=offer.agent_id.value),
-            name='executor-{id}'.format(id=task_config.task_id),
+            name='executor-{id}'.format(id=task_id),
             resources=[
                 Dict(name='cpus',
                      type='SCALAR',
@@ -527,16 +531,23 @@ class ExecutionFramework(Scheduler):
             driver.launchTasks(offer.id, tasks_to_launch)
 
             with self._lock:
-                for task in tasks_to_launch:
-                    md = self.task_metadata[task.task_id.value]
+                for task, task_id in tasks_to_launch:
+                    md = self.task_metadata[task_id]
+
+                    get_metric(TASK_QUEUED_TIME_TIMER).record(
+                        time.time() - md.task_state_ts
+                    )
+
                     self.task_metadata = self.task_metadata.set(
                         task.task_id.value,
                         md.set(
                             task_state='TASK_STAGING',
                             task_state_history=md.task_state_history.set(
                                 'TASK_STAGING', time.time()),
+                            agent_id=str(offer.agent_id.value),
                         )
                     )
+
                     get_metric(TASK_LAUNCHED_COUNT).count(1)
 
         for reason, items in declined.items():
