@@ -124,8 +124,8 @@ class MesosExecutor(TaskExecutor):
         self.driver_thread.daemon = True
         self.driver_thread.start()
 
-    def run(self, task_config):
-        self.execution_framework.enqueue_task(task_config)
+    def run(self, task_config, task_id):
+        self.execution_framework.enqueue_task(task_config, task_id)
 
     def kill(self, task_id):
         print("Killing")

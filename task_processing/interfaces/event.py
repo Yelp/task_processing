@@ -7,6 +7,8 @@ from pyrsistent import m
 from pyrsistent import PMap
 from pyrsistent import pmap
 from pyrsistent import PRecord
+from pyrsistent import PVector
+from pyrsistent import pvector
 
 
 EVENT_KINDS = ['task', 'control']
@@ -29,7 +31,7 @@ class Event(PRecord):
 
     # task-specific fields
     # task_id this event pertains to
-    task_id = field(type=str)
+    task_id = field(type=PVector, factory=pvector)
     # task config dict that sourced the task this event refers to
     task_config = field(
         invariant=lambda x: (isinstance(x, PMap),

@@ -20,8 +20,8 @@ class StatefulTaskExecutor(TaskExecutor):
         worker_thread.daemon = True
         worker_thread.start()
 
-    def run(self, task_config):
-        self.downstream_executor.run(task_config)
+    def run(self, task_config, task_id):
+        self.downstream_executor.run(task_config, task_id)
 
     def kill(self, task_id):
         return self.downstream_executor.kill(task_id)

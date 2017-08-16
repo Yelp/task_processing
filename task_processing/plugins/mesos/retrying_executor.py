@@ -87,12 +87,13 @@ class RetryingExecutor(TaskExecutor):
 
             time.sleep(1)
 
-    def run(self, task_config):
-        if task_config.task_id not in self.task_retries:
+    def run(self, task_config, task_id):
+        if task_id not in self.task_retries:
             with self.task_retries_lock:
                 self.task_retries = self.task_retries.set(
-                    task_config.task_id, self.retries)
-        self.executor.run(task_config)
+                    task_id, self.retries)
+
+        self.executor.run(task_config, task_id)
 
     def kill(self, task_id):
         # retries = -1 so that manually killed tasks can be distinguished
