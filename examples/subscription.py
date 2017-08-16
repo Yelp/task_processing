@@ -36,8 +36,9 @@ def main():
     TaskConfig = executor.TASK_CONFIG_INTERFACE
     for _ in range(2):
         task_config = TaskConfig(image='busybox', cmd='/bin/true')
-        tasks.add(task_config.task_id)
-        runner.run(task_config)
+        task_id = runner.new_task_id()
+        tasks.add(task_id)
+        runner.run(task_config, task_id)
 
     print('Running {} tasks: {}'.format(len(tasks), tasks))
     while len(tasks) > 0:
@@ -54,7 +55,8 @@ def main():
                 tasks.discard(event.task_id)
 
     runner.stop()
-    return 0 if len(tasks) == 0 else 1
+    assert len(tasks) == 0
+    print('OK')
 
 
 if __name__ == '__main__':
