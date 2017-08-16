@@ -2,6 +2,7 @@ import pytest
 from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
+from pyrsistent import thaw
 
 from task_processing.interfaces.event import Event
 from task_processing.plugins.persistence.dynamodb_persistence \
@@ -74,7 +75,7 @@ events = st.builds(
 @settings(max_examples=50)
 @given(x=events)
 def test_event_to_item_timestamp(x, persister):
-    res = persister._event_to_item(x)['M']
+    res = persister._event_to_item(thaw(x))['M']
     print(res)
     assert 'N' in res['timestamp'].keys()
     assert 'BOOL' in res['success'].keys()
@@ -85,7 +86,7 @@ def test_event_to_item_timestamp(x, persister):
 @settings(max_examples=50)
 @given(x=events)
 def test_event_to_item_list(x, persister):
-    res = persister._event_to_item(x)['M']
+    res = persister._event_to_item(thaw(x))['M']
     for k, v in x.task_config.items():
         if len(v) > 0:
             assert k in res['task_config']['M']
