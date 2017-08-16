@@ -69,7 +69,16 @@ class RetryingExecutor(TaskExecutor):
                     self.dest_queue.put(e)
                     continue
 
-                e = self.event_with_retries(e)
+                # shrink the id so layers up the stack can recognize it
+                attempt = int(e.task_id[-1])
+                shrink_id = self.shrink(e.task_id)
+                current_attempt = self.retries - self.task_retries[shrink_id]
+
+                if attempt != current_attempt:
+                    print('event from previous attempt, ignoring')
+                    continue
+
+                e = self.event_with_retries(e.set(task_id=shrink_id))
 
                 if e.terminal:
                     if self.retry_pred(e):
@@ -93,7 +102,7 @@ class RetryingExecutor(TaskExecutor):
                 self.task_retries = self.task_retries.set(
                     task_id, self.retries)
 
-        self.executor.run(task_config, task_id)
+        self.executor.run(task_config, self.grow(task_id))
 
     def kill(self, task_id):
         # retries = -1 so that manually killed tasks can be distinguished
@@ -109,3 +118,9 @@ class RetryingExecutor(TaskExecutor):
 
     def get_event_queue(self):
         return self.dest_queue
+
+    def grow(self, task_id):
+        return task_id.append(self.retries - self.task_retries[task_id])
+
+    def shrink(self, task_id):
+        return task_id[0:-1]
