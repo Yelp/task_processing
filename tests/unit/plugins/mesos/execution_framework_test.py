@@ -435,13 +435,14 @@ def test_initialize_metrics(ef):
 
     ef._initialize_metrics()
 
-    assert ef_mdl.create_counter.call_count == 10
+    assert ef_mdl.create_counter.call_count == 11
     ef_mdl_counters = [
         ef_mdl.TASK_LAUNCHED_COUNT,
         ef_mdl.TASK_FINISHED_COUNT,
         ef_mdl.TASK_FAILED_COUNT,
         ef_mdl.TASK_KILLED_COUNT,
         ef_mdl.TASK_LOST_COUNT,
+        ef_mdl.TASK_LOST_DUE_TO_INVALID_OFFER_COUNT,
         ef_mdl.TASK_ERROR_COUNT,
         ef_mdl.TASK_ENQUEUED_COUNT,
         ef_mdl.TASK_INSUFFICIENT_OFFER_COUNT,
@@ -611,12 +612,13 @@ def test_resource_offers_unmet_reqs(
     assert mock_get_metric.return_value.count.call_count == 0
 
 
-def status_update_test_prep(state):
+def status_update_test_prep(state, reason=''):
     task = me_mdl.MesosTaskConfig(name='fake_name')
     task_id = task.task_id
     update = Dict(
         task_id=Dict(value=task_id),
-        state=state
+        state=state,
+        reason=reason
     )
     task_metadata = ef_mdl.TaskMetadata(
         task_config=task,
@@ -677,4 +679,27 @@ def test_duplicate_status_update(
     assert task_id not in ef.task_metadata
     assert mock_get_metric.call_count == 0
     assert mock_get_metric.return_value.count.call_count == 0
+    assert fake_driver.acknowledgeStatusUpdate.call_count == 1
+
+
+def test_task_lost_due_to_invalid_offers(
+    ef,
+    fake_driver,
+    mock_get_metric
+):
+    update, task_id, task_metadata = status_update_test_prep(
+        state='TASK_LOST',
+        reason='REASON_INVALID_OFFERS'
+    )
+    ef.task_metadata = ef.task_metadata.set(
+        task_id,
+        task_metadata
+    )
+
+    ef.statusUpdate(fake_driver, update)
+
+    assert task_id in ef.task_metadata
+    assert mock_get_metric.call_count == 2
+    assert ef.event_queue.qsize() == 0
+    assert ef.task_queue.qsize() == 1
     assert fake_driver.acknowledgeStatusUpdate.call_count == 1

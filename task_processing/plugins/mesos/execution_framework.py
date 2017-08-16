@@ -23,6 +23,8 @@ TASK_FINISHED_COUNT = 'taskproc.mesos.task_finished_count'
 TASK_FAILED_COUNT = 'taskproc.mesos.task_failure_count'
 TASK_KILLED_COUNT = 'taskproc.mesos.task_killed_count'
 TASK_LOST_COUNT = 'taskproc.mesos.task_lost_count'
+TASK_LOST_DUE_TO_INVALID_OFFER_COUNT = \
+    'taskproc.mesos.task_lost_due_to_invalid_offer_count'
 TASK_ERROR_COUNT = 'taskproc.mesos.task_error_count'
 
 TASK_ENQUEUED_COUNT = 'taskproc.mesos.task_enqueued_count'
@@ -377,11 +379,12 @@ class ExecutionFramework(Scheduler):
         }
 
         counters = [
-            TASK_LAUNCHED_COUNT,        TASK_FINISHED_COUNT,
-            TASK_FAILED_COUNT,          TASK_KILLED_COUNT,
-            TASK_LOST_COUNT,            TASK_ERROR_COUNT,
-            TASK_ENQUEUED_COUNT,        TASK_INSUFFICIENT_OFFER_COUNT,
-            TASK_STUCK_COUNT,           BLACKLISTED_AGENTS_COUNT,
+            TASK_LAUNCHED_COUNT,                 TASK_FINISHED_COUNT,
+            TASK_FAILED_COUNT,                   TASK_KILLED_COUNT,
+            TASK_LOST_COUNT,                     TASK_ERROR_COUNT,
+            TASK_ENQUEUED_COUNT,                 TASK_INSUFFICIENT_OFFER_COUNT,
+            TASK_STUCK_COUNT,                    BLACKLISTED_AGENTS_COUNT,
+            TASK_LOST_DUE_TO_INVALID_OFFER_COUNT
         ]
         for cnt in counters:
             create_counter(cnt, default_dimensions)
@@ -542,11 +545,30 @@ class ExecutionFramework(Scheduler):
         if task_id not in self.task_metadata:
             # We assume that a terminal status update has been
             # received for this task already.
-            log.info('Ignoring this status update because a terminal status \
-                update has been receiced for this task already.')
+            log.info('Ignoring this status update because a terminal status '
+                     'update has been received for this task already.')
             driver.acknowledgeStatusUpdate(update)
             return
+
         md = self.task_metadata[task_id]
+
+        # If we attempt to accept an offer that has been invalidated by master
+        # for some reason such as offer has been rescinded or we have exceeded
+        # offer_timeout, then we will get TASK_LOST status update back from
+        # mesos master.
+        if task_state == 'TASK_LOST' and \
+                'REASON_INVALID_OFFERS' == str(update.reason):
+            # This task has not been launched. Therefore, we are going to
+            # reenqueue it. We are not propogating any event up to the
+            # application.
+            log.warning('Received TASK_LOST from mesos master because we '
+                        'attempted to accept an invalid offer. Going to re-'
+                        'enqueue this task {id}'.format(id=task_id))
+            self.task_metadata = self.task_metadata.discard(task_id)
+            self.enqueue_task(md.task_config)
+            get_metric(TASK_LOST_DUE_TO_INVALID_OFFER_COUNT).count(1)
+            driver.acknowledgeStatusUpdate(update)
+            return
 
         self.event_queue.put(
             self.translator(update, task_id).set(task_config=md.task_config)
