@@ -589,8 +589,9 @@ class ExecutionFramework(Scheduler):
             log.warning('Received TASK_LOST from mesos master because we '
                         'attempted to accept an invalid offer. Going to re-'
                         'enqueue this task {id}'.format(id=task_id))
-            self.task_metadata = self.task_metadata.discard(task_id)
-            self.enqueue_task(md.task_config)
+
+            self.enqueue_task(md.task_config, task_id)
+
             get_metric(TASK_LOST_DUE_TO_INVALID_OFFER_COUNT).count(1)
             driver.acknowledgeStatusUpdate(update)
             return
