@@ -31,7 +31,10 @@ class Event(PRecord):
 
     # task-specific fields
     # task_id this event pertains to
-    task_id = field(type=PVector, factory=pvector)
+    task_id = field(
+        type=PVector,
+        factory=lambda x: pvector(x) if isinstance(x, list) else None,
+    )
     # task config dict that sourced the task this event refers to
     task_config = field(
         invariant=lambda x: (isinstance(x, PMap),
