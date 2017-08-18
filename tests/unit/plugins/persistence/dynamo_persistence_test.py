@@ -50,7 +50,7 @@ def test_replaces_decimals_unaffected(x, persister):
     assert persister._replace_decimals(x) == x
 
 
-texts = st.text(average_size=5)
+texts = st.text(max_size=5)
 events = st.builds(
     Event,
     kind=st.sampled_from(['task', 'control']),
@@ -58,13 +58,14 @@ events = st.builds(
     terminal=st.booleans(),
     success=st.booleans(),
     task_config=st.dictionaries(
-        average_size=5,
+        max_size=5,
         keys=texts,
         values=st.lists(
             st.one_of(
                 texts,
-                st.dictionaries(average_size=5, keys=texts, values=texts),
-            )
+                st.dictionaries(max_size=5, keys=texts, values=texts),
+            ),
+            max_size=5,
         )
     )
 )
