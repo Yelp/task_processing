@@ -6,6 +6,8 @@ from addict import Dict
 from pymesos.interface import Scheduler
 from pyrsistent import field
 from pyrsistent import m
+from pyrsistent import PMap
+from pyrsistent import pmap
 from pyrsistent import PRecord
 from pyrsistent import thaw
 from pyrsistent import v
@@ -46,7 +48,7 @@ class TaskMetadata(PRecord):
     agent_id = field(type=str, initial='')
     task_config = field(type=PRecord, mandatory=True)
     task_state = field(type=str, mandatory=True)
-    task_state_ts = field(type=float, mandatory=True)
+    task_state_history = field(type=PMap, factory=pmap, mandatory=True)
 
 
 class ExecutionFramework(Scheduler):
@@ -121,8 +123,9 @@ class ExecutionFramework(Scheduler):
                     ):
                         continue
 
+                    md = self.task_metadata[task_id]
                     if time_now > (
-                        self.task_metadata[task_id].task_state_ts +
+                        md.task_state_history['TASK_STAGING'] +
                         self.task_staging_timeout_s
                     ):
                         log.warning(
@@ -180,12 +183,14 @@ class ExecutionFramework(Scheduler):
 
     def enqueue_task(self, task_config):
         with self._lock:
+            # task_state and task_state_history get reset every time
+            # a task is enqueued.
             self.task_metadata = self.task_metadata.set(
                 task_config.task_id,
                 TaskMetadata(
                     task_config=task_config,
                     task_state='TASK_INITED',
-                    task_state_ts=time.time(),
+                    task_state_history=m(TASK_INITED=time.time()),
                 )
             )
             # Need to lock on task_queue to prevent enqueues when getting
@@ -276,9 +281,9 @@ class ExecutionFramework(Scheduler):
                     remaining_disk -= task.disk
                     remaining_gpus -= task.gpus
 
+                    md = self.task_metadata[task.task_id]
                     get_metric(TASK_QUEUED_TIME_TIMER).record(
-                        time.time() -
-                        self.task_metadata[task.task_id].task_state_ts
+                        time.time() - md.task_state_history['TASK_INITED']
                     )
                 else:
                     # This offer is insufficient for this task. We need to put
@@ -522,7 +527,8 @@ class ExecutionFramework(Scheduler):
                         task.task_id.value,
                         md.set(
                             task_state='TASK_STAGING',
-                            task_state_ts=time.time(),
+                            task_state_history=md.task_state_history.set(
+                                'TASK_STAGING', time.time()),
                         )
                     )
                     get_metric(TASK_LAUNCHED_COUNT).count(1)
@@ -582,7 +588,8 @@ class ExecutionFramework(Scheduler):
                     task_id,
                     md.set(
                         task_state=task_state,
-                        task_state_ts=time.time(),
+                        task_state_history=md.task_state_history.set(
+                            task_state, time.time()),
                     )
                 )
 
