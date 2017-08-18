@@ -41,15 +41,19 @@ class MesosTaskConfig(PRecord):
     cmd = field(type=str, initial="/bin/true")
     cpus = field(type=float,
                  initial=0.1,
+                 factory=float,
                  invariant=lambda c: (c > 0, 'cpus > 0'))
     mem = field(type=float,
                 initial=32.0,
+                factory=float,
                 invariant=lambda m: (m >= 32, 'mem is >= 32'))
     disk = field(type=float,
                  initial=10.0,
+                 factory=float,
                  invariant=lambda d: (d > 0, 'disk > 0'))
     gpus = field(type=int,
                  initial=0,
+                 factory=int,
                  invariant=lambda g: (g >= 0, 'gpus >= 0'))
     volumes = field(type=PVector,
                     initial=v(),
