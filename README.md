@@ -1,4 +1,5 @@
 # Generic task processing
+[![Build Status](https://travis-ci.org/Yelp/task_processing.svg?branch=master)](https://travis-ci.org/Yelp/task_processing)
 
 Interfaces and shared infrastructure for generic task processing @ Yelp
 
