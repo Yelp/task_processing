@@ -1,5 +1,6 @@
 import pytest
 from hypothesis import given
+from hypothesis import settings
 from hypothesis import strategies as st
 
 from task_processing.interfaces.event import Event
@@ -49,15 +50,28 @@ def test_replaces_decimals_unaffected(x, persister):
     assert persister._replace_decimals(x) == x
 
 
-@given(x=st.builds(Event,
-                   kind=st.sampled_from(['task', 'control']),
-                   timestamp=st.floats(
-                       min_value=0, allow_nan=False, allow_infinity=False),
-                   terminal=st.booleans(),
-                   success=st.booleans(),
-                   task_config=st.dictionaries(
-                       keys=st.text(), values=st.text()),
-                   ))
+texts = st.text(average_size=5)
+events = st.builds(
+    Event,
+    kind=st.sampled_from(['task', 'control']),
+    timestamp=st.floats(min_value=0, allow_nan=False, allow_infinity=False),
+    terminal=st.booleans(),
+    success=st.booleans(),
+    task_config=st.dictionaries(
+        average_size=5,
+        keys=texts,
+        values=st.lists(
+            st.one_of(
+                texts,
+                st.dictionaries(average_size=5, keys=texts, values=texts),
+            )
+        )
+    )
+)
+
+
+@settings(max_examples=50)
+@given(x=events)
 def test_event_to_item_timestamp(x, persister):
     res = persister._event_to_item(x)['M']
     print(res)
@@ -67,25 +81,8 @@ def test_event_to_item_timestamp(x, persister):
     assert 'M' in res['task_config'].keys()
 
 
-@given(x=st.builds(
-    Event,
-    kind=st.sampled_from(['task', 'control']),
-    timestamp=st.floats(min_value=0, allow_nan=False, allow_infinity=False),
-    terminal=st.booleans(),
-    success=st.booleans(),
-    task_config=st.dictionaries(
-       keys=st.text(),
-       values=st.lists(
-           st.one_of(
-               st.text(),
-               st.dictionaries(
-                   keys=st.text(),
-                   values=st.text(),
-               )
-           )
-       )
-       ),
-))
+@settings(max_examples=50)
+@given(x=events)
 def test_event_to_item_list(x, persister):
     res = persister._event_to_item(x)['M']
     for k, v in x.task_config.items():
