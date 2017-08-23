@@ -7,23 +7,22 @@ services:
       ZK_CONFIG: tickTime=2000,initLimit=10,syncLimit=5,maxClientCnxns=128,forceSync=no,clientPort=2181
       ZK_ID: 1
   mesosmaster:
-    build:
-      context: .
-      dockerfile: Dockerfile.mesos
+    image: mesosphere/mesos:1.3.0
     ports:
       - 5050
       - 5054
     command: 'mesos-master --zk=zk://zookeeper:2181/mesos-testcluster --registry=in_memory --quorum=1 --authenticate --authenticate_slaves --work_dir=/tmp/mesos --credentials=/etc/mesos-secrets'
     depends_on:
       - zookeeper
+    volumes:
+      - ./mesos-secrets:/etc/mesos-secrets
   mesosslave:
-    build:
-      context: .
-      dockerfile: Dockerfile.mesos
+    image: mesosphere/mesos:1.3.0
     expose:
       - 5051
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./mesos-slave-secret:/etc/mesos-slave-secret
     environment:
       CLUSTER: testcluster
     command: 'mesos-slave --master=zk://zookeeper:2181/mesos-testcluster --resources="cpus:20;mem:2048;disk:2000;ports:[31000-31100];cpus(task-proc):10;mem(task-proc):1024;disk(task-proc):1000;ports(task-proc):[31200-31500]" --credential=/etc/mesos-slave-secret --containerizers=docker --docker=/usr/bin/docker --work_dir=/tmp/mesos --attributes="region:fakeregion;pool:default" --no-docker_kill_orphans --log_dir=/var/log/mesos'
