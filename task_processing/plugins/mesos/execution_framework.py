@@ -264,28 +264,26 @@ class ExecutionFramework(Scheduler):
         with self._lock:
             # Get all the tasks of the queue
             while not self.task_queue.empty():
-                task, mesos_task_id = self.task_queue.get()
+                task_config, mesos_task_id = self.task_queue.get()
 
-                if ((remaining_cpus >= task.cpus and
-                     remaining_mem >= task.mem and
-                     remaining_disk >= task.disk and
-                     remaining_gpus >= task.gpus and
+                if ((remaining_cpus >= task_config.cpus and
+                     remaining_mem >= task_config.mem and
+                     remaining_disk >= task_config.disk and
+                     remaining_gpus >= task_config.gpus and
                      len(available_ports) > 0)):
                     # This offer is sufficient for us to launch task
                     tasks_to_launch.append(
-                        (
-                            self.create_new_docker_task(
-                                offer, task, mesos_task_id, available_ports),
-                            mesos_task_id
+                        self.create_new_docker_task(
+                            offer, task_config, mesos_task_id, available_ports
                         )
                     )
 
                     # Deduct the resources taken by this task from the total
                     # available resources.
-                    remaining_cpus -= task.cpus
-                    remaining_mem -= task.mem
-                    remaining_disk -= task.disk
-                    remaining_gpus -= task.gpus
+                    remaining_cpus -= task_config.cpus
+                    remaining_mem -= task_config.mem
+                    remaining_disk -= task_config.disk
+                    remaining_gpus -= task_config.gpus
 
                     md = self.task_metadata[task.task_id]
                     get_metric(TASK_QUEUED_TIME_TIMER).record(
@@ -294,7 +292,8 @@ class ExecutionFramework(Scheduler):
                 else:
                     # This offer is insufficient for this task. We need to put
                     # it back in the queue
-                    tasks_to_put_back_in_queue.append((task, mesos_task_id))
+                    tasks_to_put_back_in_queue.append(
+                        (task_config, mesos_task_id))
 
         for task_config, mesos_task_id in tasks_to_put_back_in_queue:
             self.task_queue.put((task_config, mesos_task_id))
@@ -528,10 +527,11 @@ class ExecutionFramework(Scheduler):
 
             accepted.append('offer: {} agent: {} tasks: {}'.format(
                 offer.id.value, offer.agent_id.value, len(tasks_to_launch)))
-            driver.launchTasks(offer.id, [t for t, _ in tasks_to_launch])
+            driver.launchTasks(offer.id, tasks_to_launch)
 
             with self._lock:
-                for task, mesos_task_id in tasks_to_launch:
+                for task in tasks_to_launch:
+                    mesos_task_id = task.task_id.value
                     md = self.task_metadata[mesos_task_id]
 
                     get_metric(TASK_QUEUED_TIME_TIMER).record(
