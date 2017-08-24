@@ -488,8 +488,6 @@ def test_resource_offers_launch(
     fake_driver,
     mock_get_metric,
     mock_time
-
-
 ):
     ef.driver = fake_driver
     ef._last_offer_time = 1.0
@@ -520,6 +518,49 @@ def test_resource_offers_launch(
     assert mock_get_metric.return_value.record.call_args == mock.call(1.0)
     assert mock_get_metric.return_value.count.call_count == 1
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
+
+
+def test_get_tasks_to_launch_no_ports(
+    ef,
+    fake_offer,
+    fake_task,
+    fake_driver,
+    mock_get_metric
+):
+    ef.create_new_docker_task = mock.Mock()
+    ef.get_available_ports = mock.Mock(return_value=[])
+    ef.task_queue.put(fake_task)
+
+    tasks = ef.get_tasks_to_launch(fake_offer)
+
+    assert len(tasks) == 0
+    assert ef.task_queue.qsize() == 1
+
+
+def test_get_tasks_to_launch_ports_available(
+    ef,
+    fake_offer,
+    fake_task,
+    fake_driver,
+    mock_get_metric
+):
+    ef.create_new_docker_task = mock.Mock()
+    ef.get_available_ports = mock.Mock(return_value=[30000])
+    ef.task_queue.put(fake_task)
+    task_metadata = ef_mdl.TaskMetadata(
+        task_config=fake_task,
+        task_state='fake_state',
+        task_state_ts=time.time()
+    )
+    ef.task_metadata = ef.task_metadata.set(
+        fake_task.task_id,
+        task_metadata
+    )
+
+    tasks = ef.get_tasks_to_launch(fake_offer)
+
+    assert len(tasks) == 1
+    assert ef.task_queue.qsize() == 0
 
 
 def test_resource_offers_no_tasks_to_launch(
