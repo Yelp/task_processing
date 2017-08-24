@@ -535,6 +535,7 @@ def test_get_tasks_to_launch_no_ports(
 
     assert len(tasks) == 0
     assert ef.task_queue.qsize() == 1
+    assert ef.create_new_docker_task.call_count == 0
 
 
 def test_get_tasks_to_launch_ports_available(
@@ -561,6 +562,7 @@ def test_get_tasks_to_launch_ports_available(
 
     assert len(tasks) == 1
     assert ef.task_queue.qsize() == 0
+    assert ef.create_new_docker_task.call_count == 1
 
 
 def test_resource_offers_no_tasks_to_launch(

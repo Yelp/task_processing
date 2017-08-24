@@ -586,8 +586,8 @@ class ExecutionFramework(Scheduler):
                     )
                 )
 
-        with self._lock:
-            if task_state in self._task_states:
+        if task_state in self._task_states:
+            with self._lock:
                 self.task_metadata = self.task_metadata.discard(task_id)
             get_metric(self._task_states[task_state]).count(1)
 
