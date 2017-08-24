@@ -258,7 +258,8 @@ class ExecutionFramework(Scheduler):
                 if ((remaining_cpus >= task.cpus and
                      remaining_mem >= task.mem and
                      remaining_disk >= task.disk and
-                     remaining_gpus >= task.gpus)):
+                     remaining_gpus >= task.gpus and
+                     len(available_ports) > 0)):
                     # This offer is sufficient for us to launch task
                     tasks_to_launch.append(
                         self.create_new_docker_task(
