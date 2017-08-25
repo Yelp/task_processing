@@ -11,21 +11,21 @@ services:
     ports:
       - 5050
       - 5054
-    command: 'mesos-master --zk=zk://zookeeper:2181/mesos-testcluster --registry=in_memory --quorum=1 --authenticate --authenticate_slaves --work_dir=/tmp/mesos --credentials=/etc/mesos-secrets'
+    command: 'mesos-master --zk=zk://zookeeper:2181/mesos-testcluster --registry=in_memory --quorum=1 --authenticate --authenticate_agents --work_dir=/tmp/mesos --credentials=/etc/mesos-secrets'
     depends_on:
       - zookeeper
     volumes:
       - ./mesos-secrets:/etc/mesos-secrets
-  mesosslave:
+  mesosagent:
     image: mesosphere/mesos:1.3.0
     expose:
       - 5051
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./mesos-slave-secret:/etc/mesos-slave-secret
+      - ./mesos-agent-secret:/etc/mesos-agent-secret
     environment:
       CLUSTER: testcluster
-    command: 'mesos-slave --master=zk://zookeeper:2181/mesos-testcluster --resources="cpus:20;mem:2048;disk:2000;ports:[31000-31100];cpus(task-proc):10;mem(task-proc):1024;disk(task-proc):1000;ports(task-proc):[31200-31500]" --credential=/etc/mesos-slave-secret --containerizers=docker --docker=/usr/bin/docker --work_dir=/tmp/mesos --attributes="region:fakeregion;pool:default" --no-docker_kill_orphans --log_dir=/var/log/mesos'
+    command: 'mesos-agent --master=zk://zookeeper:2181/mesos-testcluster --resources="cpus:20;mem:2048;disk:2000;ports:[31000-31100];cpus(task-proc):10;mem(task-proc):1024;disk(task-proc):1000;ports(task-proc):[31200-31500]" --credential=/etc/mesos-agent-secret --containerizers=docker --docker=/usr/bin/docker --work_dir=/tmp/mesos --attributes="region:fakeregion;pool:default" --no-docker_kill_orphans --log_dir=/var/log/mesos'
     depends_on:
       - mesosmaster
       - zookeeper
@@ -39,7 +39,7 @@ services:
     depends_on:
       - zookeeper
       - mesosmaster
-      - mesosslave
+      - mesosagent
       - dynamodb
     volumes:
       - ../..:/src
