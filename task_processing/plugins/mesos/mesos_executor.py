@@ -6,6 +6,7 @@ from pymesos import MesosSchedulerDriver
 from pyrsistent import field
 from pyrsistent import m
 from pyrsistent import PMap
+from pyrsistent import pmap
 from pyrsistent import PRecord
 from pyrsistent import PVector
 from pyrsistent import pvector
@@ -72,7 +73,7 @@ class MesosTaskConfig(PRecord):
                           invariant=lambda c:
                           (c == 'DOCKER' or c == 'MESOS',
                            'containerizer is docker or mesos'))
-    environment = field(type=PMap, initial=m())
+    environment = field(type=PMap, initial=m(), factory=pmap)
 
     @property
     def task_id(self):
