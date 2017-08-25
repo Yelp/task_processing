@@ -411,7 +411,8 @@ def test_create_new_docker_task(
         ],
         command=Dict(
             value='echo "fake"',
-            uris=[]
+            uris=[],
+            environment=Dict(variables=[])
         ),
         container=container,
     )
