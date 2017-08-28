@@ -4,6 +4,7 @@ import time
 import mock
 import pytest
 from addict import Dict
+from pyrsistent import m
 from pyrsistent import v
 
 from task_processing.plugins.mesos import execution_framework as ef_mdl
@@ -130,7 +131,7 @@ def test_ef_kills_stuck_tasks(
         agent_id='fake_agent_id',
         task_config=fake_task,
         task_state='TASK_STAGING',
-        task_state_ts=0.0,
+        task_state_history=m(TASK_STAGING=0.0),
     )
     ef.task_staging_timeout_s = 0
     ef.kill_task = mock.Mock()
@@ -251,8 +252,8 @@ def test_get_tasks_to_launch_sufficient_offer(
 ):
     task_metadata = ef_mdl.TaskMetadata(
         task_config=fake_task,
-        task_state='fake_state',
-        task_state_ts=1.0
+        task_state='TASK_INITED',
+        task_state_history=m(TASK_INITED=1.0)
     )
     ef.create_new_docker_task = mock.Mock()
     mock_time.return_value = 2.0
@@ -361,7 +362,7 @@ def test_create_new_docker_task(
     task_metadata = ef_mdl.TaskMetadata(
         task_config=fake_task,
         task_state='fake_state',
-        task_state_ts=time.time()
+        task_state_history=m(fake_state=time.time())
     )
     fake_task = fake_task.set(
         volumes=v(
@@ -499,7 +500,7 @@ def test_resource_offers_launch(
     task_metadata = ef_mdl.TaskMetadata(
         task_config=fake_task,
         task_state='fake_state',
-        task_state_ts=time.time()
+        task_state_history=m(fake_state=time.time())
     )
     ef.get_tasks_to_launch = mock.Mock(return_value=[docker_task])
 
@@ -550,8 +551,8 @@ def test_get_tasks_to_launch_ports_available(
     ef.task_queue.put(fake_task)
     task_metadata = ef_mdl.TaskMetadata(
         task_config=fake_task,
-        task_state='fake_state',
-        task_state_ts=time.time()
+        task_state='TASK_INITED',
+        task_state_history=m(TASK_INITED=time.time())
     )
     ef.task_metadata = ef.task_metadata.set(
         fake_task.task_id,
@@ -665,8 +666,8 @@ def status_update_test_prep(state, reason=''):
     )
     task_metadata = ef_mdl.TaskMetadata(
         task_config=task,
-        task_state=state,
-        task_state_ts=time.time(),
+        task_state='TASK_INITED',
+        task_state_history=m(TASK_INITED=time.time()),
     )
 
     return update, task_id, task_metadata
@@ -677,13 +678,13 @@ def test_status_update_record_only(
     fake_driver
 ):
     update, task_id, task_metadata = status_update_test_prep('fake_state1')
-    task_metadata = task_metadata.set(task_state='fake_state2')
     ef.translator = mock.Mock()
 
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef.statusUpdate(fake_driver, update)
 
     assert ef.task_metadata[task_id].task_state == 'fake_state1'
+    assert len(ef.task_metadata[task_id].task_state_history) == 2
     assert fake_driver.acknowledgeStatusUpdate.call_count == 1
     assert fake_driver.acknowledgeStatusUpdate.call_args == mock.call(update)
 
@@ -709,7 +710,7 @@ def test_status_update_finished(
     assert fake_driver.acknowledgeStatusUpdate.call_args == mock.call(update)
 
 
-def test_duplicate_status_update(
+def test_ignore_status_update(
     ef,
     fake_driver,
     mock_get_metric
