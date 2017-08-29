@@ -23,7 +23,7 @@ setup(
     version=task_processing.__version__,
     provides=['task_processing'],
     author='Task Processing',
-    author_email='lol@yelp.com',
+    author_email='team-taskproc@yelp.com',
     description='Framework for task processing executors and configuration',
     packages=find_packages(exclude=('tests')),
     include_package_data=True,
