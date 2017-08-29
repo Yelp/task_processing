@@ -2,6 +2,7 @@
 import logging
 import os
 
+from task_processing.interfaces.runner import new_task_id
 from task_processing.plugins.persistence.file_persistence \
     import FilePersistence
 from task_processing.runners.sync import Sync
@@ -37,7 +38,7 @@ def main():
     )
 
     runner = Sync(executor=executor)
-    task_ids = [runner.new_task_id() for _ in range(2)]
+    task_ids = [new_task_id() for _ in range(2)]
     TaskConfig = mesos_executor.TASK_CONFIG_INTERFACE
 
     for task_id in task_ids:

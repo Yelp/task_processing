@@ -22,18 +22,15 @@ class DynamoDBPersister(Persister):
         ).Table(table_name)
 
     def read(self, task_id, comparison_operator='EQ'):
-        dynamo_task_id = ':'.join(task_id)
         res = self.table.query(
-            KeyConditionExpression=Key('task_id').eq(dynamo_task_id)
+            KeyConditionExpression=Key('task_id').eq(task_id)
         )
         return [self.item_to_event(item) for item in res['Items']]
 
     def write(self, event):
-        raw = thaw(event)
-        raw['task_id'] = ':'.join(raw['task_id'])
         return self.ddb_client.put_item(
             TableName=self.table_name,
-            Item=self._event_to_item(raw)['M']
+            Item=self._event_to_item(thaw(event.raw))['M']
         )
 
     def _event_to_item(self, raw):
@@ -76,7 +73,6 @@ class DynamoDBPersister(Persister):
 
     def item_to_event(self, obj):
         event = self._replace_decimals(obj)
-        event['task_id'] = event['task_id'].split(':')
         return event
 
     def _replace_decimals(self, obj):

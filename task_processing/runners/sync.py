@@ -3,6 +3,7 @@ import time
 
 from six.moves.queue import Queue
 
+from task_processing.interfaces.runner import new_task_id
 from task_processing.interfaces.runner import Runner
 
 log = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ class Sync(Runner):
 
     def run(self, task_config, task_id=None):
         if task_id is None:
-            task_id = self.new_task_id()
+            task_id = new_task_id()
 
         self.executor.run(task_config, task_id)
         event_queue = self.executor.get_event_queue()

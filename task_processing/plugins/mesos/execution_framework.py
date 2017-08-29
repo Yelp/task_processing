@@ -185,13 +185,11 @@ class ExecutionFramework(Scheduler):
                 self.blacklisted_slaves.remove(agent_id)
 
     def enqueue_task(self, task_config, task_id):
-        mesos_task_id = ':'.join(task_id)
-
         with self._lock:
             # task_state and task_state_history get reset every time
             # a task is enqueued.
             self.task_metadata = self.task_metadata.set(
-                mesos_task_id,
+                task_id,
                 TaskMetadata(
                     task_id=task_id,
                     task_config=task_config,
@@ -201,7 +199,7 @@ class ExecutionFramework(Scheduler):
             )
             # Need to lock on task_queue to prevent enqueues when getting
             # tasks to launch
-            self.task_queue.put((task_config, mesos_task_id))
+            self.task_queue.put((task_config, task_id))
 
         if self.are_offers_suppressed:
             self.driver.reviveOffers()
@@ -264,7 +262,7 @@ class ExecutionFramework(Scheduler):
         with self._lock:
             # Get all the tasks of the queue
             while not self.task_queue.empty():
-                task_config, mesos_task_id = self.task_queue.get()
+                task_config, task_id = self.task_queue.get()
 
                 if ((remaining_cpus >= task_config.cpus and
                      remaining_mem >= task_config.mem and
@@ -274,7 +272,7 @@ class ExecutionFramework(Scheduler):
                     # This offer is sufficient for us to launch task
                     tasks_to_launch.append(
                         self.create_new_docker_task(
-                            offer, task_config, mesos_task_id, available_ports
+                            offer, task_config, task_id, available_ports
                         )
                     )
 
@@ -284,19 +282,14 @@ class ExecutionFramework(Scheduler):
                     remaining_mem -= task_config.mem
                     remaining_disk -= task_config.disk
                     remaining_gpus -= task_config.gpus
-
-                    md = self.task_metadata[task.task_id]
-                    get_metric(TASK_QUEUED_TIME_TIMER).record(
-                        time.time() - md.task_state_history['TASK_INITED']
-                    )
                 else:
                     # This offer is insufficient for this task. We need to put
                     # it back in the queue
                     tasks_to_put_back_in_queue.append(
-                        (task_config, mesos_task_id))
+                        (task_config, task_id))
 
-        for task_config, mesos_task_id in tasks_to_put_back_in_queue:
-            self.task_queue.put((task_config, mesos_task_id))
+        for task_config, task_id in tasks_to_put_back_in_queue:
+            self.task_queue.put((task_config, task_id))
             get_metric(TASK_INSUFFICIENT_OFFER_COUNT).count(1)
 
         return tasks_to_launch
@@ -531,15 +524,14 @@ class ExecutionFramework(Scheduler):
 
             with self._lock:
                 for task in tasks_to_launch:
-                    mesos_task_id = task.task_id.value
-                    md = self.task_metadata[mesos_task_id]
-
+                    task_id = task.task_id.value
+                    md = self.task_metadata[task_id]
                     get_metric(TASK_QUEUED_TIME_TIMER).record(
-                        time.time() - md.task_state_ts
+                        time.time() - md.task_state_history['TASK_INITED']
                     )
 
                     self.task_metadata = self.task_metadata.set(
-                        mesos_task_id,
+                        task_id,
                         md.set(
                             task_state='TASK_STAGING',
                             task_state_history=md.task_state_history.set(
@@ -558,8 +550,7 @@ class ExecutionFramework(Scheduler):
             log.info("Offers accepted: {}".format(', '.join(accepted)))
 
     def statusUpdate(self, driver, update):
-        mesos_task_id = update.task_id.value
-        task_id = pvector(mesos_task_id.split(':'))
+        task_id = update.task_id.value
         task_state = str(update.state)
 
         log.info("Task update {update} received for task {task}".format(
@@ -567,7 +558,7 @@ class ExecutionFramework(Scheduler):
             task=task_id
         ))
 
-        if mesos_task_id not in self.task_metadata:
+        if task_id not in self.task_metadata:
             # We assume that a terminal status update has been
             # received for this task already.
             log.info('Ignoring this status update because a terminal status '
@@ -575,7 +566,7 @@ class ExecutionFramework(Scheduler):
             driver.acknowledgeStatusUpdate(update)
             return
 
-        md = self.task_metadata[mesos_task_id]
+        md = self.task_metadata[task_id]
 
         # If we attempt to accept an offer that has been invalidated by master
         # for some reason such as offer has been rescinded or we have exceeded
@@ -604,7 +595,7 @@ class ExecutionFramework(Scheduler):
         if md.task_state != task_state:
             with self._lock:
                 self.task_metadata = self.task_metadata.set(
-                    mesos_task_id,
+                    task_id,
                     md.set(
                         task_state=task_state,
                         task_state_history=md.task_state_history.set(
@@ -614,7 +605,7 @@ class ExecutionFramework(Scheduler):
 
         if task_state in self._task_states:
             with self._lock:
-                self.task_metadata = self.task_metadata.discard(mesos_task_id)
+                self.task_metadata = self.task_metadata.discard(task_id)
             get_metric(self._task_states[task_state]).count(1)
 
         # We have to do this because we are not using implicit

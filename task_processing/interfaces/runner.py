@@ -1,7 +1,6 @@
 import abc
 
 import six
-from pyrsistent import pvector
 
 from task_processing.interfaces.task_executor import DefaultTaskConfigInterface
 from task_processing.util.base62 import base62_random
@@ -23,5 +22,6 @@ class Runner(object):
     def kill(self, task_id):
         pass
 
-    def new_task_id(self):
-        return pvector([base62_random()])
+
+def new_task_id():
+    return base62_random()

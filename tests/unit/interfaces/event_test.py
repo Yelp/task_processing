@@ -2,7 +2,6 @@ import pytest
 from pyrsistent import InvariantException
 from pyrsistent import PRecord
 from pyrsistent import PTypeError
-from pyrsistent import v
 
 from task_processing.interfaces.event import Event
 
@@ -25,7 +24,7 @@ def test_event_is_immutable(event):
 
 
 def test_event_has_task_id(event):
-    assert event.set(task_id=['foo']).task_id == v('foo')
+    assert event.set(task_id='foo').task_id == 'foo'
 
 
 def test_event_type_checks(event):

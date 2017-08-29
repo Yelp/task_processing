@@ -5,6 +5,7 @@ import os
 from six.moves.queue import Empty
 from six.moves.queue import Queue
 
+from task_processing.interfaces.runner import new_task_id
 from task_processing.runners.subscription import Subscription
 from task_processing.task_processor import TaskProcessor
 
@@ -36,7 +37,7 @@ def main():
     TaskConfig = executor.TASK_CONFIG_INTERFACE
     for _ in range(2):
         task_config = TaskConfig(image='busybox', cmd='/bin/true')
-        task_id = runner.new_task_id()
+        task_id = new_task_id()
         tasks.add(task_id)
         runner.run(task_config, task_id)
 

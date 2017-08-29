@@ -3,6 +3,7 @@ from threading import Thread
 
 from six.moves.queue import Empty
 
+from task_processing.interfaces.runner import new_task_id
 from task_processing.interfaces.runner import Runner
 
 EventHandler = namedtuple('EventHandler', ['predicate', 'cb'])
@@ -28,7 +29,7 @@ class Async(Runner):
 
     def run(self, task_config, task_id=None):
         if task_id is None:
-            task_id = self.new_task_id()
+            task_id = new_task_id()
 
         return self.executor.run(task_config, task_id)
 

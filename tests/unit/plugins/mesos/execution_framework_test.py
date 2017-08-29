@@ -224,7 +224,7 @@ def test_enqueue_task(
     ef.driver = fake_driver
 
     fake_id = 'fake_id'
-    ef.enqueue_task(fake_task, [fake_id])
+    ef.enqueue_task(fake_task, fake_id)
 
     assert ef.task_metadata[fake_id].task_state == 'TASK_INITED'
     assert not ef.task_queue.empty()
@@ -256,7 +256,7 @@ def test_get_tasks_to_launch_sufficient_offer(
     task_metadata = ef_mdl.TaskMetadata(
         task_config=fake_task,
         task_state='TASK_INITED',
-        task_state_history=m(TASK_INITED=1.0)
+        task_state_history=m(TASK_INITED=1.0),
         task_id=task_id,
     )
     ef.create_new_docker_task = mock.Mock()
@@ -265,7 +265,7 @@ def test_get_tasks_to_launch_sufficient_offer(
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     tasks_to_launch = ef.get_tasks_to_launch(fake_offer)
 
-    assert (ef.create_new_docker_task.return_value, task_id) in tasks_to_launch
+    assert ef.create_new_docker_task.return_value in tasks_to_launch
     assert ef.task_queue.qsize() == 0
 
 
@@ -360,7 +360,7 @@ def test_create_new_docker_task(
     task_metadata = ef_mdl.TaskMetadata(
         task_config=fake_task,
         task_state='fake_state',
-        task_state_history=m(fake_state=time.time())
+        task_state_history=m(fake_state=time.time()),
         task_id=task_id,
     )
     fake_task = fake_task.set(
@@ -498,14 +498,14 @@ def test_resource_offers_launch(
     task_id = 'test'
     docker_task = Dict(task_id=Dict(value=task_id))
     task_metadata = ef_mdl.TaskMetadata(
-        task_id=[task_id],
         task_config=fake_task,
         task_state='fake_state',
-        task_state_history=m(fake_state=time.time())
+        task_state_history=m(TASK_INITED=time.time()),
+        task_id=task_id,
     )
-    ef.get_tasks_to_launch = mock.Mock(return_value=[(docker_task, task_id)])
+    ef.get_tasks_to_launch = mock.Mock(return_value=[docker_task])
 
-    ef.task_queue.put(fake_task)
+    ef.task_queue.put((fake_task, 'fake_id'))
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef.resourceOffers(ef.driver, [fake_offer])
 
@@ -533,7 +533,7 @@ def test_get_tasks_to_launch_no_ports(
 ):
     ef.create_new_docker_task = mock.Mock()
     ef.get_available_ports = mock.Mock(return_value=[])
-    ef.task_queue.put(fake_task)
+    ef.task_queue.put((fake_task, 'fake_id'))
 
     tasks = ef.get_tasks_to_launch(fake_offer)
 
@@ -551,14 +551,15 @@ def test_get_tasks_to_launch_ports_available(
 ):
     ef.create_new_docker_task = mock.Mock()
     ef.get_available_ports = mock.Mock(return_value=[30000])
-    ef.task_queue.put(fake_task)
+    ef.task_queue.put((fake_task, 'fake_id'))
     task_metadata = ef_mdl.TaskMetadata(
+        task_id='fake_id',
         task_config=fake_task,
         task_state='TASK_INITED',
         task_state_history=m(TASK_INITED=time.time())
     )
     ef.task_metadata = ef.task_metadata.set(
-        fake_task.task_id,
+        'fake_id',
         task_metadata
     )
 
@@ -600,7 +601,7 @@ def test_resource_offers_blacklisted_offer(
     ef.blacklisted_slaves = ef.blacklisted_slaves.append(
         fake_offer.agent_id.value,
     )
-    ef.task_queue.put(fake_task)
+    ef.task_queue.put((fake_task, 'fake_id'))
     ef.resourceOffers(fake_driver, [fake_offer])
 
     assert fake_driver.declineOffer.call_count == 1
@@ -622,7 +623,7 @@ def test_resource_offers_not_for_pool(
 ):
     ef.offer_matches_pool = mock.Mock(return_value=False)
 
-    ef.task_queue.put(fake_task)
+    ef.task_queue.put((fake_task, 'fake_id'))
     ef.resourceOffers(fake_driver, [fake_offer])
 
     assert ef.offer_matches_pool.call_count == 1
@@ -646,7 +647,7 @@ def test_resource_offers_unmet_reqs(
 ):
     ef.get_tasks_to_launch = mock.Mock(return_value=[])
 
-    ef.task_queue.put(fake_task)
+    ef.task_queue.put((fake_task, 'fake_id'))
     ef.resourceOffers(fake_driver, [fake_offer])
 
     assert fake_driver.declineOffer.call_count == 1
@@ -667,10 +668,10 @@ def status_update_test_prep(state, reason='', task_id='fake_id'):
         reason=reason
     )
     task_metadata = ef_mdl.TaskMetadata(
-        task_id=task_id,
         task_config=task,
         task_state='TASK_INITED',
         task_state_history=m(TASK_INITED=time.time()),
+        task_id=task_id,
     )
 
     return update, task_id, task_metadata
