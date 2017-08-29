@@ -368,10 +368,16 @@ class ExecutionFramework(Scheduler):
             ],
             command=Dict(
                 value=task_config.cmd,
-                uris=[Dict(value=uri, extract=False)
-                      for uri in task_config.uris]
+                uris=[
+                    Dict(value=uri, extract=False)
+                    for uri in task_config.uris
+                ],
+                environment=Dict(variables=[
+                    Dict(name=k, value=v) for k, v in
+                    task_config.environment.items()
+                ])
             ),
-            container=container,
+            container=container
         )
 
     def stop(self):
