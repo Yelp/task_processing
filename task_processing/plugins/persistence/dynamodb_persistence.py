@@ -30,11 +30,10 @@ class DynamoDBPersister(Persister):
     def write(self, event):
         return self.ddb_client.put_item(
             TableName=self.table_name,
-            Item=self._event_to_item(event)['M']
+            Item=self._event_to_item(thaw(event.raw))['M']
         )
 
-    def _event_to_item(self, e):
-        raw = thaw(e)
+    def _event_to_item(self, raw):
         if type(raw) is dict:
             resp = {}
             for k, v in raw.items():
@@ -73,7 +72,8 @@ class DynamoDBPersister(Persister):
             print("Missed converting key %s type %s" % (raw, type(raw)))
 
     def item_to_event(self, obj):
-        return self._replace_decimals(obj)
+        event = self._replace_decimals(obj)
+        return event
 
     def _replace_decimals(self, obj):
         if isinstance(obj, list):

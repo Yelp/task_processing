@@ -29,6 +29,6 @@ MESOS_STATUS_MAP = {
 def mesos_status_to_event(mesos_status, task_id):
     return MESOS_STATUS_MAP[mesos_status.state].set(
         raw=mesos_status,
-        task_id=str(task_id),
+        task_id=task_id,
         timestamp=time.time(),
     )

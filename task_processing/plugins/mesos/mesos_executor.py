@@ -1,6 +1,5 @@
 import logging
 import threading
-import uuid
 
 from pymesos import MesosSchedulerDriver
 from pyrsistent import field
@@ -38,7 +37,6 @@ def valid_volumes(volumes):
 
 
 class MesosTaskConfig(PRecord):
-    uuid = field(type=uuid.UUID, initial=uuid.uuid4)
     name = field(type=str, initial="default")
     image = field(type=str, initial="ubuntu:xenial")
     cmd = field(type=str, initial="/bin/true")
@@ -74,10 +72,6 @@ class MesosTaskConfig(PRecord):
                           (c == 'DOCKER' or c == 'MESOS',
                            'containerizer is docker or mesos'))
     environment = field(type=PMap, initial=m(), factory=pmap)
-
-    @property
-    def task_id(self):
-        return "{}.{}".format(self.name, str(self.uuid))
 
 
 class MesosExecutor(TaskExecutor):
@@ -130,8 +124,8 @@ class MesosExecutor(TaskExecutor):
         self.driver_thread.daemon = True
         self.driver_thread.start()
 
-    def run(self, task_config):
-        self.execution_framework.enqueue_task(task_config)
+    def run(self, task_config, task_id):
+        self.execution_framework.enqueue_task(task_config, task_id)
 
     def kill(self, task_id):
         print("Killing")

@@ -61,9 +61,9 @@ def test_creates_execution_framework_and_driver(mock_Thread, mesos_executor):
 
 
 def test_run_passes_task_to_execution_framework(mesos_executor):
-    mesos_executor.run("task")
+    mesos_executor.run("task", ["fake_id"])
     assert mesos_executor.execution_framework.enqueue_task.call_args ==\
-        mock.call("task")
+        mock.call("task", ["fake_id"])
 
 
 def test_stop_shuts_down_properly(mesos_executor):

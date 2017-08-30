@@ -1,7 +1,7 @@
 import logging
 import time
 from operator import sub
-from threading import Lock
+from threading import RLock
 from threading import Thread
 
 from pyrsistent import m
@@ -10,6 +10,8 @@ from six.moves.queue import Queue
 from task_processing.interfaces.task_executor import TaskExecutor
 
 log = logging.getLogger(__name__)
+
+TASK_ID_SEPARATOR = ':'
 
 
 class RetryingExecutor(TaskExecutor):
@@ -22,7 +24,7 @@ class RetryingExecutor(TaskExecutor):
         self.retry_pred = retry_pred
 
         self.task_retries = m()
-        self.task_retries_lock = Lock()
+        self.task_retries_lock = RLock()
 
         self.src_queue = executor.get_event_queue()
         self.dest_queue = Queue()
@@ -53,11 +55,12 @@ class RetryingExecutor(TaskExecutor):
             )
         )
 
-        self.run(event.task_config)
         with self.task_retries_lock:
             self.task_retries = self.task_retries.update_with(
                 sub, {event.task_id: 1}
             )
+            self.run(event.task_config, event.task_id)
+
         return True
 
     def retry_loop(self):
@@ -69,7 +72,15 @@ class RetryingExecutor(TaskExecutor):
                     self.dest_queue.put(e)
                     continue
 
-                e = self.event_with_retries(e)
+                # shrink the id so layers up the stack can recognize it
+                shrink_id, attempt = self.task_id_shrink(e.task_id)
+                current_attempt = self.retries - self.task_retries[shrink_id]
+
+                if attempt != current_attempt:
+                    log.info('Event from previous attempt, ignoring')
+                    continue
+
+                e = self.event_with_retries(e.set(task_id=shrink_id))
 
                 if e.terminal:
                     if self.retry_pred(e):
@@ -87,12 +98,13 @@ class RetryingExecutor(TaskExecutor):
 
             time.sleep(1)
 
-    def run(self, task_config):
-        if task_config.task_id not in self.task_retries:
+    def run(self, task_config, task_id):
+        if task_id not in self.task_retries:
             with self.task_retries_lock:
                 self.task_retries = self.task_retries.set(
-                    task_config.task_id, self.retries)
-        self.executor.run(task_config)
+                    task_id, self.retries)
+
+        self.executor.run(task_config, self.task_id_grow(task_id))
 
     def kill(self, task_id):
         # retries = -1 so that manually killed tasks can be distinguished
@@ -108,3 +120,18 @@ class RetryingExecutor(TaskExecutor):
 
     def get_event_queue(self):
         return self.dest_queue
+
+    def task_id_split(self, task_id):
+        return task_id.split(TASK_ID_SEPARATOR)
+
+    def task_id_join(self, task_id):
+        return TASK_ID_SEPARATOR.join(task_id)
+
+    def task_id_grow(self, task_id):
+        components = self.task_id_split(task_id)
+        components.append(str(self.retries - self.task_retries[task_id]))
+        return self.task_id_join(components)
+
+    def task_id_shrink(self, task_id):
+        components = self.task_id_split(task_id)
+        return self.task_id_join(components[0:-1]), int(components[-1])

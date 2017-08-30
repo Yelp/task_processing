@@ -2,6 +2,7 @@
 import logging
 import os
 
+from task_processing.interfaces.runner import new_task_id
 from task_processing.plugins.persistence.file_persistence \
     import FilePersistence
 from task_processing.runners.sync import Sync
@@ -37,13 +38,22 @@ def main():
     )
 
     runner = Sync(executor=executor)
-    tasks = set()
+    task_ids = [new_task_id() for _ in range(2)]
     TaskConfig = mesos_executor.TASK_CONFIG_INTERFACE
-    for _ in range(1, 2):
-        task_config = TaskConfig(image='busybox', cmd='/bin/true')
-        tasks.add(task_config.task_id)
-        runner.run(task_config)
-        print(executor.status(task_config.task_id))
+
+    for task_id in task_ids:
+        runner.run(TaskConfig(image='busybox', cmd='/bin/true'), task_id)
+    runner.stop()
+
+    persistor = FilePersistence(output_file='/tmp/foo')
+    for task_id in task_ids:
+        events = persistor.read(task_id)
+        assert events[0].task_id == task_id
+        assert events[-1].task_id == task_id
+        assert events[-1].terminal
+        assert events[-1].success is not None
+
+    print('OK')
 
 
 if __name__ == '__main__':

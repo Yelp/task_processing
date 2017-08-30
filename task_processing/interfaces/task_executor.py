@@ -1,14 +1,11 @@
 import abc
-import uuid
 
 import six
-from pyrsistent import field
 from pyrsistent import PRecord
 
 
 class DefaultTaskConfigInterface(PRecord):
-    task_id = field(type=uuid.UUID, initial=uuid.uuid4)
-    name = field(type=str, initial='default')
+    pass
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -24,8 +21,8 @@ class TaskExecutor(object):
     """
 
     @abc.abstractmethod
-    def run(self, task_config):
-        """Run the supplied task
+    def run(self, task_config, task_id):
+        """Run the supplied task with task_id.
 
         :param task_config: An object satistfying the TASK_CONFIG_INTERFACE
         The executor should start running the provided task and return the
@@ -54,6 +51,6 @@ class TaskExecutor(object):
     def get_event_queue(self):
         """Get queue of events
 
-        :returns: TBD
+        :returns: Object with .get and .put methods defined on it.
         """
         pass

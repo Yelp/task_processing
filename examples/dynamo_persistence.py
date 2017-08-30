@@ -5,6 +5,7 @@ import os
 from boto3 import session
 from botocore.errorfactory import ClientError
 
+from task_processing.interfaces.runner import new_task_id
 from task_processing.plugins.persistence.dynamodb_persistence \
     import DynamoDBPersister
 from task_processing.runners.sync import Sync
@@ -59,15 +60,15 @@ def main():
         }
     )
     runner = Sync(executor=executor)
-    tasks = set()
     TaskConfig = mesos_executor.TASK_CONFIG_INTERFACE
-    for _ in range(1, 2):
-        task_config = TaskConfig(
-            image='ubuntu:14.04', cmd='/bin/sleep 2'
-        )
-        tasks.add(task_config.task_id)
-        runner.run(task_config)
-        print(executor.status(task_config.task_id))
+
+    for _ in range(2):
+        task_config = TaskConfig(image='ubuntu:14.04', cmd='/bin/true')
+        task_id = new_task_id()
+        runner.run(task_config, task_id)
+        assert executor.status(task_id)[-1]['terminal']
+
+    print('OK')
 
 
 def create_table(client):

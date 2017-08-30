@@ -5,5 +5,5 @@ class Promise(Runner):
     def __init__(self, executor):
         pass
 
-    def run(self, task_config):
+    def run(self, task_config, task_id=None):
         pass
