@@ -27,7 +27,7 @@ def test_executor_grows_id_by_atttempt(_):
 
     retrying.run(task_config, task_id)
 
-    downstream_task = downstream_tasks.get(True, 0.01)
+    downstream_task = downstream_tasks.get(True, 0.1)
     assert (task_config, task_id + ':0') == downstream_task
 
     downstream_events.put(
@@ -41,7 +41,7 @@ def test_executor_grows_id_by_atttempt(_):
         )
     )
 
-    downstream_task = downstream_tasks.get(True, 0.01)
+    downstream_task = downstream_tasks.get(True, 0.1)
     assert (task_config, task_id + ':1') == downstream_task
 
     retrying.stop()
@@ -73,7 +73,7 @@ def test_executor_retries_x_times(_):
         )
 
     retrying_q = retrying.get_event_queue()
-    fail_event = retrying_q.get(True, 0.01)
+    fail_event = retrying_q.get(True, 0.1)
     assert fail_event
 
     retrying.stop()

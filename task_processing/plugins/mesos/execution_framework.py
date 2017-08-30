@@ -9,8 +9,6 @@ from pyrsistent import m
 from pyrsistent import PMap
 from pyrsistent import pmap
 from pyrsistent import PRecord
-from pyrsistent import PVector
-from pyrsistent import pvector
 from pyrsistent import thaw
 from pyrsistent import v
 from six.moves.queue import Queue
@@ -47,7 +45,7 @@ log = logging.getLogger(__name__)
 
 
 class TaskMetadata(PRecord):
-    task_id = field(type=PVector, factory=pvector, mandatory=True)
+    task_id = field(type=str, mandatory=True)
     agent_id = field(type=str, initial='')
     task_config = field(type=PRecord, mandatory=True)
     task_state = field(type=str, mandatory=True)

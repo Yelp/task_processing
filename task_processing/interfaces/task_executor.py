@@ -28,7 +28,7 @@ class TaskExecutor(object):
         The executor should start running the provided task and return the
         task id.
 
-        :returns pvector task_id: Callers get the id of the task that was run
+        :returns str task_id: Callers get the id of the task that was run
         to check status or kill it later
         """
         pass
@@ -51,6 +51,6 @@ class TaskExecutor(object):
     def get_event_queue(self):
         """Get queue of events
 
-        :returns: Object with .pull and .push methods defined on it.
+        :returns: Object with .get and .put methods defined on it.
         """
         pass
