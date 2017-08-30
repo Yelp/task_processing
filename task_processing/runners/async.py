@@ -13,6 +13,9 @@ class AsyncError(Exception):
 
 
 class Async(Runner):
+    # TODO: "callbacks" is inconsistent with the EventHandler terminology
+    # above. This should either be event_handlers, or
+    # EventHandler should be Callback
     def __init__(self, executor, callbacks=None):
         if not callbacks:
             raise AsyncError("must provide at least one callback")

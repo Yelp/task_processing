@@ -47,7 +47,7 @@ class TaskProcessor(object):
     This is the entrypoint to registering plugins (which know how to
     actually run tasks) and creating instances of TaskExecutors. Note that
     since most customers of this library will be importing this class into
-    their code, let's try to make it Python2/3 compatible
+    their code, let's try to make it Python2/3 compatible.
 
     Typical use would be:
 
