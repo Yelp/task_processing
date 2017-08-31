@@ -33,7 +33,7 @@ class Subscription(Runner):
         return self.executor.run(task_config)
 
     def kill(self, task_id):
-        return self.executor.kill(task_id)
+        self.executor.kill(task_id)
 
     def stop(self):
         self.executor.stop()
