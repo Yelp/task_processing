@@ -118,12 +118,37 @@ class ExecutionFramework(Scheduler):
             with self._lock:
                 time_now = time.time()
                 for task_id in self.task_metadata.keys():
-                    if self.task_metadata[task_id].task_state not in (
+                    eligible_for_termination_at = self.task_metadata[task_id].\
+                        task_state_ts + self.task_staging_timeout_s
+
+                    md = self.task_metadata[task_id]
+
+                    if time_now < eligible_for_termination_at:
+                        return
+
+                    if md.task_state == 'UNKNOWN':
+                        with self._lock:
+                            self.task_metadata = self.task_metadata.discard(
+                                task_id
+                            )
+                            self.enqueue_task(md.task_config)
+
+                            print('Would have killed and'
+                                  're-enqueued the task')
+                            continue
+
+                    if md.task_state == \
+                            'SHOULD BE KILLED':
+                        # This task has been stuck for longer than the
+                        # specified timeout. Attempt to kill it again.
+                        self.kill_task(task_id)
+                        continue
+
+                    if md.task_state not in (
                         'TASK_STAGING',
                     ):
                         continue
 
-                    md = self.task_metadata[task_id]
                     if time_now > (
                         md.task_state_history['TASK_STAGING'] +
                         self.task_staging_timeout_s
@@ -565,23 +590,40 @@ class ExecutionFramework(Scheduler):
 
         md = self.task_metadata[task_id]
 
-        # If we attempt to accept an offer that has been invalidated by master
-        # for some reason such as offer has been rescinded or we have exceeded
-        # offer_timeout, then we will get TASK_LOST status update back from
-        # mesos master.
-        if task_state == 'TASK_LOST' and \
-                'REASON_INVALID_OFFERS' == str(update.reason):
-            # This task has not been launched. Therefore, we are going to
-            # reenqueue it. We are not propogating any event up to the
-            # application.
-            log.warning('Received TASK_LOST from mesos master because we '
-                        'attempted to accept an invalid offer. Going to re-'
-                        'enqueue this task {id}'.format(id=task_id))
-            self.task_metadata = self.task_metadata.discard(task_id)
-            self.enqueue_task(md.task_config)
-            get_metric(TASK_LOST_DUE_TO_INVALID_OFFER_COUNT).count(1)
-            driver.acknowledgeStatusUpdate(update)
-            return
+        if task_state == 'TASK_LOST':
+            # If we attempt to accept an offer that has been invalidated by
+            # master for some reason such as offer has been rescinded or we
+            # have exceeded offer_timeout, then we will get TASK_LOST status
+            # update back from mesos master.
+            if 'REASON_INVALID_OFFERS' == str(update.reason):
+                # This task has not been launched. Therefore, we are going to
+                # reenqueue it. We are not propogating any event up to the
+                # application.
+                log.warning('Received TASK_LOST from mesos master because we '
+                            'attempted to accept an invalid offer. Going to '
+                            're-enqueue this task {id}'.format(id=task_id))
+                with self._lock:
+                    self.task_metadata = self.task_metadata.discard(task_id)
+                    self.enqueue_task(md.task_config)
+                get_metric(TASK_LOST_DUE_TO_INVALID_OFFER_COUNT).count(1)
+                driver.acknowledgeStatusUpdate(update)
+                return
+
+            elif str(update.message) == 'Reconciliation: Task is unknown':
+                # This could be a duplicate status update; we need to
+                # check if this is a duplicate update or not
+                if md.task_state == 'UNKNOWN':
+                    with self._lock:
+                        log.warning('Reenquing task {id} because we failed to '
+                                    'launch the task'.format(
+                                        id=task_id
+                                    ))
+                        self.task_metadata = self.task_metadata.discard(
+                            task_id
+                        )
+                        self.enqueue_task(md.task_config)
+                driver.acknowledgeStatusUpdate(update)
+                return
 
         self.event_queue.put(
             self.translator(update, task_id).set(task_config=md.task_config)
