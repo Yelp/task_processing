@@ -134,7 +134,7 @@ class MesosExecutor(TaskExecutor):
         self.execution_framework.enqueue_task(task_config)
 
     def kill(self, task_id):
-        print("Killing")
+        self.execution_framework.kill(task_id)
 
     def stop(self):
         self.execution_framework.stop()

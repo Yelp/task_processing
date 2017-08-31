@@ -14,8 +14,8 @@ class Sync(Runner):
         self.TASK_CONFIG_INTERFACE = executor.TASK_CONFIG_INTERFACE
         self.queue = Queue()
 
-    def kill(self, *args):
-        pass
+    def kill(self, task_id):
+        self.executor.kill(task_id)
 
     def run(self, task_config):
         self.executor.run(task_config)
