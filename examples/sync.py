@@ -68,6 +68,8 @@ def main():
 
     TaskConfig = executor.TASK_CONFIG_INTERFACE
     task_config = TaskConfig(image="busybox", cmd='/bin/true')
+    # This only works on agents that have added mesos as a containerizer
+    # task_config = TaskConfig(containerizer='MESOS', cmd='/bin/true')
 
     runner = Sync(executor)
     result = runner.run(task_config)
