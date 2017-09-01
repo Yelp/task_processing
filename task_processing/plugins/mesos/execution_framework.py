@@ -327,17 +327,20 @@ class ExecutionFramework(Scheduler):
                 type='MESOS',
                 # for docker, volumes should include parameters
                 volumes=thaw(task_config.volumes),
-                mesos=Dict(
-                    image=Dict(
-                        type='DOCKER',
-                        docker=Dict(name=task_config.image),
-                    ),
-                ),
                 network_infos=Dict(
                     port_mappings=[Dict(host_port=port_to_use,
                                         container_port=8888)],
                 ),
             )
+            # For this to work, image_providers needs to be set to 'docker'
+            # on mesos agents
+            if 'image' in task_config:
+                container.mesos = Dict(
+                    image=Dict(
+                        type='DOCKER',
+                        docker=Dict(name=task_config.image),
+                    )
+                )
 
         return Dict(
             task_id=Dict(value=task_config.task_id),
