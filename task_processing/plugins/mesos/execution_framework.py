@@ -22,6 +22,7 @@ from task_processing.plugins.mesos.translator import mesos_status_to_event
 
 
 TASK_LAUNCHED_COUNT = 'taskproc.mesos.task_launched_count'
+TASK_LAUNCHED_FAILED_COUNT = 'taskproc.mesos.task_launched_failed_count'
 TASK_FINISHED_COUNT = 'taskproc.mesos.task_finished_count'
 TASK_FAILED_COUNT = 'taskproc.mesos.task_failure_count'
 TASK_KILLED_COUNT = 'taskproc.mesos.task_killed_count'
@@ -68,7 +69,8 @@ class ExecutionFramework(Scheduler):
     ):
         self.name = name
         # wait this long for a task to launch.
-        self.task_staging_timeout_s = task_staging_timeout_s
+        # self.task_staging_timeout_s = task_staging_timeout_s
+        self.task_staging_timeout_s = 30
         self.pool = pool
         self.role = role
         self.translator = translator
@@ -106,41 +108,48 @@ class ExecutionFramework(Scheduler):
         }
 
         self.stopping = False
-        task_kill_thread = threading.Thread(
+        self.task_kill_thread = threading.Thread(
             target=self.kill_tasks_stuck_in_staging, args=())
-        task_kill_thread.daemon = True
-        task_kill_thread.start()
+        self.task_kill_thread.daemon = True
+        self.task_kill_thread.start()
 
     def kill_tasks_stuck_in_staging(self):
         while True:
             if self.stopping:
                 return
 
-            with self._lock:
+            try:
                 time_now = time.time()
                 for task_id in self.task_metadata.keys():
-                    eligible_for_termination_at = self.task_metadata[task_id].\
-                        task_state_ts + self.task_staging_timeout_s
-
                     md = self.task_metadata[task_id]
 
+                    eligible_for_termination_at = md.task_state_history[
+                        md.task_state] + self.task_staging_timeout_s
+
                     if time_now < eligible_for_termination_at:
-                        return
+                        continue
 
                     if md.task_state == 'UNKNOWN':
+                        log.warning('Task {id} has been in unknown state for '
+                                    'longer than {timeout}. Re-enqueuing it.'
+                                    .format(
+                                        id=task_id,
+                                        timeout=self.task_staging_timeout_s
+                                    )
+                                    )
                         with self._lock:
-                            self.task_metadata = self.task_metadata.discard(
-                                task_id
-                            )
+                            self.task_metadata = self.task_metadata.\
+                                discard(
+                                    task_id
+                                )
                         self.enqueue_task(md.task_config)
-                        # TODO: Add metrics and logging here
-                        print('Would have killed and'
-                              're-enqueued the task')
+                        get_metric(TASK_LAUNCHED_FAILED_COUNT).count(1)
                         continue
 
                     if md.task_state == 'SHOULD BE KILLED':
                         # This task has been stuck for longer than the
                         # specified timeout. Attempt to kill it again.
+                        log.info('Attempting to kill task')
                         self.kill_task(task_id)
                         # TODO: Add metrics and logging here
                         continue
@@ -165,26 +174,28 @@ class ExecutionFramework(Scheduler):
                         get_metric(TASK_STUCK_COUNT).count(1)
 
                 self._reconcile_tasks()
-            time.sleep(10)
+                time.sleep(1)
+            except:
+                log.info('Operation timed out')
 
-        def _reconcile_tasks(self):
-            tasks_to_reconcile = [Dict({'task_id': task_id}) for
-                                  task_id in self.task_metadata if
-                                  self.task_metadata[task_id].task_state in (
-                'UNKNOWN',
-                'SHOULD BE KILLED'
-            )
-            ]
+    def _reconcile_tasks(self):
+        tasks_to_reconcile = [Dict({'task_id': task_id}) for
+                              task_id in self.task_metadata if
+                              self.task_metadata[task_id].task_state in (
+            'UNKNOWN',
+            'SHOULD BE KILLED'
+        )
+        ]
 
-            log.info('Reconciling following tasks {tasks}'.format(
-                tasks=tasks_to_reconcile
-            ))
+        log.info('Reconciling following tasks {tasks}'.format(
+            tasks=tasks_to_reconcile
+        ))
 
-            if len(tasks_to_reconcile) > 0:
-                try:
-                    self.driver.reconcileTasks(tasks_to_reconcile)
-                except:
-                    pass
+        if len(tasks_to_reconcile) > 0:
+            try:
+                self.driver.reconcileTasks(tasks_to_reconcile)
+            except:
+                pass
 
     def offer_matches_pool(self, offer):
         if self.pool is None:
@@ -201,16 +212,31 @@ class ExecutionFramework(Scheduler):
         if task_id not in self.task_metadata:
             return
 
-        print('Sleeping before killing the task')
-        time.sleep(10)
+        md = self.task_metadata[task_id]
+        # The task has been enqueued, but not yet launched
+        # TODO(sagarp): Figure out what to do with it.
+        if md.task_state == 'TASK_INITED':
+            return
 
+        # Check if the task we are attempting to kill is running or not.
+        # We cannot kill a task that is not running or about to start running
+        if md.task_state not in (
+            'TASK_RUNNING',
+            'TASK_STAGING',
+            'SHOULD BE KILLED'
+        ):
+            pass
+            # TODO(sagarp): Figure out a return code for this case
+
+        print('attempting to kill the task')
+        print('********************************************************')
+        time.sleep(10)
         try:
             self.driver.killTask(Dict(value=task_id))
-        except Exception:
+        except:
             log.warning('Failed to kill task {task}.'.format(
                 task=task_id
             ))
-            md = self.task_metadata[task_id]
             if md.task_state == 'SHOULD BE KILLED':
                 return
             with self._lock:
@@ -218,7 +244,9 @@ class ExecutionFramework(Scheduler):
                     task_id,
                     md.set(
                         task_state='SHOULD BE KILLED',
-                        task_state_ts=time.time()
+                        task_state_history=md.task_state_history.set(
+                            'SHOULD BE KILLED', time.time()
+                        ),
                     )
                 )
 
@@ -466,7 +494,8 @@ class ExecutionFramework(Scheduler):
             TASK_LOST_COUNT,                     TASK_ERROR_COUNT,
             TASK_ENQUEUED_COUNT,                 TASK_INSUFFICIENT_OFFER_COUNT,
             TASK_STUCK_COUNT,                    BLACKLISTED_AGENTS_COUNT,
-            TASK_LOST_DUE_TO_INVALID_OFFER_COUNT
+            TASK_LOST_DUE_TO_INVALID_OFFER_COUNT,
+            TASK_LAUNCHED_FAILED_COUNT
         ]
         for cnt in counters:
             create_counter(cnt, default_dimensions)
@@ -511,6 +540,8 @@ class ExecutionFramework(Scheduler):
         ))
 
     def resourceOffers(self, driver, offers):
+        print('This thread is alive or not {}'.format(
+            self.task_kill_thread.isAlive()))
         if self.driver is None:
             self.driver = driver
 
@@ -594,7 +625,6 @@ class ExecutionFramework(Scheduler):
 
             accepted.append('offer: {} agent: {} tasks: {}'.format(
                 offer.id.value, offer.agent_id.value, len(tasks_to_launch)))
-            driver.launchTasks(offer.id, tasks_to_launch)
 
             task_launch_failed = False
             try:
@@ -624,7 +654,8 @@ class ExecutionFramework(Scheduler):
 
                         )
                     )
-                    get_metric(TASK_LAUNCHED_COUNT).count(1)
+                    if not task_launch_failed:
+                        get_metric(TASK_LAUNCHED_COUNT).count(1)
 
         for reason, items in declined.items():
             if items:
@@ -689,7 +720,8 @@ class ExecutionFramework(Scheduler):
                 driver.acknowledgeStatusUpdate(update)
                 return
 
-        # Record state changes, send a new event and emit metrics.
+        # Record state changes, send a new event and emit metrics only if the
+        # state has actually changed.
         if md.task_state != task_state:
             with self._lock:
                 self.task_metadata = self.task_metadata.set(
