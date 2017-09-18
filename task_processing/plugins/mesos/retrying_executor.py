@@ -36,34 +36,49 @@ class RetryingExecutor(TaskExecutor):
         return event.transform(
             ('extensions', 'RetryingExecutor/tries'),
             "{}/{}".format(
-                1 + self.retries - self.task_retries.get(event.task_id, -1),
+                self.task_retries[event.task_id],
                 self.retries
             )
         )
 
     def retry(self, event):
-        current_retries = self.task_retries.get(event.task_id, -1)
-        if current_retries <= 0:
+        with self.task_retries_lock:
+            current_retry_attempt = self.task_retries[event.task_id]
+
+        if current_retry_attempt == self.retries:
             return False
 
         log.info(
             'Retrying task {}, {} of {}, fail event: {}'.format(
-                event.task_config.name, 1 + self.retries - current_retries,
+                event.task_config.name, current_retry_attempt,
                 self.retries, event.raw
             )
         )
 
-        self.run(event.task_config)
         with self.task_retries_lock:
-            self.task_retries = self.task_retries.update_with(
-                sub, {event.task_id: 1}
+            self.task_retries = self.task_retries.set(
+                event.task_id,
+                current_retry_attempt + 1
             )
+        self.run(event.task_config)
+
         return True
 
     def retry_loop(self):
         while True:
             while not self.src_queue.empty():
                 e = self.src_queue.get()
+                # This is to remove trailing '-retry*'
+                original_task_id = '-'.join([item for item in
+                                             e.task_id.split('-')[:-1]])
+
+                # Check if the update is for current attempt. Discard if
+                # it is not.
+                if not self._is_update_duplicate(e, original_task_id):
+                    continue
+
+                # Set the task id back to original task_id
+                e = self._decode_event(e, original_task_id)
 
                 if e.kind != 'task':
                     self.dest_queue.put(e)
@@ -75,10 +90,10 @@ class RetryingExecutor(TaskExecutor):
                     if self.retry_pred(e):
                         if self.retry(e):
                             continue
-                    else:
-                        with self.task_retries_lock:
-                            self.task_retries = \
-                                self.task_retries.remove(e.task_id)
+
+                    with self.task_retries_lock:
+                        self.task_retries = \
+                            self.task_retries.remove(e.task_id)
 
                 self.dest_queue.put(e)
 
@@ -91,8 +106,8 @@ class RetryingExecutor(TaskExecutor):
         if task_config.task_id not in self.task_retries:
             with self.task_retries_lock:
                 self.task_retries = self.task_retries.set(
-                    task_config.task_id, self.retries)
-        self.executor.run(task_config)
+                    task_config.task_id, 1)
+        self.executor.run(self._get_encoded_task_config(task_config))
 
     def kill(self, task_id):
         # retries = -1 so that manually killed tasks can be distinguished
@@ -108,3 +123,38 @@ class RetryingExecutor(TaskExecutor):
 
     def get_event_queue(self):
         return self.dest_queue
+
+    def _get_encoded_task_config(self, task_config):
+        return task_config.set(uuid='{id}-retry{attempt}'.format(
+            id=task_config.uuid,
+            attempt=self.task_retries[task_config.task_id]
+        ))
+
+    def _decode_event(self, e, original_task_id):
+        # Fix task_id references
+        mesos_status = e.raw
+        mesos_status.task_id.value = original_task_id
+        mesos_status.executor_id.value = original_task_id
+
+        task_config = e.task_config.set(uuid='-'.join(
+            [item for item in e.task_config.uuid.split('-')[:-1]]
+        ))
+
+        # Set the task id back to original task_id
+        return e.set(
+            task_id=original_task_id,
+            task_config=task_config,
+            raw=mesos_status
+        )
+
+    def _is_update_duplicate(self, e, original_task_id):
+        retry_suffix = '-'.join([item for item in
+                                 e.task_id.split('-')[-1:]])
+
+        # This is to extract retry attempt from retry_suffix
+        # eg: if retry_suffix= 'retry2', then attempt==2
+        attempt = int(retry_suffix[5:])
+        with self.task_retries_lock:
+            if attempt == self.task_retries[original_task_id]:
+                return True
+        return False
