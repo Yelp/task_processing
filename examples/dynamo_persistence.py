@@ -28,7 +28,7 @@ def main():
         provider_config={
             'secret': secret,
             'mesos_address': mesos_address,
-            'role': 'task-proc',
+            'role': 'taskproc',
         }
     )
 

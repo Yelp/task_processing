@@ -1,56 +1,94 @@
-# Generic task processing
+# Task Processing
 [![Build Status](https://travis-ci.org/Yelp/task_processing.svg?branch=master)](https://travis-ci.org/Yelp/task_processing)
 
-Interfaces and shared infrastructure for generic task processing @ Yelp
+Interfaces and shared infrastructure for generic task processing (also known as `taskproc`) at Yelp.
 
-# Structure
+## Developer Setup
 
-## /interfaces
+### Pre-requisites
 
-### Event
++ [Docker](https://www.docker.com/get-docker)
++ [Python 3.6](https://www.python.org/downloads/)
++ [Virtualenv](https://virtualenv.pypa.io/en/stable/installation/)
 
-### Runner
+### Running examples
 
-### TaskExecutor
+[hello-world.py](/examples/hello-world/py) is a very simple annotated example that launches a task to echo `hello world`. From the root of the repository, run:
 
-## /plugins
+    docker-compose -f examples/cluster/docker-compose.yaml \
+      run playground examples/hello-world.py
 
-### mesos
+This will bring up a single master, single agent Mesos cluster using [Docker Compose](https://docs.docker.com/compose/) and launch a single task which will print "hello world" to the sandbox's stdout before terminating.
 
-Implements all required interfaces to talk to Mesos deployment.
+Other examples available include:
++ async  
+Example of the [async](#async) task runner.
 
-#### Configuration options
++ dynamo_persistence.py  
+Example that shows how task events may be persisted to [DynamoDB](https://aws.amazon.com/dynamodb) using the `stateful` plugin..
+
++ file_persistence.py  
+Example that shows how task events may be persisted to disk using the `stateful` plugin.
+
++ promise.py  
+Example that shows how the [promise/future](#Promise/Future) task runner (not yet implemented) may be used.
+
++ subscription.py  
+Example of the [subscription](#subscription) task runner.
+
++ sync.py  
+Brief example using the [sync](#sync) task runner.
+
+### Running tests
+
+From the root of the repository, run:
+
+    make
+
+## Repository Structure
+
+### /interfaces
+
+#### Event
+
+#### Runner
+
+#### TaskExecutor
+
+### /plugins
+
+#### Mesos
+
+Implements all required interfaces to talk to Mesos deployment. This plugin uses [PyMesos](https://github.com/douban/pymesos) to communicate with Mesos.
+
+##### Configuration options
 
 - authentication\_principal Mesos principal
 - credential\_secret\_file path to file containing Mesos secret
 - mesos\_address host:port to connect to Mesos cluster
 - event_translator a fucntion that maps Mesos-specific events to `Event` objects
 
-## /runners
+#### stateful
+
+TODO: documentation
+
+### /runners
 
 Runners provide specific concurrency semantics and are supposed to be
 platform independent.
 
-### Sync
+#### Sync
 
-Running a task is a blocking operation.
+Running a task is a blocking operation. `sync` runners block until the running task has completed or a `stop` event is received.
 
-### Async
+#### Async
 
-Provide callbacks for different events in tasks' lifecycle.
+Provide callbacks for different events in tasks' lifecycle. `async` runners allow tasks to specify one or more EventHandlers which consist of predicates and callbacks. Predicates are evaluated when an update is received from the task (e.g. that it has terminated and whether or not it has succeded) and if the predicate passes, the callback is called.
 
-### Promise/Future
+#### Promise/Future
 
 Running a task returns future object.
 
-### Subscription
+#### Subscription
 
 Provide a queue object and receive all events in there.
-
-# How do i try it?
-
-There are some examples in `/examples`. To run them you need docker and
-docker-compose.
-
-    cd examples/cluster/
-    docker-compose run playground examples/sync.py

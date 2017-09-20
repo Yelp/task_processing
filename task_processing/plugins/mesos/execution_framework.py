@@ -544,7 +544,7 @@ class ExecutionFramework(Scheduler):
 
         for reason, items in declined.items():
             if items:
-                log.info("Offers declined because {}: {}".format(
+                log.info("Offers declined because of {}: {}".format(
                     reason, ', '.join(items)))
         if accepted:
             log.info("Offers accepted: {}".format(', '.join(accepted)))

@@ -28,7 +28,7 @@ def parse_sync_args():
     parser.add_argument(
         '-r', '--role',
         dest="role",
-        default='task-proc',
+        default='taskproc',
         help="mesos reservation role to use"
     )
     parser.add_argument(

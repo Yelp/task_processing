@@ -16,7 +16,7 @@ def main():
     executor = MesosExecutor(
         credentials=credentials,
         mesos_address=mesos_address,
-        role='task-proc'
+        role='taskproc'
     )
     task_config = make_task_config(image="busybox", cmd="/bin/true")
     runner = Promise(executor)
