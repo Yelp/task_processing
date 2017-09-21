@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import logging
-import os
 import time
+
+from common import parse_args
 
 from task_processing.runners.async import Async
 from task_processing.runners.async import EventHandler
@@ -21,18 +22,16 @@ class Counter(object):
 
 
 def main():
-    mesos_address = os.environ['MESOS']
-    with open('./examples/cluster/secret') as f:
-        secret = f.read().strip()
+    args = parse_args()
 
     processor = TaskProcessor()
     processor.load_plugin(provider_module='task_processing.plugins.mesos')
     executor = processor.executor_from_config(
         provider='mesos',
         provider_config={
-            'secret': secret,
-            'mesos_address': mesos_address,
-            'role': 'taskproc',
+            'secret': args.secret,
+            'mesos_address': args.master,
+            'role': args.role,
         }
     )
 
