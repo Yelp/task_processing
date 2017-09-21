@@ -290,6 +290,7 @@ def test_get_tasks_to_launch_insufficient_offer(
 ):
     ef.create_new_docker_task = mock.Mock()
     task = me_mdl.MesosTaskConfig(
+        cmd='/bin/true',
         name='fake_name',
         image='fake_image',
         cpus=task_cpus,
@@ -659,7 +660,8 @@ def test_resource_offers_unmet_reqs(
 
 
 def status_update_test_prep(state, reason=''):
-    task = me_mdl.MesosTaskConfig(name='fake_name', image='fake_image')
+    task = me_mdl.MesosTaskConfig(
+        cmd='/bin/true', name='fake_name', image='fake_image')
     task_id = task.task_id
     update = Dict(
         task_id=Dict(value=task_id),
