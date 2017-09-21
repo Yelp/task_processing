@@ -1,6 +1,3 @@
-import logging
-import os
-import traceback
 from collections import namedtuple
 from threading import Thread
 
@@ -9,8 +6,6 @@ from six.moves.queue import Empty
 from task_processing.interfaces.runner import Runner
 
 EventHandler = namedtuple('EventHandler', ['predicate', 'cb'])
-
-log = logging.getLogger(__name__)
 
 
 class AsyncError(Exception):
@@ -59,11 +54,7 @@ class Async(Runner):
 
                 for cb in self.callbacks:
                     if cb.predicate(event):
-                        try:
-                            cb.cb(event)
-                        except:
-                            log.error(traceback.format_exc())
-                            os._exit(1)
+                        cb.cb(event)
             except Empty:
                 pass
 
