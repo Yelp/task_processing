@@ -137,9 +137,9 @@ def test_ef_kills_stuck_tasks(
     ef.task_staging_timeout_s = 0
     ef.kill_task = mock.Mock()
     ef.blacklist_slave = mock.Mock()
-
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
-    ef.kill_tasks_stuck_in_staging()
+
+    ef._background_check()
 
     assert ef.kill_task.call_count == 1
     assert ef.kill_task.call_args == mock.call(task_id)
@@ -170,35 +170,21 @@ def test_reenqueue_tasks_stuck_in_unknown_state(
     ef.task_staging_timeout_s = 0
     ef.kill_task = mock.Mock()
     ef.blacklist_slave = mock.Mock()
-    ef._reenqueue_task = mock.Mock()
-
+    ef.enqueue_task = mock.Mock()
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
-    ef.kill_tasks_stuck_in_staging()
 
-    assert ef._reenqueue_task.call_count == 1
-    assert ef._reenqueue_task.call_args == mock.call(task_id)
+    ef._background_check()
+
+    assert ef.enqueue_task.call_count == 1
+    assert ef.enqueue_task.call_args == mock.call(
+        ef.task_metadata[task_id].task_config
+    )
     assert mock_get_metric.call_count == 1
     assert mock_get_metric.call_args == mock.call(
         ef_mdl.TASK_LAUNCH_FAILED_COUNT
     )
     assert mock_get_metric.return_value.count.call_count == 1
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
-
-
-def test_reenqueue_task(ef, fake_task):
-    task_id = fake_task.task_id
-    task_metadata = ef_mdl.TaskMetadata(
-        agent_id='fake_agent_id',
-        task_config=fake_task,
-        task_state='TASK_INITED',
-        task_state_history=m(TASK_INITED=0.0),
-    )
-    ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
-    ef.enqueue_task = mock.Mock()
-
-    ef._reenqueue_task(task_id)
-
-    ef.enqueue_task.call_count = 1
 
 
 def test_offer_matches_pool_no_pool(ef, fake_offer):

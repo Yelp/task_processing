@@ -91,7 +91,9 @@ class ExecutionFramework(Scheduler):
         self.are_offers_suppressed = False
         self.suppress_after = int(time.time()) + suppress_delay
         self.decline_after = time.time() + initial_decline_delay
-        self._reconcile_tasks_at = time.time() + task_reconciliation_delay
+        self._task_reconciliation_delay = task_reconciliation_delay
+        self._reconcile_tasks_at = time.time() + \
+            self._task_reconciliation_delay
 
         self.offer_decline_filter = Dict(refuse_seconds=self.offer_backoff)
         self._lock = threading.RLock()
@@ -110,66 +112,65 @@ class ExecutionFramework(Scheduler):
 
         self.stopping = False
         task_kill_thread = threading.Thread(
-            target=self.kill_tasks_stuck_in_staging, args=())
+            target=self._background_check, args=())
         task_kill_thread.daemon = True
         task_kill_thread.start()
 
-    def kill_tasks_stuck_in_staging(self):
+    def _background_check(self):
         while True:
             if self.stopping:
                 return
 
             time_now = time.time()
-            for task_id in self.task_metadata.keys():
-                md = self.task_metadata[task_id]
+            with self._lock:
+                for task_id in self.task_metadata.keys():
+                    md = self.task_metadata[task_id]
 
-                eligible_for_termination_at = md.task_state_history[
-                    md.task_state] + self.task_staging_timeout_s
+                    if md.task_state not in (
+                        'TASK_STAGING',
+                        'UNKNOWN'
+                    ):
+                        continue
 
-                if time_now < eligible_for_termination_at:
-                    continue
+                    # Task is not eligible for killing or reenqueuing
+                    if time_now < (md.task_state_history[md.task_state] +
+                                   self.task_staging_timeout_s):
+                        continue
 
-                if md.task_state == 'UNKNOWN':
-                    log.warning('Task {id} has been in unknown state for '
-                                'longer than {timeout}. Re-enqueuing it.'
-                                .format(
-                                    id=task_id,
-                                    timeout=self.task_staging_timeout_s
-                                )
-                                )
-                    self._reenqueue_task(task_id)
-                    get_metric(TASK_LAUNCH_FAILED_COUNT).count(1)
-                    continue
+                    if md.task_state == 'UNKNOWN':
+                        log.warning('Task {id} has been in unknown state for '
+                                    'longer than {timeout}. Re-enqueuing it.'
+                                    .format(
+                                        id=task_id,
+                                        timeout=self.task_staging_timeout_s
+                                    )
+                                    )
+                        # Re-enqueue task
+                        self.enqueue_task(self.task_metadata[task_id].
+                                          task_config)
+                        get_metric(TASK_LAUNCH_FAILED_COUNT).count(1)
+                        continue
 
-                if md.task_state not in (
-                    'TASK_STAGING',
-                ):
-                    continue
+                    else:
+                        log.warning(
+                            'Killing stuck task {id}'.format(id=task_id)
+                        )
+                        self.kill_task(task_id)
+                        self.blacklist_slave(
+                            agent_id=self.task_metadata[task_id].agent_id,
+                            timeout=self.slave_blacklist_timeout_s,
+                        )
+                        get_metric(TASK_STUCK_COUNT).count(1)
 
-                if time_now > (
-                    md.task_state_history['TASK_STAGING'] +
-                    self.task_staging_timeout_s
-                ):
-                    log.warning(
-                        'Killing stuck task {id}'.format(id=task_id)
-                    )
-                    self.kill_task(task_id)
-                    self.blacklist_slave(
-                        agent_id=self.task_metadata[task_id].agent_id,
-                        timeout=self.slave_blacklist_timeout_s,
-                    )
-                    get_metric(TASK_STUCK_COUNT).count(1)
-
-            self._reconcile_tasks(
-                [Dict({'task_id': task_id}) for
-                    task_id in self.task_metadata if
-                    self.task_metadata[task_id].task_state == 'UNKNOWN']
-            )
+            self._reconcile_tasks()
             time.sleep(10)
 
-    def _reconcile_tasks(self, tasks_to_reconcile):
+    def _reconcile_tasks(self):
         if time.time() < self._reconcile_tasks_at:
             return
+
+        tasks_to_reconcile = [Dict({'task_id': task_id}) for
+                              task_id in self.task_metadata]
 
         log.info('Reconciling following tasks {tasks}'.format(
             tasks=tasks_to_reconcile
@@ -181,16 +182,7 @@ class ExecutionFramework(Scheduler):
             except (socket.timeout, Exception):
                 log.warning('Failed to reconcile task status')
 
-        self._reconcile_tasks_at += time.time()
-
-    def _reenqueue_task(self, task_id):
-        task_config = self.task_metadata[task_id].task_config
-        with self._lock:
-            self.task_metadata = self.task_metadata.\
-                discard(
-                    task_id
-                )
-        self.enqueue_task(task_config)
+        self._reconcile_tasks_at += self._task_reconciliation_delay
 
     def offer_matches_pool(self, offer):
         if self.pool is None:
@@ -650,7 +642,8 @@ class ExecutionFramework(Scheduler):
             log.warning('Received TASK_LOST from mesos master because we '
                         'attempted to accept an invalid offer. Going to '
                         're-enqueue this task {id}'.format(id=task_id))
-            self._reenqueue_task(task_id)
+            # Re-enqueue task
+            self.enqueue_task(self.task_metadata[task_id].task_config)
             get_metric(TASK_LOST_DUE_TO_INVALID_OFFER_COUNT).count(1)
             driver.acknowledgeStatusUpdate(update)
             return
