@@ -38,15 +38,17 @@ def valid_volumes(volumes):
 
 
 class MesosTaskConfig(PRecord):
-    def __invariant__(conf): return ('image' in conf if conf.containerizer ==
-                                     'DOCKER' else True,
-                                     'Image required for chosen containerizer')
+    def __invariant__(conf):
+        return ('image' in conf if conf.containerizer == 'DOCKER' else True,
+                'Image required for chosen containerizer')
 
     uuid = field(type=uuid.UUID, initial=uuid.uuid4)
     name = field(type=str, initial="default")
     # image is optional for the mesos containerizer
     image = field(type=str)
-    cmd = field(type=str, initial="/bin/true")
+    cmd = field(type=str,
+                mandatory=True,
+                invariant=lambda cmd: (cmd.strip() != '', 'empty cmd'))
     cpus = field(type=float,
                  initial=0.1,
                  factory=float,
