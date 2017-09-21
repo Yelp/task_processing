@@ -15,7 +15,7 @@ def main():
     args = parse_args()
     processor = TaskProcessor()
     processor.load_plugin(provider_module='task_processing.plugins.mesos')
-    executor = processor.executor_from_config(
+    mesos_executor = processor.executor_from_config(
         provider='mesos',
         provider_config={
             'secret': args.secret,
@@ -25,18 +25,24 @@ def main():
         }
     )
 
-    TaskConfig = executor.TASK_CONFIG_INTERFACE
-    task_config = TaskConfig(image="busybox", cmd='/bin/true')
-    # This only works on agents that have added mesos as a containerizer
-    # task_config = TaskConfig(containerizer='MESOS', cmd='/bin/true')
+    executor = processor.executor_from_config(
+        provider='timeout',
+        provider_config={
+            'downstream_executor': mesos_executor,
+        }
+    )
 
-    runner = Sync(executor)
+    TaskConfig = mesos_executor.TASK_CONFIG_INTERFACE
+    runner = Sync(executor=executor)
+    task_config = TaskConfig(
+        image='docker-dev.yelpcorp.com/dumb-busybox',
+        cmd='exec dumb-init /bin/sleep 30',
+        timeout=15
+    )
     result = runner.run(task_config)
     print(result)
-    print(result.raw)
-    runner.stop()
 
-    return 0 if result.success else 1
+    runner.stop()
 
 
 if __name__ == "__main__":

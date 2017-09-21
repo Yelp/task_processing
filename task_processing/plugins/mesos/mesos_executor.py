@@ -65,6 +65,10 @@ class MesosTaskConfig(PRecord):
                  initial=0,
                  factory=int,
                  invariant=lambda g: (g >= 0, 'gpus >= 0'))
+    timeout = field(type=float,
+                    factory=float,
+                    mandatory=False,
+                    invariant=lambda t: (t > 0, 'timeout > 0'))
     volumes = field(type=PVector,
                     initial=v(),
                     factory=pvector,
@@ -141,7 +145,7 @@ class MesosExecutor(TaskExecutor):
         self.execution_framework.enqueue_task(task_config)
 
     def kill(self, task_id):
-        print("Killing")
+        self.execution_framework.kill_task(task_id)
 
     def stop(self):
         self.execution_framework.stop()
