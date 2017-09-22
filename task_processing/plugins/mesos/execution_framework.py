@@ -146,8 +146,7 @@ class ExecutionFramework(Scheduler):
                                     )
                                     )
                         # Re-enqueue task
-                        self.enqueue_task(self.task_metadata[task_id].
-                                          task_config)
+                        self.enqueue_task(md.task_config)
                         get_metric(TASK_LAUNCH_FAILED_COUNT).count(1)
                         continue
 
@@ -643,7 +642,7 @@ class ExecutionFramework(Scheduler):
                         'attempted to accept an invalid offer. Going to '
                         're-enqueue this task {id}'.format(id=task_id))
             # Re-enqueue task
-            self.enqueue_task(self.task_metadata[task_id].task_config)
+            self.enqueue_task(md.task_config)
             get_metric(TASK_LOST_DUE_TO_INVALID_OFFER_COUNT).count(1)
             driver.acknowledgeStatusUpdate(update)
             return
