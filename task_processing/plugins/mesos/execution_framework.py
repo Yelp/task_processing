@@ -39,8 +39,7 @@ BLACKLISTED_AGENTS_COUNT = 'taskproc.mesos.blacklisted_agents_count'
 
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
-LEVEL = logging.DEBUG
-logging.basicConfig(format=FORMAT, level=LEVEL)
+logging.basicConfig(format=FORMAT)
 log = logging.getLogger(__name__)
 
 
