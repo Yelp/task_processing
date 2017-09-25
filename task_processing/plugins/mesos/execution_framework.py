@@ -102,7 +102,7 @@ class ExecutionFramework(Scheduler):
 
         self._initialize_metrics()
         self._last_offer_time = None
-        self._terminal_task_states = {
+        self._terminal_task_counts = {
             'TASK_FINISHED': TASK_FINISHED_COUNT,
             'TASK_LOST': TASK_LOST_COUNT,
             'TASK_KILLED': TASK_KILLED_COUNT,
@@ -143,8 +143,7 @@ class ExecutionFramework(Scheduler):
                                     .format(
                                         id=task_id,
                                         timeout=self.task_staging_timeout_s
-                                    )
-                                    )
+                                    ))
                         # Re-enqueue task
                         self.enqueue_task(md.task_config)
                         get_metric(TASK_LAUNCH_FAILED_COUNT).count(1)
@@ -161,15 +160,13 @@ class ExecutionFramework(Scheduler):
                         )
                         get_metric(TASK_STUCK_COUNT).count(1)
 
-            self._reconcile_tasks()
+            self._reconcile_tasks([Dict({'task_id': task_id}) for
+                                   task_id in self.task_metadata])
             time.sleep(10)
 
-    def _reconcile_tasks(self):
+    def _reconcile_tasks(self, tasks_to_reconcile):
         if time.time() < self._reconcile_tasks_at:
             return
-
-        tasks_to_reconcile = [Dict({'task_id': task_id}) for
-                              task_id in self.task_metadata]
 
         log.info('Reconciling following tasks {tasks}'.format(
             tasks=tasks_to_reconcile
@@ -586,6 +583,8 @@ class ExecutionFramework(Scheduler):
                             )
                 task_launch_failed = True
 
+            # 'UNKNOWN' state is for internal tracking. It will not be
+            # propogated to users.
             current_task_state = 'UNKNOWN' if task_launch_failed else \
                 'TASK_STAGING'
             with self._lock:
@@ -665,10 +664,10 @@ class ExecutionFramework(Scheduler):
                     task_config=md.task_config)
             )
 
-            if task_state in self._terminal_task_states:
+            if task_state in self._terminal_task_counts:
                 with self._lock:
                     self.task_metadata = self.task_metadata.discard(task_id)
-                get_metric(self._terminal_task_states[task_state]).count(1)
+                get_metric(self._terminal_task_counts[task_state]).count(1)
 
         # We have to do this because we are not using implicit
         # acknowledgements.
