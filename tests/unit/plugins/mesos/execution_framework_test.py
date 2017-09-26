@@ -1,3 +1,4 @@
+import socket
 import threading
 import time
 
@@ -136,9 +137,9 @@ def test_ef_kills_stuck_tasks(
     ef.task_staging_timeout_s = 0
     ef.kill_task = mock.Mock()
     ef.blacklist_slave = mock.Mock()
-
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
-    ef.kill_tasks_stuck_in_staging()
+
+    ef._background_check()
 
     assert ef.kill_task.call_count == 1
     assert ef.kill_task.call_args == mock.call(task_id)
@@ -149,6 +150,39 @@ def test_ef_kills_stuck_tasks(
     )
     assert mock_get_metric.call_count == 1
     assert mock_get_metric.call_args == mock.call(ef_mdl.TASK_STUCK_COUNT)
+    assert mock_get_metric.return_value.count.call_count == 1
+    assert mock_get_metric.return_value.count.call_args == mock.call(1)
+
+
+def test_reenqueue_tasks_stuck_in_unknown_state(
+    ef,
+    fake_task,
+    mock_sleep,
+    mock_get_metric
+):
+    task_id = fake_task.task_id
+    task_metadata = ef_mdl.TaskMetadata(
+        agent_id='fake_agent_id',
+        task_config=fake_task,
+        task_state='UNKNOWN',
+        task_state_history=m(UNKNOWN=0.0),
+    )
+    ef.task_staging_timeout_s = 0
+    ef.kill_task = mock.Mock()
+    ef.blacklist_slave = mock.Mock()
+    ef.enqueue_task = mock.Mock()
+    ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
+
+    ef._background_check()
+
+    assert ef.enqueue_task.call_count == 1
+    assert ef.enqueue_task.call_args == mock.call(
+        ef.task_metadata[task_id].task_config
+    )
+    assert mock_get_metric.call_count == 1
+    assert mock_get_metric.call_args == mock.call(
+        ef_mdl.TASK_FAILED_TO_LAUNCH_COUNT
+    )
     assert mock_get_metric.return_value.count.call_count == 1
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
 
@@ -439,11 +473,13 @@ def test_initialize_metrics(ef):
 
     ef._initialize_metrics()
 
-    assert ef_mdl.create_counter.call_count == 11
+    assert ef_mdl.create_counter.call_count == 13
     ef_mdl_counters = [
         ef_mdl.TASK_LAUNCHED_COUNT,
         ef_mdl.TASK_FINISHED_COUNT,
         ef_mdl.TASK_FAILED_COUNT,
+        ef_mdl.TASK_LAUNCH_FAILED_COUNT,
+        ef_mdl.TASK_FAILED_TO_LAUNCH_COUNT,
         ef_mdl.TASK_KILLED_COUNT,
         ef_mdl.TASK_LOST_COUNT,
         ef_mdl.TASK_LOST_DUE_TO_INVALID_OFFER_COUNT,
@@ -522,6 +558,40 @@ def test_resource_offers_launch(
     assert mock_get_metric.return_value.record.call_args == mock.call(1.0)
     assert mock_get_metric.return_value.count.call_count == 1
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
+
+
+def test_resource_offers_launch_tasks_failed(
+    ef,
+    fake_task,
+    fake_offer,
+    fake_driver,
+    mock_get_metric,
+    mock_time
+):
+    ef.driver = fake_driver
+    ef.driver.launchTasks = mock.Mock(side_effect=socket.timeout)
+    ef._last_offer_time = None
+    mock_time.return_value = 2.0
+    ef.suppress_after = 0.0
+    ef.offer_matches_pool = mock.Mock(return_value=True)
+    task_id = fake_task.task_id
+    docker_task = Dict(task_id=Dict(value=task_id))
+    task_metadata = ef_mdl.TaskMetadata(
+        task_config=fake_task,
+        task_state='fake_state',
+        task_state_history=m(fake_state=time.time())
+    )
+    ef.get_tasks_to_launch = mock.Mock(return_value=[docker_task])
+    ef.task_queue.put(fake_task)
+    ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
+    ef.resourceOffers(ef.driver, [fake_offer])
+
+    assert fake_driver.suppressOffers.call_count == 0
+    assert not ef.are_offers_suppressed
+    assert fake_driver.declineOffer.call_count == 0
+    assert fake_driver.launchTasks.call_count == 1
+    assert mock_get_metric.call_count == 1
+    assert ef.task_metadata[task_id].task_state == 'UNKNOWN'
 
 
 def test_get_tasks_to_launch_no_ports(
