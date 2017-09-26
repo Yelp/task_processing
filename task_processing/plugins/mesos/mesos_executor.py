@@ -17,10 +17,9 @@ from task_processing.plugins.mesos.execution_framework import (
     ExecutionFramework
 )
 from task_processing.plugins.mesos.translator import mesos_status_to_event
+
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
-LEVEL = logging.DEBUG
-logging.basicConfig(format=FORMAT, level=LEVEL)
-log = logging.getLogger(__name__)
+logging.basicConfig(format=FORMAT)
 
 
 VOLUME_KEYS = set(['mode', 'container_path', 'host_path'])
