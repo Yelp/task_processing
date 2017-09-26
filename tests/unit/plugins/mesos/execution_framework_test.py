@@ -181,7 +181,7 @@ def test_reenqueue_tasks_stuck_in_unknown_state(
     )
     assert mock_get_metric.call_count == 1
     assert mock_get_metric.call_args == mock.call(
-        ef_mdl.TASK_LAUNCH_FAILED_COUNT
+        ef_mdl.TASK_FAILED_TO_LAUNCH_COUNT
     )
     assert mock_get_metric.return_value.count.call_count == 1
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
@@ -473,12 +473,13 @@ def test_initialize_metrics(ef):
 
     ef._initialize_metrics()
 
-    assert ef_mdl.create_counter.call_count == 12
+    assert ef_mdl.create_counter.call_count == 13
     ef_mdl_counters = [
         ef_mdl.TASK_LAUNCHED_COUNT,
         ef_mdl.TASK_FINISHED_COUNT,
         ef_mdl.TASK_FAILED_COUNT,
         ef_mdl.TASK_LAUNCH_FAILED_COUNT,
+        ef_mdl.TASK_FAILED_TO_LAUNCH_COUNT,
         ef_mdl.TASK_KILLED_COUNT,
         ef_mdl.TASK_LOST_COUNT,
         ef_mdl.TASK_LOST_DUE_TO_INVALID_OFFER_COUNT,
@@ -589,7 +590,7 @@ def test_resource_offers_launch_tasks_failed(
     assert not ef.are_offers_suppressed
     assert fake_driver.declineOffer.call_count == 0
     assert fake_driver.launchTasks.call_count == 1
-    assert mock_get_metric.call_count == 0
+    assert mock_get_metric.call_count == 1
     assert ef.task_metadata[task_id].task_state == 'UNKNOWN'
 
 

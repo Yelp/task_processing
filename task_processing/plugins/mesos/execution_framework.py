@@ -22,6 +22,7 @@ from task_processing.plugins.mesos.translator import mesos_status_to_event
 
 
 TASK_LAUNCHED_COUNT = 'taskproc.mesos.task_launched_count'
+TASK_FAILED_TO_LAUNCH_COUNT = 'taskproc.mesos.tasks_failed_to_launch_count'
 TASK_LAUNCH_FAILED_COUNT = 'taskproc.mesos.task_launch_failed_count'
 TASK_FINISHED_COUNT = 'taskproc.mesos.task_finished_count'
 TASK_FAILED_COUNT = 'taskproc.mesos.task_failure_count'
@@ -146,7 +147,7 @@ class ExecutionFramework(Scheduler):
                                     ))
                         # Re-enqueue task
                         self.enqueue_task(md.task_config)
-                        get_metric(TASK_LAUNCH_FAILED_COUNT).count(1)
+                        get_metric(TASK_FAILED_TO_LAUNCH_COUNT).count(1)
                         continue
 
                     else:
@@ -440,7 +441,7 @@ class ExecutionFramework(Scheduler):
             TASK_ENQUEUED_COUNT,                 TASK_INSUFFICIENT_OFFER_COUNT,
             TASK_STUCK_COUNT,                    BLACKLISTED_AGENTS_COUNT,
             TASK_LOST_DUE_TO_INVALID_OFFER_COUNT,
-            TASK_LAUNCH_FAILED_COUNT
+            TASK_LAUNCH_FAILED_COUNT,            TASK_FAILED_TO_LAUNCH_COUNT
         ]
         for cnt in counters:
             create_counter(cnt, default_dimensions)
@@ -582,6 +583,7 @@ class ExecutionFramework(Scheduler):
                             )
                             )
                 task_launch_failed = True
+                get_metric(TASK_LAUNCH_FAILED_COUNT).count(1)
 
             # 'UNKNOWN' state is for internal tracking. It will not be
             # propogated to users.
