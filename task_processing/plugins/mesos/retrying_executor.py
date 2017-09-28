@@ -1,6 +1,5 @@
 import logging
 import time
-from operator import sub
 from threading import Lock
 from threading import Thread
 
@@ -43,6 +42,9 @@ class RetryingExecutor(TaskExecutor):
 
     def retry(self, event):
         current_retry_attempt = self.task_retries[event.task_id]
+        # This task has been killed manually
+        if current_retry_attempt == -1:
+            return False
 
         if current_retry_attempt == self.retries:
             return False
@@ -111,8 +113,10 @@ class RetryingExecutor(TaskExecutor):
     def kill(self, task_id):
         # retries = -1 so that manually killed tasks can be distinguished
         with self.task_retries_lock:
-            self.tasks_retries = self.task_retries.update_with(
-                sub, {task_id: 1})
+            self.tasks_retries = self.task_retries.set(
+                task_id,
+                -1
+            )
         self.executor.kill(task_id)
 
     def stop(self):
@@ -130,11 +134,6 @@ class RetryingExecutor(TaskExecutor):
         ))
 
     def _restore_task_id(self, e, original_task_id):
-        # Fix task_id references
-        mesos_status = e.raw
-        mesos_status.task_id.value = original_task_id
-        mesos_status.executor_id.value = original_task_id
-
         task_config = e.task_config.set(uuid='-'.join(
             [item for item in e.task_config.uuid.split('-')[:-1]]
         ))
@@ -143,7 +142,6 @@ class RetryingExecutor(TaskExecutor):
         return e.set(
             task_id=original_task_id,
             task_config=task_config,
-            raw=mesos_status
         )
 
     def _is_current_attempt(self, e, original_task_id):
