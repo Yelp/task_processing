@@ -1,8 +1,12 @@
+import logging
 import threading
+import traceback
 
 from six.moves.queue import Queue
 
 from task_processing.interfaces.task_executor import TaskExecutor
+
+log = logging.getLogger(__name__)
 
 
 class StatefulTaskExecutor(TaskExecutor):
@@ -41,6 +45,9 @@ class StatefulTaskExecutor(TaskExecutor):
     def subscribe_to_updates_for_task(self):
         while True:
             result = self.downstream_executor.get_event_queue().get()
-            self.persister.write(event=result)
+            try:
+                self.persister.write(event=result)
+            except:
+                log.error(traceback.format_exc())
             self.queue_for_processed_events.put(result)
             self.downstream_executor.get_event_queue().task_done()
