@@ -20,6 +20,9 @@ dev_env:
 tox_%: dev_env
 	${TOX} -e $*
 
+itest_trusty: dev_env
+	${TOX} -e integration
+
 docs: dev_env
 	${TOX} -e docs
 
