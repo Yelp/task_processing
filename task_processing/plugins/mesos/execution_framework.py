@@ -194,11 +194,8 @@ class ExecutionFramework(Scheduler):
 
     def blacklist_slave(self, agent_id, timeout):
         with self._lock:
-            if agent_id in self.blacklisted_slaves:
-                # Punish this slave for more time.
-                self.blacklisted_slaves = \
-                    self.blacklisted_slaves.remove(agent_id)
-
+            # A new entry is appended even if the agent is being blacklisted.
+            # This is equivalent to restarting the blacklist timer.
             log.info('Blacklisting slave: {id} for {secs} seconds.'.format(
                 id=agent_id,
                 secs=timeout

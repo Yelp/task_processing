@@ -233,6 +233,9 @@ def test_blacklist_slave(
     assert mock_get_metric.return_value.count.call_count == 1
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
 
+    for i in range(0, 2):
+        ef.blacklisted_slaves = ef.blacklisted_slaves.remove(agent_id)
+
 
 def test_unblacklist_slave(
     ef,
