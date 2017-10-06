@@ -41,7 +41,7 @@ class MesosTaskConfig(PRecord):
         return ('image' in conf if conf.containerizer == 'DOCKER' else True,
                 'Image required for chosen containerizer')
 
-    uuid = field(type=str, initial=str(uuid.uuid4()))
+    id = field(type=uuid.UUID, initial=uuid.uuid4)
     name = field(type=str, initial="default")
     # image is optional for the mesos containerizer
     image = field(type=str)
@@ -88,6 +88,10 @@ class MesosTaskConfig(PRecord):
     @property
     def task_id(self):
         return "{}.{}".format(self.name, str(self.uuid))
+
+    @property
+    def uuid(self):
+        return str(self.id)
 
 
 class MesosExecutor(TaskExecutor):
