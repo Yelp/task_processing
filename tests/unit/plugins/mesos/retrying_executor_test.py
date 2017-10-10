@@ -86,7 +86,7 @@ def test_restore_task_id(mock_retrying_executor):
     task_config = mock_event.task_config
     modified_task_config = task_config.set(
         'uuid',
-        mock_event.task_config.uuid + '-retry1'
+        str(mock_event.task_config.uuid) + '-retry1'
     )
     mock_event = mock_event.set(
         'task_config',
@@ -107,7 +107,7 @@ def test_is_not_current_attempt(mock_retrying_executor):
     mock_retrying_executor.task_retries = mock_retrying_executor.\
         task_retries.set(mock_event.task_id, 2)
     task_config = mock_event.task_config
-    modified_task_id = mock_event.task_config.uuid + '-retry1'
+    modified_task_id = str(mock_event.task_config.uuid) + '-retry1'
     modified_task_config = task_config.set(
         'uuid',
         modified_task_id
@@ -135,7 +135,7 @@ def test_is_current_attempt(mock_retrying_executor):
     mock_retrying_executor.task_retries = mock_retrying_executor.\
         task_retries.set(mock_event.task_id, 2)
     task_config = mock_event.task_config
-    modified_task_id = mock_event.task_config.uuid + '-retry2'
+    modified_task_id = str(mock_event.task_config.uuid) + '-retry2'
     modified_task_config = task_config.set(
         'uuid',
         modified_task_id

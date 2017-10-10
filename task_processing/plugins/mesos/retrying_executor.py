@@ -135,7 +135,7 @@ class RetryingExecutor(TaskExecutor):
 
     def _restore_task_id(self, e, original_task_id):
         task_config = e.task_config.set(uuid='-'.join(
-            [item for item in e.task_config.uuid.split('-')[:-1]]
+            [item for item in str(e.task_config.uuid).split('-')[:-1]]
         ))
 
         # Set the task id back to original task_id
