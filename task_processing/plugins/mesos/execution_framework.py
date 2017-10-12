@@ -66,7 +66,7 @@ class ExecutionFramework(Scheduler):
         offer_backoff=10,
         suppress_delay=10,
         initial_decline_delay=1,
-        task_reconciliation_delay=60,
+        task_reconciliation_delay=300,
     ):
         self.name = name
         # wait this long for a task to launch.
@@ -160,8 +160,10 @@ class ExecutionFramework(Scheduler):
                         )
                         get_metric(TASK_STUCK_COUNT).count(1)
 
-            self._reconcile_tasks([Dict({'task_id': task_id}) for
-                                   task_id in self.task_metadata])
+            self._reconcile_tasks(
+                [Dict({'task_id': Dict({'value': task_id})}) for
+                    task_id in self.task_metadata]
+            )
             time.sleep(10)
 
     def _reconcile_tasks(self, tasks_to_reconcile):
@@ -175,8 +177,9 @@ class ExecutionFramework(Scheduler):
         if len(tasks_to_reconcile) > 0:
             try:
                 self.driver.reconcileTasks(tasks_to_reconcile)
-            except (socket.timeout, Exception):
-                log.warning('Failed to reconcile task status')
+            except (socket.timeout, Exception) as e:
+                log.warning(
+                    'Failed to reconcile task status: {}'.format(str(e)))
 
         self._reconcile_tasks_at += self._task_reconciliation_delay
 
@@ -500,21 +503,27 @@ class ExecutionFramework(Scheduler):
                     'bad pool': [],
                     'bad resources': [],
                     'no tasks': []}
+        declined_offer_ids = []
         accepted = []
-        for offer in offers:
-            if self.task_queue.empty():
+
+        if self.task_queue.empty():
+            if not self.are_offers_suppressed:
+                driver.suppressOffers()
+                self.are_offers_suppressed = True
+                log.info("Suppressing offers, no more tasks to run.")
+
+            for offer in offers:
                 declined['no tasks'].append(offer.id.value)
-                driver.declineOffer(offer.id, self.offer_decline_filter)
-                if (not self.are_offers_suppressed and
-                        int(time.time()) > self.suppress_after):
-                    driver.suppressOffers()
-                    self.are_offers_suppressed = True
-                    log.info("Suppressing offers, no more tasks to run.")
-                continue
+                declined_offer_ids.append(offer.id)
+
+            driver.declineOffer(declined_offer_ids, self.offer_decline_filter)
+            log.info("Offers declined because of no tasks: {}".format(
+                ','.join(declined['no tasks'])
+            ))
+            return
 
         with_maintenance_window = [
-            offer for offer in offers
-            if offer.unavailability
+            offer for offer in offers if offer.unavailability
         ]
 
         for offer in with_maintenance_window:
@@ -532,14 +541,15 @@ class ExecutionFramework(Scheduler):
                 )
 
         without_maintenance_window = [
-            offer for offer in offers if offer not in with_maintenance_window]
+            offer for offer in offers if offer not in with_maintenance_window
+        ]
         for offer in without_maintenance_window:
             with self._lock:
                 if offer.agent_id.value in self.blacklisted_slaves:
                     declined['blacklisted'].append('offer {} agent {}'.format(
                         offer.id.value, offer.agent_id.value
                     ))
-                    driver.declineOffer(offer.id, self.offer_decline_filter)
+                    declined_offer_ids.append(offer.id)
                     continue
 
             if not self.offer_matches_pool(offer):
@@ -549,7 +559,7 @@ class ExecutionFramework(Scheduler):
                              pool=self.pool
                          ))
                 declined['bad pool'].append(offer.id.value)
-                driver.declineOffer(offer.id, self.offer_decline_filter)
+                declined_offer_ids.append(offer.id)
                 continue
 
             tasks_to_launch = self.get_tasks_to_launch(offer)
@@ -560,7 +570,7 @@ class ExecutionFramework(Scheduler):
                         declined['no tasks'].append(offer.id.value)
                 else:
                     declined['bad resources'].append(offer.id.value)
-                driver.declineOffer(offer.id, self.offer_decline_filter)
+                declined_offer_ids.append(offer.id)
                 continue
 
             accepted.append('offer: {} agent: {} tasks: {}'.format(
@@ -600,6 +610,8 @@ class ExecutionFramework(Scheduler):
                     if not task_launch_failed:
                         get_metric(TASK_LAUNCHED_COUNT).count(1)
 
+        if len(declined_offer_ids) > 0:
+            driver.declineOffer(declined_offer_ids, self.offer_decline_filter)
         for reason, items in declined.items():
             if items:
                 log.info("Offers declined because of {}: {}".format(

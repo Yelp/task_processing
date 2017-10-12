@@ -653,7 +653,7 @@ def test_resource_offers_no_tasks_to_launch(
     ef.resourceOffers(fake_driver, [fake_offer])
 
     assert fake_driver.declineOffer.call_args == mock.call(
-        fake_offer.id,
+        [fake_offer.id],
         ef.offer_decline_filter
     )
     assert fake_driver.suppressOffers.call_count == 1
@@ -678,7 +678,7 @@ def test_resource_offers_blacklisted_offer(
 
     assert fake_driver.declineOffer.call_count == 1
     assert fake_driver.declineOffer.call_args == mock.call(
-        fake_offer.id,
+        [fake_offer.id],
         ef.offer_decline_filter
     )
     assert fake_driver.launchTasks.call_count == 0
@@ -702,7 +702,7 @@ def test_resource_offers_not_for_pool(
     assert ef.offer_matches_pool.call_args == mock.call(fake_offer)
     assert fake_driver.declineOffer.call_count == 1
     assert fake_driver.declineOffer.call_args == mock.call(
-        fake_offer.id,
+        [fake_offer.id],
         ef.offer_decline_filter
     )
     assert fake_driver.launchTasks.call_count == 0
@@ -724,7 +724,7 @@ def test_resource_offers_unmet_reqs(
 
     assert fake_driver.declineOffer.call_count == 1
     assert fake_driver.declineOffer.call_args == mock.call(
-        fake_offer.id,
+        [fake_offer.id],
         ef.offer_decline_filter
     )
     assert fake_driver.launchTasks.call_count == 0
