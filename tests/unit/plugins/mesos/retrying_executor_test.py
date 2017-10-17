@@ -19,12 +19,12 @@ def mock_Thread():
 @pytest.fixture
 def mock_retrying_executor(mock_Thread):
     return RetryingExecutor(
-        executor=mock.Mock(),
+        downstream_executor=mock.Mock(),
     )
 
 
 def _get_mock_task_config():
-    return MesosTaskConfig(image='mock_image', cmd='mock_cmd')
+    return MesosTaskConfig(image='mock_image', cmd='mock_cmd', retries=5)
 
 
 def _get_mock_event(is_terminal=False):
@@ -45,7 +45,7 @@ def _get_mock_event(is_terminal=False):
 def test_task_retry(mock_retrying_executor):
     mock_event = _get_mock_event()
     mock_retrying_executor.task_retries = mock_retrying_executor.\
-        task_retries.set(mock_event.task_id, 1)
+        task_retries.set(mock_event.task_id, 3)
     mock_retrying_executor.run = mock.Mock()
 
     mock_retrying_executor.retry(mock_event)
@@ -57,13 +57,13 @@ def test_task_retry(mock_retrying_executor):
 def test_retries_exhaused(mock_retrying_executor):
     mock_event = _get_mock_event()
     mock_retrying_executor.task_retries = mock_retrying_executor.\
-        task_retries.set(mock_event.task_id, 3)
+        task_retries.set(mock_event.task_id, 1)
     mock_retrying_executor.run = mock.Mock()
 
     mock_retrying_executor.retry(mock_event)
 
-    assert mock_retrying_executor.task_retries[mock_event.task_id] == 3
-    assert mock_retrying_executor.run.call_count == 0
+    assert mock_retrying_executor.task_retries[mock_event.task_id] == 0
+    assert mock_retrying_executor.run.call_count == 1
 
 
 def test_task_config_with_retry(mock_retrying_executor):

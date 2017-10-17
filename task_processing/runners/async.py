@@ -61,7 +61,7 @@ class Async(Runner):
                     if cb.predicate(event):
                         try:
                             cb.cb(event)
-                        except:
+                        except Exception:
                             log.error(traceback.format_exc())
                             os._exit(1)
             except Empty:

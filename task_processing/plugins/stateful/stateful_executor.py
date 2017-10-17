@@ -47,7 +47,7 @@ class StatefulTaskExecutor(TaskExecutor):
             result = self.downstream_executor.get_event_queue().get()
             try:
                 self.persister.write(event=result)
-            except:
+            except Exception:
                 log.error(traceback.format_exc())
             self.queue_for_processed_events.put(result)
             self.downstream_executor.get_event_queue().task_done()
