@@ -162,7 +162,9 @@ class ExecutionFramework(Scheduler):
 
             self._reconcile_tasks(
                 [Dict({'task_id': Dict({'value': task_id})}) for
-                    task_id in self.task_metadata]
+                    task_id in self.task_metadata
+                 if self.task_metadata[task_id].task_state is not
+                 'TASK_INITED']
             )
             time.sleep(10)
 
