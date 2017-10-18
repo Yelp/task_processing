@@ -26,7 +26,7 @@ def main():
     )
 
     TaskConfig = executor.TASK_CONFIG_INTERFACE
-    task_config = TaskConfig(image="busybox", cmd='/bin/true')
+    task_config = TaskConfig(image="busybox", cmd='/bin/true', cpus=1)
     # This only works on agents that have added mesos as a containerizer
     # task_config = TaskConfig(containerizer='MESOS', cmd='/bin/true')
 
