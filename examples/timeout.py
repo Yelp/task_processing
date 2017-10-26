@@ -37,7 +37,7 @@ def main():
     task_config = TaskConfig(
         image='docker-dev.yelpcorp.com/dumb-busybox',
         cmd='exec dumb-init /bin/sleep 30',
-        timeout=15
+        timeout=10
     )
     result = runner.run(task_config)
     print(result)

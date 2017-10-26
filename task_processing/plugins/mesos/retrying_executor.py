@@ -45,10 +45,11 @@ class RetryingExecutor(TaskExecutor):
         if retries_remaining <= 0:
             return False
 
+        total_retries = self._task_or_executor_retries(event.task_config)
         log.info(
             'Retrying task {}, {} of {}, fail event: {}'.format(
-                event.task_config.name, self.retries - retries_remaining,
-                self.retries, event.raw
+                event.task_config.name, total_retries - retries_remaining + 1,
+                total_retries, event.raw
             )
         )
 
@@ -102,11 +103,10 @@ class RetryingExecutor(TaskExecutor):
     def run(self, task_config):
         if task_config.task_id not in self.task_retries:
             with self.task_retries_lock:
-                retry_value = self.retries - 1
-                if 'retries' in task_config:
-                    retry_value = task_config.retries - 1
                 self.task_retries = self.task_retries.set(
-                    task_config.task_id, retry_value)
+                    task_config.task_id,
+                    self._task_or_executor_retries(task_config)
+                )
         self.executor.run(self._task_config_with_retry(task_config))
 
     def kill(self, task_id):
@@ -153,3 +153,7 @@ class RetryingExecutor(TaskExecutor):
         if attempt == self.task_retries[original_task_id]:
             return True
         return False
+
+    def _task_or_executor_retries(self, task_config):
+        return task_config.retries \
+            if 'retries' in task_config else self.retries

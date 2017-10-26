@@ -68,10 +68,12 @@ class MesosTaskConfig(PRecord):
                     factory=float,
                     mandatory=False,
                     invariant=lambda t: (t > 0, 'timeout > 0'))
+    # By default, the retrying executor retries 3 times. This task option
+    # overrides the executor setting.
     retries = field(type=int,
                     factory=int,
                     mandatory=False,
-                    invariant=lambda r: (r > 0, 'retries >= 0'))
+                    invariant=lambda r: (r >= 0, 'retries >= 0'))
     volumes = field(type=PVector,
                     initial=v(),
                     factory=pvector,

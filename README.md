@@ -21,11 +21,11 @@ Interfaces and shared infrastructure for generic task processing (also known as 
 This will bring up a single master, single agent Mesos cluster using [Docker Compose](https://docs.docker.com/compose/) and launch a single task which will print "hello world" to the sandbox's stdout before terminating.
 
 Other examples available include:
-+ async  
++ async.py
 Example of the [async](#async) task runner.
 
 + dynamo_persistence.py  
-Example that shows how task events may be persisted to [DynamoDB](https://aws.amazon.com/dynamodb) using the `stateful` plugin..
+Example that shows how task events may be persisted to [DynamoDB](https://aws.amazon.com/dynamodb) using the `stateful` plugin.
 
 + file_persistence.py  
 Example that shows how task events may be persisted to disk using the `stateful` plugin.
@@ -38,6 +38,12 @@ Example of the [subscription](#subscription) task runner.
 
 + sync.py  
 Brief example using the [sync](#sync) task runner.
+
++ timeout.py
+Example that shows how to timeout a task execution using the `timeout` plugin.
+
++ retry.py
+Example that shows how to retry a task on failure using the `retry` plugin.
 
 ### Running tests
 
@@ -57,9 +63,16 @@ From the root of the repository, run:
 
 ### /plugins
 
-#### Mesos
+Plugins can be chained to create a task execution pipeline with more than one property. Please refer to persistence/retry/timeout examples.
 
+#### mesos
 Implements all required interfaces to talk to Mesos deployment. This plugin uses [PyMesos](https://github.com/douban/pymesos) to communicate with Mesos.
+
+#### timeout
+Implements an executor to timeout task execution.
+
+#### retrying
+Implements an executor to retry task execution upon failure.
 
 ##### Configuration options
 
