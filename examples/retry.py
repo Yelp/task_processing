@@ -37,7 +37,7 @@ def main():
     task_config = TaskConfig(
         image='docker-dev.yelpcorp.com/dumb-busybox',
         cmd='/bin/false',
-        retries=5
+        retries=2
     )
     result = runner.run(task_config)
     print(result)
