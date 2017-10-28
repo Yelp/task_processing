@@ -1,7 +1,10 @@
+import json
 import logging
 import socket
+import sys
 import threading
 import time
+import urllib.request
 
 from addict import Dict
 from pymesos.interface import Scheduler
@@ -40,6 +43,7 @@ TASK_STUCK_COUNT = 'taskproc.mesos.task_stuck_count'
 OFFER_DELAY_TIMER = 'taskproc.mesos.offer_delay'
 BLACKLISTED_AGENTS_COUNT = 'taskproc.mesos.blacklisted_agents_count'
 
+TASK_LOG_CHUNK_LEN = 4096
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
 logging.basicConfig(format=FORMAT)
@@ -51,6 +55,9 @@ class TaskMetadata(PRecord):
     task_config = field(type=PRecord, mandatory=True)
     task_state = field(type=str, mandatory=True)
     task_state_history = field(type=PMap, factory=pmap, mandatory=True)
+    task_log_url = field(type=str, initial='')
+    task_log_offsets = field(type=PMap, factory=pmap,
+                             initial=pmap({'stdout': 0, 'stderr': 0}))
 
 
 class ExecutionFramework(Scheduler):
@@ -130,6 +137,7 @@ class ExecutionFramework(Scheduler):
                         'TASK_STAGING',
                         'UNKNOWN'
                     ):
+                        self._fetch_task_log(task_id)
                         continue
 
                     # Task is not eligible for killing or reenqueuing
@@ -166,7 +174,7 @@ class ExecutionFramework(Scheduler):
                  if self.task_metadata[task_id].task_state is not
                  'TASK_INITED']
             )
-            time.sleep(10)
+            time.sleep(30)
 
     def _reconcile_tasks(self, tasks_to_reconcile):
         if time.time() < self._reconcile_tasks_at:
@@ -428,6 +436,70 @@ class ExecutionFramework(Scheduler):
     def stop(self):
         self.stopping = True
 
+    def _construct_task_log_url_pre(self, offer):
+        return offer.url.scheme + '://' + \
+            offer.url.address.ip + ':' + \
+            str(offer.url.address.port) + '/'
+
+    # The url would be inferred if agent's working directory were known.
+    # http://mesos.apache.org/documentation/latest/sandbox/
+    def _construct_task_log_url(self, task_log_url, update):
+        try:
+            response = json.load(urllib.request.urlopen(
+                task_log_url + 'files/debug'))
+        except Exception as e:
+            log.error("Failed to fetch files {error}".format(error=e))
+            return ''
+
+        for key in response.keys():
+            if self.framework_id in key and \
+                    update.executor_id.value in key and \
+                    update.container_status.container_id.value in key:
+                return (task_log_url + 'files/read?path=' + key + '/')
+        return ''
+
+    # Fetching needs to be lock protected because we don't the same log
+    # to be read more than once.
+    def _fetch_task_log(self, task_id):
+        md = self.task_metadata[task_id]
+        if md.task_log_url is '':
+            return
+
+        offsets = {
+            'stdout': md.task_log_offsets['stdout'],
+            'stderr': md.task_log_offsets['stderr']
+        }
+        for f in ['stdout', 'stderr']:
+            offset = offsets[f]
+            while True:
+                url = md.task_log_url + f + \
+                    '&length=' + str(TASK_LOG_CHUNK_LEN) + \
+                    '&offset=' + str(offset)
+                try:
+                    response = json.load(urllib.request.urlopen(url))
+                    log_length = len(response['data'])
+                    for line in response['data'].splitlines():
+                        print(
+                            task_id + ": " + line,
+                            file=sys.stderr if f is 'stderr' else sys.stdout
+                        )
+                    offset = offset + log_length
+                    # Stop if there is no more data
+                    if log_length < TASK_LOG_CHUNK_LEN:
+                        break
+                except Exception as e:
+                    log.error("Failed to fetch task {f} log {error}".format(
+                        f=f, error=e
+                    ))
+            # Update offset of this stream
+            offsets[f] = offset
+
+        # Update both offsets for the task
+        self.task_metadata = self.task_metadata.set(
+            task_id,
+            md.set(task_log_offsets=pmap(offsets)),
+        )
+
     # TODO: add mesos cluster dimension when available
     def _initialize_metrics(self):
         default_dimensions = {
@@ -479,6 +551,7 @@ class ExecutionFramework(Scheduler):
             id=frameworkId.value,
             role=self.role
         ))
+        self.framework_id = frameworkId.value
 
     def reregistered(self, driver, masterInfo):
         log.warning("Re-registered to {master} with role {role}".format(
@@ -597,6 +670,7 @@ class ExecutionFramework(Scheduler):
             # propogated to users.
             current_task_state = 'UNKNOWN' if task_launch_failed else \
                 'TASK_STAGING'
+            task_log_url = self._construct_task_log_url_pre(offer)
             with self._lock:
                 for task in tasks_to_launch:
                     md = self.task_metadata[task.task_id.value]
@@ -605,8 +679,10 @@ class ExecutionFramework(Scheduler):
                         md.set(
                             task_state=current_task_state,
                             task_state_history=md.task_state_history.set(
-                                current_task_state, time.time()),
-
+                                current_task_state, time.time()
+                            ),
+                            task_log_url=task_log_url
+                            if md.task_config.task_log else '',
                         )
                     )
                     if not task_launch_failed:
@@ -662,14 +738,29 @@ class ExecutionFramework(Scheduler):
         # task state has actually changed.
         if md.task_state != task_state:
             with self._lock:
-                self.task_metadata = self.task_metadata.set(
-                    task_id,
-                    md.set(
-                        task_state=task_state,
-                        task_state_history=md.task_state_history.set(
-                            task_state, time.time()),
+                if task_state == 'TASK_RUNNING' and md.task_config.task_log:
+                    self.task_metadata = self.task_metadata.set(
+                        task_id,
+                        md.set(
+                            task_state=task_state,
+                            task_state_history=md.task_state_history.set(
+                                task_state, time.time()
+                            ),
+                            task_log_url=self._construct_task_log_url(
+                                md.task_log_url, update
+                            )
+                        )
                     )
-                )
+                else:
+                    self.task_metadata = self.task_metadata.set(
+                        task_id,
+                        md.set(
+                            task_state=task_state,
+                            task_state_history=md.task_state_history.set(
+                                task_state, time.time()
+                            ),
+                        )
+                    )
 
             self.event_queue.put(
                 self.translator(update, task_id).set(
@@ -678,6 +769,7 @@ class ExecutionFramework(Scheduler):
 
             if task_state in self._terminal_task_counts:
                 with self._lock:
+                    self._fetch_task_log(task_id)
                     self.task_metadata = self.task_metadata.discard(task_id)
                 get_metric(self._terminal_task_counts[task_state]).count(1)
 

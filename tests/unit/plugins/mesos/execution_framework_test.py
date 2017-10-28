@@ -79,7 +79,14 @@ def fake_offer():
                 name='pool',
                 text=Dict(value='fake_pool_text')
             )
-        ]
+        ],
+        url=Dict(
+            address=Dict(
+                ip='1.2.3.4',
+                port=5051,
+            ),
+            scheme='http',
+        ),
     )
 
 

@@ -27,6 +27,12 @@ def main():
 
     TaskConfig = executor.TASK_CONFIG_INTERFACE
     task_config = TaskConfig(image="busybox", cmd='/bin/true')
+    # Test log fetching
+    # task_config = TaskConfig(
+    #     image="ubuntu:14.04",
+    #     task_log=True,
+    #     cmd="bash -c 'for i in $(seq 1 30); do echo $i&&sleep 10; done'"
+    # )
     # This only works on agents that have added mesos as a containerizer
     # task_config = TaskConfig(containerizer='MESOS', cmd='/bin/true')
 
