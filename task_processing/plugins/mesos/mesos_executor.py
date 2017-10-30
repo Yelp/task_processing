@@ -78,6 +78,8 @@ class MesosTaskConfig(PRecord):
                     initial=v(),
                     factory=pvector,
                     invariant=valid_volumes)
+    task_log = field(type=bool, initial=False, mandatory=False)
+
     ports = field(type=PVector, initial=v(), factory=pvector)
     cap_add = field(type=PVector, initial=v(), factory=pvector)
     ulimit = field(type=PVector, initial=v(), factory=pvector)
