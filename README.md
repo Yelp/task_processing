@@ -45,6 +45,9 @@ Example that shows how to timeout a task execution using the `timeout` plugin.
 + retry.py
 Example that shows how to retry a task on failure using the `retry` plugin.
 
++ task_logging.py
+Example that shows how to fetch task logs from Mesos agents using the `logging` plugin.
+
 ### Running tests
 
 From the root of the repository, run:
@@ -73,6 +76,9 @@ Implements an executor to timeout task execution.
 
 #### retrying
 Implements an executor to retry task execution upon failure.
+
+#### logging
+Implements an executor to retrieve task logs from Mesos agents. Note that it has to be the immediate upstream executor of the mesos executor.
 
 ##### Configuration options
 
