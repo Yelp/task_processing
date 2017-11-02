@@ -609,7 +609,17 @@ class ExecutionFramework(Scheduler):
 
                         )
                     )
+                    # Emit the staging event for successful launches
                     if not task_launch_failed:
+                        update = Dict(
+                            state='TASK_STAGING',
+                            offer=offer,
+                        )
+                        self.event_queue.put(
+                            self.translator(update, task.task_id.value).set(
+                                task_config=md.task_config
+                            )
+                        )
                         get_metric(TASK_LAUNCHED_COUNT).count(1)
 
         if len(declined_offer_ids) > 0:
