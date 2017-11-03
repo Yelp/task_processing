@@ -239,10 +239,10 @@ class ExecutionFramework(Scheduler):
             # tasks to launch
             self.task_queue.put(task_config)
 
-        if self.are_offers_suppressed:
-            self.driver.reviveOffers()
-            self.are_offers_suppressed = False
-            log.info('Reviving offers because we have tasks to run.')
+            if self.are_offers_suppressed:
+                self.driver.reviveOffers()
+                self.are_offers_suppressed = False
+                log.info('Reviving offers because we have tasks to run.')
 
         get_metric(TASK_ENQUEUED_COUNT).count(1)
 
@@ -508,21 +508,25 @@ class ExecutionFramework(Scheduler):
         declined_offer_ids = []
         accepted = []
 
-        if self.task_queue.empty():
-            if not self.are_offers_suppressed:
-                driver.suppressOffers()
-                self.are_offers_suppressed = True
-                log.info("Suppressing offers, no more tasks to run.")
+        with self._lock:
+            if self.task_queue.empty():
+                if not self.are_offers_suppressed:
+                    driver.suppressOffers()
+                    self.are_offers_suppressed = True
+                    log.info("Suppressing offers, no more tasks to run.")
 
-            for offer in offers:
-                declined['no tasks'].append(offer.id.value)
-                declined_offer_ids.append(offer.id)
+                for offer in offers:
+                    declined['no tasks'].append(offer.id.value)
+                    declined_offer_ids.append(offer.id)
 
-            driver.declineOffer(declined_offer_ids, self.offer_decline_filter)
-            log.info("Offers declined because of no tasks: {}".format(
-                ','.join(declined['no tasks'])
-            ))
-            return
+                driver.declineOffer(
+                    declined_offer_ids,
+                    self.offer_decline_filter
+                )
+                log.info("Offers declined because of no tasks: {}".format(
+                    ','.join(declined['no tasks'])
+                ))
+                return
 
         with_maintenance_window = [
             offer for offer in offers if offer.unavailability
