@@ -60,7 +60,6 @@ class ExecutionFramework(Scheduler):
         role,
         task_staging_timeout_s=240,
         pool=None,
-        max_task_queue_size=1000,
         translator=mesos_status_to_event,
         slave_blacklist_timeout_s=900,
         offer_backoff=10,
@@ -85,8 +84,8 @@ class ExecutionFramework(Scheduler):
             role=self.role
         )
 
-        self.task_queue = Queue(max_task_queue_size)
-        self.event_queue = Queue(max_task_queue_size)
+        self.task_queue = Queue()
+        self.event_queue = Queue()
         self.driver = None
         self.are_offers_suppressed = False
         self.suppress_after = int(time.time()) + suppress_delay
