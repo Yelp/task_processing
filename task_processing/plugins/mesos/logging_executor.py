@@ -164,10 +164,11 @@ class MesosLoggingExecutor(TaskExecutor):
                             )
                         )
 
-                # Fetch the last log and remove the entry
+                # Fetch the last log and remove the entry if the task is active
                 if e.kind == 'task' and e.terminal:
                     with self.task_lock:
-                        self.done_tasks = self.done_tasks.append(e.task_id)
+                        if e.task_id in self.running_tasks:
+                            self.done_tasks = self.done_tasks.append(e.task_id)
 
             if self.stopping:
                 return
