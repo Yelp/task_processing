@@ -68,6 +68,7 @@ class ExecutionFramework(Scheduler):
         task_reconciliation_delay=300,
     ):
         self.name = name
+        self._framework_id = None
         # wait this long for a task to launch.
         self.task_staging_timeout_s = task_staging_timeout_s
         self.pool = pool
@@ -259,6 +260,20 @@ class ExecutionFramework(Scheduler):
                 break
         return ports
 
+    def decline_offers_with_differing_role(self, offers):
+        valid_offers = []
+        offers_to_decline = []
+        for offer in offers:
+            for resource in resources:
+                if resource.role is not self.role:
+                    offer_to_decline.append(offer)
+                else:
+                    valid_offers.append(offer)
+
+        self.driver.decline_offers(offers_to_decline)
+
+        return valid_offers
+
     def get_tasks_to_launch(self, offer):
         tasks_to_launch = []
         remaining_cpus = 0
@@ -267,15 +282,15 @@ class ExecutionFramework(Scheduler):
         remaining_gpus = 0
         available_ports = []
         for resource in offer.resources:
-            if resource.name == "cpus" and resource.role == self.role:
+            if resource.name == "cpus":
                 remaining_cpus += resource.scalar.value
-            elif resource.name == "mem" and resource.role == self.role:
+            elif resource.name == "mem":
                 remaining_mem += resource.scalar.value
-            elif resource.name == "disk" and resource.role == self.role:
+            elif resource.name == "disk":
                 remaining_disk += resource.scalar.value
-            elif resource.name == "gpus" and resource.role == self.role:
+            elif resource.name == "gpus":
                 remaining_gpus += resource.scalar.value
-            elif resource.name == "ports" and resource.role == self.role:
+            elif resource.name == "ports":
                 # TODO: Validate if the ports available > ports required
                 available_ports = self.get_available_ports(resource)
 
@@ -383,10 +398,10 @@ class ExecutionFramework(Scheduler):
                     )
                 )
 
-        return Dict(
+        task_info = Dict(
             task_id=Dict(value=task_config.task_id),
             agent_id=Dict(value=offer.agent_id.value),
-            name='executor-{id}'.format(id=task_config.task_id),
+            name='executor-{id}-container'.format(id=task_config.task_id),
             resources=[
                 Dict(name='cpus',
                      type='SCALAR',
@@ -423,6 +438,27 @@ class ExecutionFramework(Scheduler):
             ),
             container=container
         )
+
+        executor_info = Dict(
+            type='DEFAULT',
+            executor_id=Dict(
+                value='executor-{id}'.format(id=task_config.task_id),
+            ),
+        )
+        task_group_info = [task_info]
+
+        launch_group = Dict(
+            executor=executor_info,
+            task_group=task_group_info
+        )
+
+        operation = Dict(
+            type='LAUNCH_GROUP',
+            launch_group=launch_group,
+            executor_ids=[],
+        )
+
+        return operation
 
     def stop(self):
         self.stopping = True
@@ -474,6 +510,7 @@ class ExecutionFramework(Scheduler):
     def registered(self, driver, frameworkId, masterInfo):
         if self.driver is None:
             self.driver = driver
+        self._framework_id = frameworkId.value
         log.info("Registered with framework ID {id} and role {role}".format(
             id=frameworkId.value,
             role=self.role
@@ -527,6 +564,8 @@ class ExecutionFramework(Scheduler):
                 ))
                 return
 
+        # offers = self.decline_offers_with_differing_role(offers)
+
         with_maintenance_window = [
             offer for offer in offers if offer.unavailability
         ]
@@ -567,9 +606,9 @@ class ExecutionFramework(Scheduler):
                 declined_offer_ids.append(offer.id)
                 continue
 
-            tasks_to_launch = self.get_tasks_to_launch(offer)
+            operations = self.get_tasks_to_launch(offer)
 
-            if len(tasks_to_launch) == 0:
+            if len(operations) == 0:
                 if self.task_queue.empty():
                     if offer.id.value not in declined['no tasks']:
                         declined['no tasks'].append(offer.id.value)
@@ -579,17 +618,18 @@ class ExecutionFramework(Scheduler):
                 continue
 
             accepted.append('offer: {} agent: {} tasks: {}'.format(
-                offer.id.value, offer.agent_id.value, len(tasks_to_launch)))
+                offer.id.value, offer.agent_id.value, len(operations)))
 
             task_launch_failed = False
             try:
-                driver.launchTasks(offer.id, tasks_to_launch)
+                # driver.launchTasks(offer.id, tasks_to_launch)
+                driver.acceptOffers([offer.id], operations)
             except (socket.timeout, Exception):
                 log.warning('Failed to launch following tasks {tasks}.'
                             'Thus, moving them to UNKNOWN state'.format(
                                 tasks=', '.join([
                                     task.task_id.value for task in
-                                    tasks_to_launch
+                                    operations
                                 ]),
                             )
                             )
