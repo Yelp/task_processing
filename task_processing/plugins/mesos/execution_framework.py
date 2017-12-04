@@ -264,17 +264,24 @@ class ExecutionFramework(Scheduler):
         valid_offers = []
         offers_to_decline = []
         for offer in offers:
-            for resource in resources:
-                if resource.role is not self.role:
-                    offer_to_decline.append(offer)
-                else:
+            for resource in offer.resources:
+                print('Role of the resource is {}'.format(resource.role))
+                if resource.role == self.role:
+                    print('Found a valid offer {}'.format(offer.agent_id.value))
                     valid_offers.append(offer)
 
-        self.driver.decline_offers(offers_to_decline)
+                else:
+                    print('Found an in-valid offer {}'.format(offer.agent_id.value))
+                    offers_to_decline.append(offer.id)
+                break
+
+        self.driver.declineOffer(offers_to_decline, self.offer_decline_filter)
 
         return valid_offers
 
     def get_tasks_to_launch(self, offer):
+        print('Calling get_launch_task method for a valid offer {}'.format(
+            offer.id.value))
         tasks_to_launch = []
         remaining_cpus = 0
         remaining_mem = 0
@@ -365,7 +372,7 @@ class ExecutionFramework(Scheduler):
                 md.set(agent_id=str(offer.agent_id.value))
             )
 
-        if task_config.containerizer == 'DOCKER':
+        if task_config.containerizer == 'MESOS':
             container = Dict(
                 type='DOCKER',
                 volumes=thaw(task_config.volumes),
@@ -378,15 +385,15 @@ class ExecutionFramework(Scheduler):
                     force_pull_image=True,
                 ),
             )
-        elif task_config.containerizer == 'MESOS':
+        elif task_config.containerizer == 'DOCKER':
             container = Dict(
                 type='MESOS',
                 # for docker, volumes should include parameters
-                volumes=thaw(task_config.volumes),
-                network_infos=Dict(
-                    port_mappings=[Dict(host_port=port_to_use,
-                                        container_port=8888)],
-                ),
+                # volumes=thaw(task_config.volumes),
+                # network_infos=Dict(
+                #     port_mappings=[Dict(host_port=port_to_use,
+                #                         container_port=8888)],
+                # ),
             )
             # For this to work, image_providers needs to be set to 'docker'
             # on mesos agents
@@ -444,8 +451,37 @@ class ExecutionFramework(Scheduler):
             executor_id=Dict(
                 value='executor-{id}'.format(id=task_config.task_id),
             ),
+            framework_id=Dict(
+                value=self._framework_id
+            ),
+            resources=[
+                Dict(name='cpus',
+                     type='SCALAR',
+                     role=self.role,
+                     scalar=Dict(value=task_config.cpus)),
+                Dict(name='mem',
+                     type='SCALAR',
+                     role=self.role,
+                     scalar=Dict(value=task_config.mem)),
+                Dict(name='disk',
+                     type='SCALAR',
+                     role=self.role,
+                     scalar=Dict(value=task_config.disk)),
+                Dict(name='gpus',
+                     type='SCALAR',
+                     role=self.role,
+                     scalar=Dict(value=task_config.gpus)),
+                Dict(name='ports',
+                     type='RANGES',
+                     role=self.role,
+                     ranges=Dict(
+                         range=[Dict(begin=port_to_use, end=port_to_use)]))
+            ],
         )
-        task_group_info = [task_info]
+
+        task_group_info = Dict(
+            tasks=[task_info]
+        )
 
         launch_group = Dict(
             executor=executor_info,
@@ -564,7 +600,8 @@ class ExecutionFramework(Scheduler):
                 ))
                 return
 
-        # offers = self.decline_offers_with_differing_role(offers)
+        offers = self.decline_offers_with_differing_role(offers)
+        print('Offers left are {}'.format(offers))
 
         with_maintenance_window = [
             offer for offer in offers if offer.unavailability
@@ -640,6 +677,7 @@ class ExecutionFramework(Scheduler):
             # propogated to users.
             current_task_state = 'UNKNOWN' if task_launch_failed else \
                 'TASK_STAGING'
+            """
             with self._lock:
                 for task in tasks_to_launch:
                     md = self.task_metadata[task.task_id.value]
@@ -664,6 +702,7 @@ class ExecutionFramework(Scheduler):
                             )
                         )
                         get_metric(TASK_LAUNCHED_COUNT).count(1)
+            """
 
         if len(declined_offer_ids) > 0:
             driver.declineOffer(declined_offer_ids, self.offer_decline_filter)

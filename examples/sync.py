@@ -18,15 +18,15 @@ def main():
     executor = processor.executor_from_config(
         provider='mesos',
         provider_config={
-            'secret': args.secret,
-            'mesos_address': args.master,
-            'pool': args.pool,
-            'role': args.role,
+            'secret': 'bee5aeJibee5aeJibee5aeJi',
+            'mesos_address': '10.40.1.50:5050',
+            'pool': None,
+            'role': 'testing',
         }
     )
 
     TaskConfig = executor.TASK_CONFIG_INTERFACE
-    task_config = TaskConfig(image="busybox", cmd='/bin/true')
+    task_config = TaskConfig(image="ubuntu:14.04", cmd='/bin/sleep 1200')
     # This only works on agents that have added mesos as a containerizer
     # task_config = TaskConfig(containerizer='MESOS', cmd='/bin/true')
 
