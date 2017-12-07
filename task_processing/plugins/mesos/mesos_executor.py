@@ -90,6 +90,8 @@ class MesosTaskConfig(PRecord):
                           (c == 'DOCKER' or c == 'MESOS',
                            'containerizer is docker or mesos'))
     environment = field(type=PMap, initial=m(), factory=pmap)
+    executor_cache = field(type=bool, initial=False)
+    executor_output_file = field(type=str, initial=None)
 
     @property
     def task_id(self):
