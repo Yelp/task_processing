@@ -4,9 +4,6 @@ import uuid
 
 from pymesos import MesosSchedulerDriver
 from pyrsistent import field
-from pyrsistent import m
-from pyrsistent import PMap
-from pyrsistent import pmap
 from pyrsistent import PRecord
 from pyrsistent import PVector
 from pyrsistent import pvector
@@ -34,6 +31,14 @@ def valid_volumes(volumes):
                 '{}, was: {}'.format(VOLUME_KEYS, vol.keys())
             )
     return (True, None)
+
+
+class ExecutorURI(PRecord):
+    value = field(type=str)
+    executable = field(type=bool, initial=False)
+    extract = field(type=bool, initial=True)
+    cache = field(type=bool, initial=False)
+    output_file = field(type=str, initial=None)
 
 
 class MesosTaskConfig(PRecord):
@@ -81,7 +86,6 @@ class MesosTaskConfig(PRecord):
     ports = field(type=PVector, initial=v(), factory=pvector)
     cap_add = field(type=PVector, initial=v(), factory=pvector)
     ulimit = field(type=PVector, initial=v(), factory=pvector)
-    uris = field(type=PVector, initial=v(), factory=pvector)
     # TODO: containerization + containerization_args ?
     docker_parameters = field(type=PVector, initial=v(), factory=pvector)
     containerizer = field(type=str,
@@ -89,9 +93,7 @@ class MesosTaskConfig(PRecord):
                           invariant=lambda c:
                           (c == 'DOCKER' or c == 'MESOS',
                            'containerizer is docker or mesos'))
-    environment = field(type=PMap, initial=m(), factory=pmap)
-    executor_cache = field(type=bool, initial=False)
-    executor_output_file = field(type=str, initial=None)
+    uris = field(type=PVector, initial=v(), factory=pvector)
 
     @property
     def task_id(self):

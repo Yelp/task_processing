@@ -383,7 +383,20 @@ class ExecutionFramework(Scheduler):
                     )
                 )
 
-        executor_info = Dict(
+        uris = []
+        for uri in task_config.executor_uris:
+            uri = Dict(
+                value=uri.value,
+                extract=uri.extract,
+                executable=uri.executable,
+                cache=uri.cache
+            )
+            if uri.output_file is not None:
+                uri['output_file'] = uri.output_file
+
+            uris.append(uri)
+
+        return Dict(
             task_id=Dict(value=task_config.task_id),
             agent_id=Dict(value=offer.agent_id.value),
             name='executor-{id}'.format(id=task_config.task_id),
@@ -412,11 +425,7 @@ class ExecutionFramework(Scheduler):
             ],
             command=Dict(
                 value=task_config.cmd,
-                uris=[
-                    Dict(value=uri, extract=False)
-                    for uri in task_config.uris
-                ],
-                cache=True,
+                uris=uris,
                 environment=Dict(variables=[
                     Dict(name=k, value=v) for k, v in
                     task_config.environment.items()
@@ -424,10 +433,6 @@ class ExecutionFramework(Scheduler):
             ),
             container=container
         )
-        if task_config.output_file is not None:
-            executor_info.command['output_file'] = task_config.output_file
-
-        return executor_info
 
     def stop(self):
         self.stopping = True
