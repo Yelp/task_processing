@@ -19,14 +19,23 @@ def main():
         provider='mesos',
         provider_config={
             'secret': 'bee5aeJibee5aeJibee5aeJi',
-            'mesos_address': '10.40.1.50:5050',
+            'mesos_address': 'paasta1-uswest2btestopia.dev.yelpcorp.com:5050',
             'pool': None,
             'role': 'testing',
         }
     )
 
     TaskConfig = executor.TASK_CONFIG_INTERFACE
-    task_config = TaskConfig(image="ubuntu:14.04", cmd='/bin/sleep 1200')
+    task_config = TaskConfig(
+        # image="docker-dev.yelpcorp.com:25000/user_authentication-service:latest",
+        image="ubuntu:16.04",
+        cmd='cat /etc/*release',
+        # volumes=[{
+        #     'container_path': '/some_file',
+        #     'host_path': '/nail/home/sagarp',
+        #     'mode': 'RW',
+        # }]
+    )
     # This only works on agents that have added mesos as a containerizer
     # task_config = TaskConfig(containerizer='MESOS', cmd='/bin/true')
 

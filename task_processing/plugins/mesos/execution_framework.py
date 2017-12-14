@@ -389,7 +389,17 @@ class ExecutionFramework(Scheduler):
             container = Dict(
                 type='MESOS',
                 # for docker, volumes should include parameters
-                # volumes=thaw(task_config.volumes),
+                volumes=thaw(task_config.volumes),
+                # network='',
+                docker=Dict(
+                    image=task_config.image,
+                    network='BRIDGE',
+                    port_mappings=[Dict(host_port=port_to_use,
+                                        container_port=8888)],
+                    parameters=thaw(task_config.docker_parameters),
+                    force_pull_image=True,
+                ),
+
                 # network_infos=Dict(
                 #     port_mappings=[Dict(host_port=port_to_use,
                 #                         container_port=8888)],
@@ -434,10 +444,10 @@ class ExecutionFramework(Scheduler):
             ],
             command=Dict(
                 value=task_config.cmd,
-                uris=[
-                    Dict(value=uri, extract=False)
-                    for uri in task_config.uris
-                ],
+                # uris=[
+                #     Dict(value=uri, extract=False)
+                #     for uri in task_config.uris
+                # ],
                 environment=Dict(variables=[
                     Dict(name=k, value=v) for k, v in
                     task_config.environment.items()
