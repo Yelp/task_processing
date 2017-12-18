@@ -369,8 +369,10 @@ class ExecutionFramework(Scheduler):
                 # for docker, volumes should include parameters
                 volumes=thaw(task_config.volumes),
                 network_infos=Dict(
-                    port_mappings=[Dict(host_port=port_to_use,
-                                        container_port=8888)],
+                    protocol='IPv4',
+                    port_mappings=[
+                        Dict(host_port=port_to_use, container_port=8888)],
+                    name='cni-test',
                 ),
             )
             # For this to work, image_providers needs to be set to 'docker'
