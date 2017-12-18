@@ -28,8 +28,8 @@ def main():
     TaskConfig = executor.TASK_CONFIG_INTERFACE
     task_config = TaskConfig(
         # image="docker-dev.yelpcorp.com:25000/user_authentication-service:latest",
-        image="ubuntu:16.04",
-        cmd='cat /etc/*release',
+        image="ubuntu:14.04",
+        cmd='cat /etc/*release && ifconfig && /bin/sleep 12000',
         # volumes=[{
         #     'container_path': '/some_file',
         #     'host_path': '/nail/home/sagarp',
