@@ -188,10 +188,11 @@ class ExecutionFramework(Scheduler):
         if self.pool is None:
             # If pool is not specified, then we can accept offer from any agent
             return True
+
         for attribute in offer.attributes:
             if attribute.name == "pool":
-                return attribute.text.value == self.pool
-        return False
+                return attribute.text.value == self.pool, attribute.text.value
+        return False, None
 
     def kill_task(self, task_id):
         self.driver.killTask(Dict(value=task_id))
@@ -557,12 +558,15 @@ class ExecutionFramework(Scheduler):
                     declined_offer_ids.append(offer.id)
                     continue
 
-            if not self.offer_matches_pool(offer):
-                log.info("Declining offer {id} because it is not for pool "
-                         "{pool}.".format(
-                             id=offer.id.value,
-                             pool=self.pool
-                         ))
+            offer_pool_match, offer_pool = self.offer_matches_pool(offer)
+            if not offer_pool_match:
+                log.info(
+                    "Declining offer {id}, required pool {sp} doesn't match "
+                    "offered pool {op}".format(
+                        id=offer.id.value,
+                        sp=self.pool,
+                        op=offer_pool
+                    ))
                 declined['bad pool'].append(offer.id.value)
                 declined_offer_ids.append(offer.id)
                 continue
