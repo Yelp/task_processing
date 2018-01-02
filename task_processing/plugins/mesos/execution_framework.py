@@ -187,11 +187,12 @@ class ExecutionFramework(Scheduler):
     def offer_matches_pool(self, offer):
         if self.pool is None:
             # If pool is not specified, then we can accept offer from any agent
-            return True
+            return True, None
 
         for attribute in offer.attributes:
             if attribute.name == "pool":
                 return attribute.text.value == self.pool, attribute.text.value
+
         return False, None
 
     def kill_task(self, task_id):
