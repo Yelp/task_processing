@@ -188,19 +188,22 @@ def test_reenqueue_tasks_stuck_in_unknown_state(
 
 
 def test_offer_matches_pool_no_pool(ef, fake_offer):
-    assert ef.offer_matches_pool(fake_offer)
+    match, _ = ef.offer_matches_pool(fake_offer)
+    assert match
 
 
 def test_offer_matches_pool_match(ef, fake_offer):
     ef.pool = 'fake_pool_text'
+    match, _ = ef.offer_matches_pool(fake_offer)
 
-    assert ef.offer_matches_pool(fake_offer)
+    assert match
 
 
 def test_offer_matches_pool_no_match(ef, fake_offer):
     ef.pool = 'fake_other_pool_text'
+    match, _ = ef.offer_matches_pool(fake_offer)
 
-    assert not ef.offer_matches_pool(fake_offer)
+    assert not match
 
 
 def test_kill_task(ef, fake_driver):
@@ -536,7 +539,7 @@ def test_resource_offers_launch(
     ef._last_offer_time = 1.0
     mock_time.return_value = 2.0
     ef.suppress_after = 0.0
-    ef.offer_matches_pool = mock.Mock(return_value=True)
+    ef.offer_matches_pool = mock.Mock(return_value=(True, None))
     task_id = fake_task.task_id
     docker_task = Dict(task_id=Dict(value=task_id))
     task_metadata = ef_mdl.TaskMetadata(
@@ -576,7 +579,7 @@ def test_resource_offers_launch_tasks_failed(
     ef._last_offer_time = None
     mock_time.return_value = 2.0
     ef.suppress_after = 0.0
-    ef.offer_matches_pool = mock.Mock(return_value=True)
+    ef.offer_matches_pool = mock.Mock(return_value=(True, None))
     task_id = fake_task.task_id
     docker_task = Dict(task_id=Dict(value=task_id))
     task_metadata = ef_mdl.TaskMetadata(
@@ -693,7 +696,7 @@ def test_resource_offers_not_for_pool(
     fake_driver,
     mock_get_metric
 ):
-    ef.offer_matches_pool = mock.Mock(return_value=False)
+    ef.offer_matches_pool = mock.Mock(return_value=(False, None))
 
     ef.task_queue.put(fake_task)
     ef.resourceOffers(fake_driver, [fake_offer])
