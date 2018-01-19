@@ -386,25 +386,25 @@ class ExecutionFramework(Scheduler):
                 ),
             )
         elif task_config.containerizer == 'DOCKER':
+            outer_container = Dict(
+                type='MESOS',
+                # for docker, volumes should include parameters
+                volumes=thaw(task_config.volumes),
+                network='BRIDGE',
+                network_infos=[Dict(
+                    protocol='IPv4',
+                    port_mappings=[Dict(host_port=port_to_use, container_port=8888)],
+                    name='cni-test',
+                )],
+            )
+
             container = Dict(
                 type='MESOS',
                 # for docker, volumes should include parameters
                 volumes=thaw(task_config.volumes),
                 network='BRIDGE',
-                # docker=Dict(
-                #    image=task_config.image,
-                #     network='BRIDGE',
-                #     port_mappings=[Dict(host_port=port_to_use,
-                #                         container_port=8888)],
-                #     parameters=thaw(task_config.docker_parameters),
-                #     force_pull_image=True,
-                # ),
-                # network_infos=Dict(
-                #     protocol='IPv4',
-                #     port_mappings=[Dict(host_port=port_to_use, container_port=8888)],
-                #     name='cni-test',
-                # ),
             )
+
             # For this to work, image_providers needs to be set to 'docker'
             # on mesos agents
             if 'image' in task_config:
@@ -458,16 +458,7 @@ class ExecutionFramework(Scheduler):
 
         executor_info = Dict(
             type='DEFAULT',
-            container=Dict(
-                type='MESOS',
-                network='USER',
-            ),
-            network=[Dict(
-                protocol='IPv4',
-                port_mappings=[
-                    Dict(host_port=port_to_use, container_port=8888)],
-                name='cni-test',
-            )],
+            container=outer_container,
             executor_id=Dict(
                 value='executor-{id}'.format(id=task_config.task_id),
             ),
