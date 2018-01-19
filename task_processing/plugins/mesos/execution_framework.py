@@ -462,11 +462,12 @@ class ExecutionFramework(Scheduler):
                 type='MESOS',
                 network='USER',
             ),
-            network=[ Dict(
-                 protocol='IPv4',
-                 port_mappings=[Dict(host_port=port_to_use, container_port=8888)],
-                 name='cni-test',
-            ) ],
+            network=[Dict(
+                protocol='IPv4',
+                port_mappings=[
+                    Dict(host_port=port_to_use, container_port=8888)],
+                name='cni-test',
+            )],
             executor_id=Dict(
                 value='executor-{id}'.format(id=task_config.task_id),
             ),
