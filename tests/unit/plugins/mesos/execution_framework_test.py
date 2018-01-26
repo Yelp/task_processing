@@ -7,6 +7,7 @@ import pytest
 from addict import Dict
 from pyrsistent import m
 from pyrsistent import v
+from six.moves.queue import Queue
 
 from task_processing.plugins.mesos import execution_framework as ef_mdl
 from task_processing.plugins.mesos import mesos_executor as me_mdl
@@ -215,6 +216,18 @@ def test_kill_task(ef, fake_driver):
     assert fake_driver.killTask.call_args == mock.call(
         Dict(value='fake_task_id')
     )
+
+
+def test_kill_task_from_task_queue(ef, fake_driver):
+    ef.driver = fake_driver
+    ef.task_queue = Queue()
+    ef.task_queue.put(mock.Mock(task_id='fake_task_id'))
+    ef.task_queue.put(mock.Mock(task_id='fake_task_id1'))
+
+    ef.kill_task('fake_task_id')
+
+    assert fake_driver.killTask.call_count == 0
+    assert ef.task_queue.qsize() == 1
 
 
 def test_blacklist_slave(

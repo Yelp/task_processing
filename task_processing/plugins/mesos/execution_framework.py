@@ -196,7 +196,22 @@ class ExecutionFramework(Scheduler):
         return False, None
 
     def kill_task(self, task_id):
-        self.driver.killTask(Dict(value=task_id))
+        tmp_list = []
+        flag = False
+        with self._lock:
+            while not self.task_queue.empty():
+                t = self.task_queue.get()
+                if task_id == t.task_id:
+                    flag = True
+                    self.task_metadata = self.task_metadata.discard(task_id)
+                else:
+                    tmp_list.append(t)
+
+            for t in tmp_list:
+                self.task_queue.put(t)
+
+        if flag is False:
+            self.driver.killTask(Dict(value=task_id))
 
     def blacklist_slave(self, agent_id, timeout):
         with self._lock:
