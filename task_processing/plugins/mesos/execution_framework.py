@@ -15,6 +15,7 @@ from pyrsistent import v
 from six.moves.queue import Queue
 
 from task_processing.interfaces.event import control_event
+from task_processing.interfaces.event import task_event
 from task_processing.metrics import create_counter
 from task_processing.metrics import create_timer
 from task_processing.metrics import get_metric
@@ -31,6 +32,7 @@ TASK_LOST_COUNT = 'taskproc.mesos.task_lost_count'
 TASK_LOST_DUE_TO_INVALID_OFFER_COUNT = \
     'taskproc.mesos.task_lost_due_to_invalid_offer_count'
 TASK_ERROR_COUNT = 'taskproc.mesos.task_error_count'
+TASK_OFFER_TIMEOUT = 'taskproc.mesos.task_offer_timeout'
 
 TASK_ENQUEUED_COUNT = 'taskproc.mesos.task_enqueued_count'
 TASK_QUEUED_TIME_TIMER = 'taskproc.mesos.task_queued_time'
@@ -125,11 +127,36 @@ class ExecutionFramework(Scheduler):
                 for task_id in self.task_metadata.keys():
                     md = self.task_metadata[task_id]
 
-                    if md.task_state not in (
-                        'TASK_STAGING',
-                        'UNKNOWN'
-                    ):
-                        continue
+                    if md.task_state == 'TASK_INITED':
+                        # give up if the task hasn't launched after
+                        # offer_timeout
+                        if time_now >= (
+                            md.task_state_history[md.task_state] +
+                            md.task_config.offer_timeout
+                        ):
+                            log.warning((
+                                'Task {id} has been waiting for offers for '
+                                'longer than configured timeout '
+                                '{offer_timeout}. Giving up and removing the '
+                                'task from the task queue.'
+                            ).format(
+                                id=task_id,
+                                offer_timeout=md.task_config.offer_timeout
+                            ))
+                            # killing the task will also dequeue
+                            self.kill_task(task_id)
+                            self.task_metadata = self.task_metadata.discard(
+                                task_id
+                            )
+                            self.event_queue.put(
+                                task_event(
+                                    task_id=task_id,
+                                    terminal=True,
+                                    timestamp=time.time(),
+                                    success=False,
+                                    message='stop'
+                                ))
+                            get_metric('TASK_OFFER_TIMEOUT').count(1)
 
                     # Task is not eligible for killing or reenqueuing
                     if time_now < (md.task_state_history[md.task_state] +
@@ -148,7 +175,7 @@ class ExecutionFramework(Scheduler):
                         get_metric(TASK_FAILED_TO_LAUNCH_COUNT).count(1)
                         continue
 
-                    else:
+                    if md.task_state == 'TASK_STAGING':
                         log.warning(
                             'Killing stuck task {id}'.format(id=task_id)
                         )
@@ -517,10 +544,12 @@ class ExecutionFramework(Scheduler):
         if self.task_queue.empty() and current_offer_time < self.decline_after:
             time.sleep(self.decline_after - current_offer_time)
 
-        declined = {'blacklisted': [],
-                    'bad pool': [],
-                    'bad resources': [],
-                    'no tasks': []}
+        declined = {
+            'blacklisted': [],
+            'bad pool': [],
+            'bad resources': [],
+            'no tasks': []
+        }
         declined_offer_ids = []
         accepted = []
 

@@ -840,3 +840,33 @@ def test_task_lost_due_to_invalid_offers(
     assert ef.event_queue.qsize() == 0
     assert ef.task_queue.qsize() == 1
     assert fake_driver.acknowledgeStatusUpdate.call_count == 1
+
+
+def test_background_thread_removes_offer_timeout(
+    ef,
+    fake_driver,
+    fake_task,
+    mock_time,
+    mock_sleep,
+):
+    mock_time.return_value = 2.0
+    task_id = fake_task.task_id
+    fake_task = fake_task.set(
+        offer_timeout=1
+    )
+    task_metadata = ef_mdl.TaskMetadata(
+        agent_id='fake_agent_id',
+        task_config=fake_task,
+        task_state='TASK_INITED',
+        task_state_history=m(TASK_INITED=0.0),
+    )
+    ef.driver = fake_driver
+    ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
+    ef._background_check()
+    assert ef.task_queue.empty()
+    assert task_id not in ef.task_metadata.keys()
+    assert not ef.event_queue.empty()
+    event = ef.event_queue.get(block=False)
+    assert event.terminal is True
+    assert event.success is False
+    assert event.task_id == task_id

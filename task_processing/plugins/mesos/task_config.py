@@ -71,6 +71,12 @@ class MesosTaskConfig(PRecord):
                           (c == 'DOCKER' or c == 'MESOS',
                            'containerizer is docker or mesos'))
     environment = field(type=PMap, initial=m(), factory=pmap)
+    offer_timeout = field(
+        type=float,
+        factory=float,
+        mandatory=False,
+        invariant=lambda t: (t > 0, 'timeout > 0')
+    )
 
     @property
     def task_id(self):
