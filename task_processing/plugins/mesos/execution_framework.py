@@ -393,8 +393,9 @@ class ExecutionFramework(Scheduler):
                 network='BRIDGE',
                 network_infos=[Dict(
                     protocol='IPv4',
-                    port_mappings=[Dict(host_port=port_to_use, container_port=8888)],
-                    name='cni-test',
+                    port_mappings=[
+                        Dict(host_port=port_to_use, container_port=8888)],
+                    name='yelp-compose',
                 )],
             )
 
