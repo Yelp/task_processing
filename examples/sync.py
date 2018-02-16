@@ -18,18 +18,20 @@ def main():
     executor = processor.executor_from_config(
         provider='mesos',
         provider_config={
-            'secret': 'bee5aeJibee5aeJibee5aeJi',
-            'mesos_address': 'paasta1-uswest2btestopia.dev.yelpcorp.com:5050',
+            'secret': '',
+            'mesos_address': '10.40.21.26:5050',
             'pool': None,
-            'role': 'testing',
+            'role': '*',
         }
     )
 
     TaskConfig = executor.TASK_CONFIG_INTERFACE
     task_config = TaskConfig(
-        # image="docker-dev.yelpcorp.com:25000/user_authentication-service:latest",
-        image="ubuntu:14.04",
-        cmd='cat /etc/*release && ifconfig && /bin/sleep 12000',
+        image="nginx",
+        # image="trinitronx/python-simplehttpserver",
+        # cmd='cat /etc/*release && ifconfig && /bin/sleep 12000',
+        cmd='apt-get update && apt-get install -y net-tools curl procps && which curl && nginx && netstat -ntlp && ifconfig -a && /bin/sleep 123456',
+        # cmd='/bin/sleep 12000',
         # volumes=[{
         #     'container_path': '/some_file',
         #     'host_path': '/nail/home/sagarp',

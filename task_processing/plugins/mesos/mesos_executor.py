@@ -45,9 +45,7 @@ class MesosTaskConfig(PRecord):
     name = field(type=str, initial="default")
     # image is optional for the mesos containerizer
     image = field(type=str)
-    cmd = field(type=str,
-                mandatory=True,
-                invariant=lambda cmd: (cmd.strip() != '', 'empty cmd'))
+    cmd = field(type=str)
     cpus = field(type=float,
                  initial=0.1,
                  factory=float,

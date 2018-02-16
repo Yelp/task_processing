@@ -379,6 +379,11 @@ class ExecutionFramework(Scheduler):
                 docker=Dict(
                     image=task_config.image,
                     network='BRIDGE',
+                    network_infos=[Dict(
+                        protocol='IPv4',
+                        port_mappings=[Dict(host_port=port_to_use, container_port=8888)],
+                        name='cni-test',
+                    )],
                     port_mappings=[Dict(host_port=port_to_use,
                                         container_port=8888)],
                     parameters=thaw(task_config.docker_parameters),
@@ -386,6 +391,7 @@ class ExecutionFramework(Scheduler):
                 ),
             )
         elif task_config.containerizer == 'DOCKER':
+            print('*********************** the port to use is ', port_to_use)
             outer_container = Dict(
                 type='MESOS',
                 # for docker, volumes should include parameters
@@ -394,8 +400,9 @@ class ExecutionFramework(Scheduler):
                 network_infos=[Dict(
                     protocol='IPv4',
                     port_mappings=[
-                        Dict(host_port=port_to_use, container_port=8888)],
-                    name='yelp-compose',
+                        Dict(host_port=port_to_use, container_port=80)
+                    ],
+                    name='cni-test',
                 )],
             )
 
@@ -404,6 +411,11 @@ class ExecutionFramework(Scheduler):
                 # for docker, volumes should include parameters
                 volumes=thaw(task_config.volumes),
                 network='BRIDGE',
+                network_infos=[Dict(
+                    protocol='IPv4',
+                    port_mappings=[Dict(host_port=port_to_use+1, container_port=80)],
+                    name='cni-test',
+                )]
             )
 
             # For this to work, image_providers needs to be set to 'docker'
@@ -420,6 +432,27 @@ class ExecutionFramework(Scheduler):
             task_id=Dict(value=task_config.task_id),
             agent_id=Dict(value=offer.agent_id.value),
             name='executor-{id}-container'.format(id=task_config.task_id),
+            health_check=Dict(
+                type='COMMAND',
+                command= Dict(
+                    # shell=True,
+                    value='curl 127.0.0.1:80',
+                    arguments=[
+                        '&& ifconfig'
+                     ],
+                ),
+            ),
+            # health_check=Dict(
+            #    type='HTTP',
+            #    http=Dict(
+            #        port=80,
+            #        statuses=[200]
+            #    ),
+                # type='TCP',
+                # tcp=Dict(
+                #    port=80
+                #)
+            # ),
             resources=[
                 Dict(name='cpus',
                      type='SCALAR',
@@ -468,27 +501,28 @@ class ExecutionFramework(Scheduler):
             ),
             resources=[
                 Dict(name='cpus',
-                     type='SCALAR',
-                     role=self.role,
-                     scalar=Dict(value=task_config.cpus)),
+                    type='SCALAR',
+                    role=self.role,
+                    scalar=Dict(value=task_config.cpus)),
                 Dict(name='mem',
-                     type='SCALAR',
-                     role=self.role,
-                     scalar=Dict(value=task_config.mem)),
+                    type='SCALAR',
+                    role=self.role,
+                    scalar=Dict(value=task_config.mem)),
                 Dict(name='disk',
-                     type='SCALAR',
-                     role=self.role,
-                     scalar=Dict(value=task_config.disk)),
+                    type='SCALAR',
+                    role=self.role,
+                    scalar=Dict(value=task_config.disk)),
                 Dict(name='gpus',
-                     type='SCALAR',
-                     role=self.role,
-                     scalar=Dict(value=task_config.gpus)),
-                Dict(name='ports',
-                     type='RANGES',
-                     role=self.role,
-                     ranges=Dict(
-                         range=[Dict(begin=port_to_use, end=port_to_use)]))
+                    type='SCALAR',
+                    role=self.role,
+                    scalar=Dict(value=task_config.gpus)),
+                # Dict(name='ports',
+                #    type='RANGES',
+                #    role=self.role,
+                #    ranges=Dict(
+                #        range=[Dict(begin=port_to_use+1, end=port_to_use+1)]))
             ],
+
         )
 
         task_group_info = Dict(
