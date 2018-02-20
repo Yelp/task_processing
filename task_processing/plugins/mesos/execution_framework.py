@@ -58,7 +58,7 @@ class ExecutionFramework(Scheduler):
         self,
         name,
         role,
-        task_staging_timeout_s=240,
+        task_staging_timeout_s=6000,
         pool=None,
         translator=mesos_status_to_event,
         slave_blacklist_timeout_s=900,
@@ -69,7 +69,7 @@ class ExecutionFramework(Scheduler):
     ):
         self.name = name
         # wait this long for a task to launch.
-        self.task_staging_timeout_s = task_staging_timeout_s
+        self.task_staging_timeout_s = 600
         self.pool = pool
         self.role = role
         self.translator = translator
@@ -372,7 +372,7 @@ class ExecutionFramework(Scheduler):
                     protocol='IPv4',
                     port_mappings=[
                         Dict(host_port=port_to_use, container_port=8888)],
-                    name='cni-test',
+                    name='yelp-compose',
                 ),
             )
             # For this to work, image_providers needs to be set to 'docker'

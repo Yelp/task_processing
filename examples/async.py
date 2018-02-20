@@ -29,9 +29,9 @@ def main():
     executor = processor.executor_from_config(
         provider='mesos',
         provider_config={
-            'secret': args.secret,
-            'mesos_address': args.master,
-            'role': args.role,
+            'secret': 'bee5aeJibee5aeJibee5aeJi',
+            'mesos_address': 'mesos3-uswest1cdevc.dev.yelpcorp.com:5050',
+            'role': '*',
         }
     )
 
@@ -43,18 +43,21 @@ def main():
             cb=counter.process_event
         )]
     )
+    start_time = time.time()
 
     TaskConfig = executor.TASK_CONFIG_INTERFACE
-    tasks_to_launch = 2
+    tasks_to_launch = 10000
     for _ in range(tasks_to_launch):
-        task_config = TaskConfig(image='busybox', cmd='/bin/true')
+        task_config = TaskConfig(
+            containerizer='MESOS', image='alpine', cmd='/bin/true && echo "I run successfully"')
         runner.run(task_config)
 
-    for _ in range(5):
-        print('terminated {} tasks'.format(counter.terminated))
+    while True:
         if counter.terminated >= tasks_to_launch:
             break
         time.sleep(2)
+
+    print('Finished in {secs}'.format(secs=time.time() - start_time))
 
     runner.stop()
     return 0 if counter.terminated >= tasks_to_launch else 1

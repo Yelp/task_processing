@@ -19,15 +19,15 @@ def main():
         provider='mesos',
         provider_config={
             'secret': 'bee5aeJibee5aeJibee5aeJi',
-            'mesos_address': 'paasta1-uswest2btestopia.dev.yelpcorp.com:5050',
+            'mesos_address': 'mesos3-uswest1cdevc.dev.yelpcorp.com:5050',
             'pool': None,
-            'role': 'testing',
+            'role': '*',
         }
     )
 
     TaskConfig = executor.TASK_CONFIG_INTERFACE
     task_config = TaskConfig(
-        image="ubuntu:14.04", cmd='cat /etc/*release && ifconfig', containerizer='MESOS')
+        image="ubuntu:14.04", cmd='/bin/true', containerizer='MESOS')
     # This only works on agents that have added mesos as a containerizer
     # task_config = TaskConfig(containerizer='MESOS', cmd='/bin/true')
 
