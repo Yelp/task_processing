@@ -308,14 +308,14 @@ def test_get_tasks_to_launch_sufficient_offer(
         task_state='TASK_INITED',
         task_state_history=m(TASK_INITED=1.0)
     )
-    ef.create_new_docker_task = mock.Mock()
+    ef._create_new_task_info = mock.Mock()
     mock_time.return_value = 2.0
 
     ef.task_queue.put(fake_task)
     ef.task_metadata = ef.task_metadata.set(fake_task.task_id, task_metadata)
     tasks_to_launch = ef.get_tasks_to_launch(fake_offer)
 
-    assert ef.create_new_docker_task.return_value in tasks_to_launch
+    assert ef._create_new_task_info.return_value in tasks_to_launch
     assert ef.task_queue.qsize() == 0
     assert mock_get_metric.call_count == 1
     assert mock_get_metric.call_args == mock.call(
@@ -341,7 +341,7 @@ def test_get_tasks_to_launch_insufficient_offer(
     task_disk,
     task_gpus,
 ):
-    ef.create_new_docker_task = mock.Mock()
+    ef._create_new_task_info = mock.Mock()
     task = me_mdl.MesosTaskConfig(
         cmd='/bin/true',
         name='fake_name',
@@ -404,7 +404,7 @@ def test_get_tasks_to_launch_insufficient_offer(
         ),
     )),
 ])
-def test_create_new_docker_task(
+def test__create_new_task_info(
     ef,
     fake_offer,
     fake_task,
@@ -432,7 +432,7 @@ def test_create_new_docker_task(
     )
 
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
-    docker_task = ef.create_new_docker_task(
+    docker_task = ef._create_new_task_info(
         fake_offer,
         fake_task,
         available_ports
@@ -620,7 +620,7 @@ def test_get_tasks_to_launch_no_ports(
     fake_driver,
     mock_get_metric
 ):
-    ef.create_new_docker_task = mock.Mock()
+    ef._create_new_task_info = mock.Mock()
     ef.get_available_ports = mock.Mock(return_value=[])
     ef.task_queue.put(fake_task)
 
@@ -628,7 +628,7 @@ def test_get_tasks_to_launch_no_ports(
 
     assert len(tasks) == 0
     assert ef.task_queue.qsize() == 1
-    assert ef.create_new_docker_task.call_count == 0
+    assert ef._create_new_task_info.call_count == 0
 
 
 def test_get_tasks_to_launch_ports_available(
@@ -638,7 +638,7 @@ def test_get_tasks_to_launch_ports_available(
     fake_driver,
     mock_get_metric
 ):
-    ef.create_new_docker_task = mock.Mock()
+    ef._create_new_task_info = mock.Mock()
     ef.get_available_ports = mock.Mock(return_value=[30000])
     ef.task_queue.put(fake_task)
     task_metadata = ef_mdl.TaskMetadata(
@@ -655,7 +655,7 @@ def test_get_tasks_to_launch_ports_available(
 
     assert len(tasks) == 1
     assert ef.task_queue.qsize() == 0
-    assert ef.create_new_docker_task.call_count == 1
+    assert ef._create_new_task_info.call_count == 1
 
 
 def test_resource_offers_no_tasks_to_launch(
