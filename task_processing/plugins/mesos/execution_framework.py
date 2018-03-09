@@ -21,6 +21,7 @@ from task_processing.metrics import create_timer
 from task_processing.metrics import get_metric
 from task_processing.plugins.mesos.translator import mesos_status_to_pod_event
 from task_processing.plugins.mesos.translator import mesos_status_to_task_event
+from task_processing.plugins.mesos.utils import is_pod
 
 
 TASK_LAUNCHED_COUNT = 'taskproc.mesos.task_launched_count'
@@ -54,7 +55,6 @@ class TaskMetadata(PRecord):
     agent_id = field(type=str, initial='')
     pod_id = field(type=(str, type(None)), initial=None)
     terminated = field(type=bool, initial=False)
-    terminal_raw_status_update = field(type=(type(None), Dict), initial=None)
     task_config = field(type=PRecord, mandatory=True)
     task_state = field(type=str, mandatory=True)
     task_state_history = field(type=PMap, factory=pmap, mandatory=True)
@@ -67,7 +67,6 @@ class ExecutionFramework(Scheduler):
         role,
         task_staging_timeout_s=240,
         pool=None,
-        translator=mesos_status_to_task_event,
         slave_blacklist_timeout_s=900,
         offer_backoff=10,
         suppress_delay=10,
@@ -165,7 +164,7 @@ class ExecutionFramework(Scheduler):
                             get_metric('TASK_OFFER_TIMEOUT').count(1)
 
                     # Task is not eligible for killing or reenqueuing
-                    if time_now < (md.task_state_history[md.task_state] \
+                    if time_now < (md.task_state_history[md.task_state]
                         ['time_stamp'] + self.task_staging_timeout_s):
                         continue
 
@@ -233,18 +232,28 @@ class ExecutionFramework(Scheduler):
         flag = False
         with self._lock:
             while not self.task_queue.empty():
-                t = self.task_queue.get()
-                if task_id == t.task_id:
+                task = self.task_queue.get()
+                if task_id == task.task_id:
                     flag = True
-                    self.task_metadata = self.task_metadata.discard(task_id)
+                    if task in self._pod_to_task_mappings:
+                        for t in self._pod_to_task_mappings[task_id]:
+                            self.task_metadata = self.task_metadata.discard(t)
+                        self._pod_to_task_mappings = \
+                            self._pod_to_task_mappings.discard(task_id)
+                    else:
+                        self.task_metadata = self.task_metadata.discard(t)
                 else:
-                    tmp_list.append(t)
+                    tmp_list.append(task)
 
             for t in tmp_list:
                 self.task_queue.put(t)
 
         if flag is False:
-            self.driver.killTask(Dict(value=task_id))
+            if task_id in self._pod_to_task_mappings:
+                for t in self._pod_to_task_mappings[task_id]:
+                    self.driver.killTask(Dict(value=t))
+            else:
+                self.driver.killTask(Dict(value=task_id))
 
     def blacklist_slave(self, agent_id, timeout):
         with self._lock:
@@ -272,17 +281,11 @@ class ExecutionFramework(Scheduler):
             self.blacklisted_slaves = \
                 self.blacklisted_slaves.remove(agent_id)
 
-    def _is_pod(self, task_config):
-        if type(task_config).__name__ == 'MesosPodConfig':
-            return True
-
-        return False
-
     def _initialize_metadata(self, task_config):
         # task_state and task_state_history get reset every time
         # a task is enqueued.
         with self._lock:
-            if self._is_pod(task_config):
+            if is_pod(task_config):
                 pod_id = task_config.task_id
                 nested_container_ids = []
 
@@ -375,18 +378,18 @@ class ExecutionFramework(Scheduler):
             elif resource.name == "gpus" and resource.role == self.role:
                 remaining_gpus += resource.scalar.value
             elif resource.name == "ports" and resource.role == self.role:
-                # TODO: Validate if the ports available > ports required
                 available_ports = self.get_available_ports(resource)
 
         log.info(
             "Received offer {id} with cpus: {cpu}, mem: {mem}, "
-            "disk: {disk} gpus: {gpu} role: {role}".format(
+            "disk: {disk} gpus: {gpu} role: {role} ports: {ports}".format(
                 id=offer.id.value,
                 cpu=remaining_cpus,
                 mem=remaining_mem,
                 disk=remaining_disk,
                 gpu=remaining_gpus,
-                role=self.role
+                role=self.role,
+                ports=len(available_ports)
             )
         )
 
@@ -399,14 +402,34 @@ class ExecutionFramework(Scheduler):
             # Get all the tasks of the queue
             while not self.task_queue.empty():
                 task = self.task_queue.get()
+                cpus = 0
+                mem = 0
+                ports = 0
+                gpus = 0
+                disk = 0
 
-                if ((remaining_cpus >= task.cpus and
-                     remaining_mem >= task.mem and
-                     remaining_disk >= task.disk and
-                     remaining_gpus >= task.gpus and
-                     len(available_ports) > 0)):
+                if is_pod(task):
+                    # Aggregate all the resources for pods
+                    for t in task.tasks:
+                        cpus += t.cpus
+                        mem += t.mem
+                        disk += t.disk
+                        ports += len(t.ports)
+                        gpus += t.gpus
+                else:
+                    cpus = task.cpus
+                    mem = task.mem
+                    ports = task.ports
+                    gpus = task.gpus
+                    ports = len(task.ports)
 
-                    if self._is_pod(task):
+                if ((remaining_cpus >= cpus and
+                     remaining_mem >= mem and
+                     remaining_disk >= disk and
+                     remaining_gpus >= gpus and
+                     len(available_ports) >= ports)):
+
+                    if is_pod(task):
                         task_group_operations.append(
                             self._create_new_mesos_pod(
                                 offer,
@@ -426,12 +449,12 @@ class ExecutionFramework(Scheduler):
 
                     # Deduct the resources taken by this task from the total
                     # available resources.
-                    remaining_cpus -= task.cpus
-                    remaining_mem -= task.mem
-                    remaining_disk -= task.disk
-                    remaining_gpus -= task.gpus
+                    remaining_cpus -= cpus
+                    remaining_mem -= mem
+                    remaining_disk -= disk
+                    remaining_gpus -= gpus
 
-                    if self._is_pod(task):
+                    if is_pod(task):
                         for t in task.tasks:
                             md = self.task_metadata[t.task_id]
                             get_metric(TASK_QUEUED_TIME_TIMER).record(
@@ -475,10 +498,9 @@ class ExecutionFramework(Scheduler):
                 )
             )
 
-        # Create a task_info for the outer container
+        # The executor does not need a separate network namespace.
         task_info_for_parent = Dict(
-            type='MESOS',
-            network='BRIDGE',
+            type='MESOS'
         )
 
         executor_info = Dict(
@@ -495,31 +517,28 @@ class ExecutionFramework(Scheduler):
                 Dict(name='cpus',
                      type='SCALAR',
                      role=self.role,
-                     scalar=Dict(value=pod_config.cpus)),
+                     scalar=Dict(value=0.1)),
                 Dict(name='mem',
                      type='SCALAR',
                      role=self.role,
-                     scalar=Dict(value=pod_config.mem)),
+                     scalar=Dict(value=100)),
                 Dict(name='disk',
                      type='SCALAR',
                      role=self.role,
-                     scalar=Dict(value=pod_config.disk)),
+                     scalar=Dict(value=200)),
                 Dict(name='gpus',
                      type='SCALAR',
                      role=self.role,
-                     scalar=Dict(value=pod_config.gpus)),
+                     scalar=Dict(value=0)),
             ],
         )
-
         task_group_info = Dict(
             tasks=task_infos
         )
-
         launch_group = Dict(
             executor=executor_info,
             task_group=task_group_info
         )
-
         operation = Dict(
             type='LAUNCH_GROUP',
             launch_group=launch_group,
@@ -528,9 +547,17 @@ class ExecutionFramework(Scheduler):
         return operation
 
     def _create_new_task_info(self, offer, task_config, available_ports):
-        # Handle the case of multiple port allocations
-        port_to_use = available_ports[0]
-        available_ports[:] = available_ports[1:]
+        port_mappings = []
+        counter = 0
+        for p in task_config.ports:
+            port_mappings.append(
+                Dict(
+                    host_port=available_ports[counter],
+                    container_port=p
+                )
+            )
+            counter += 1
+        available_ports[:] = available_ports[len(task_config.ports):]
 
         # TODO: this probably belongs in the caller
         with self._lock:
@@ -548,8 +575,7 @@ class ExecutionFramework(Scheduler):
                 docker=Dict(
                     image=task_config.image,
                     network='BRIDGE',
-                    port_mappings=[Dict(host_port=port_to_use,
-                                        container_port=8888)],
+                    port_mappings=port_mappings,
                     parameters=thaw(task_config.docker_parameters),
                     force_pull_image=True,
                 ),
@@ -559,12 +585,7 @@ class ExecutionFramework(Scheduler):
                 type='MESOS',
                 # for docker, volumes should include parameters
                 volumes=thaw(task_config.volumes),
-                network_infos=[Dict(
-                    protocol='IPv4',
-                    port_mappings=[
-                        Dict(host_port=port_to_use, container_port=8888)],
-                    name=task_config.cni_network,
-                )]
+                network='BRIDGE',
             )
             # For this to work, image_providers needs to be set to 'docker'
             # on mesos agents
@@ -574,13 +595,14 @@ class ExecutionFramework(Scheduler):
                         type='DOCKER',
                         docker=Dict(name=task_config.image),
                     ),
-                    network_infos=[Dict(
-                        protocol='IPv4',
-                        port_mappings=[
-                            Dict(host_port=port_to_use, container_port=8888)],
-                        name='cni-test',
-                    )]
                 )
+
+            if 'cni_network' in task_config:
+                container.network_infos = [Dict(
+                    protocol='IPv4',
+                    port_mappings=port_mappings,
+                    name=task_config.cni_network,
+                )]
 
         task_info = Dict(
             task_id=Dict(value=task_config.task_id),
@@ -603,11 +625,6 @@ class ExecutionFramework(Scheduler):
                      type='SCALAR',
                      role=self.role,
                      scalar=Dict(value=task_config.gpus)),
-                Dict(name='ports',
-                     type='RANGES',
-                     role=self.role,
-                     ranges=Dict(
-                         range=[Dict(begin=port_to_use, end=port_to_use)]))
             ],
             command=Dict(
                 value=task_config.cmd,
@@ -623,11 +640,27 @@ class ExecutionFramework(Scheduler):
             container=container
         )
 
-        if task_config.health_check is True:
+        if len(port_mappings) > 0:
+            task_info.append(
+                Dict(name='ports',
+                     type='RANGES',
+                     role=self.role,
+                     ranges=Dict(
+                         range=[Dict(
+                             begin=port_mappings[0]['host_port'],
+                             end=port_mappings[0]['host_port']
+                         )]
+                     )
+                     )
+            )
+
+        if task_config.http_health_check_port is not None:
             task_info.health_check = Dict(
                 type='COMMAND',
                 command=Dict(
-                    value='curl 127.0.0.1:{port}'.join(port=8888),
+                    value='curl 127.0.0.1:{port}'.join(
+                        port=task_config.http_health_check_port
+                    ),
                 )
             )
         return task_info
@@ -644,30 +677,27 @@ class ExecutionFramework(Scheduler):
 
     def _aggregate_status_updates_for_pod(self, pod_id, task_state):
         sm = m()
-        with self._lock:
-            for task_id in self._pod_to_task_mappings[pod_id]:
-                sm.set(
-                    task_id,
-                    self.task_metadata[task_id].task_state_history
-                    [task_state]['status_update']
-                )
+        for task_id in self._pod_to_task_mappings[pod_id]:
+            sm = sm.set(
+                task_id,
+                self.task_metadata[task_id].task_state_history
+                [task_state]['status_update']
+            )
 
         return sm
 
     def _aggregate_task_configs_for_pod(self, pod_id):
         tm = m()
-        with self._lock:
-            for task_id in self._pod_to_task_mappings[pod_id]:
-                tm.set(
-                    task_id,
-                    self.task_metadata[task_id].task_config
-                )
+        for task_id in self._pod_to_task_mappings[pod_id]:
+            tm = tm.set(
+                task_id,
+                self.task_metadata[task_id].task_config
+            )
 
         return tm
 
     def _update_internal_state(self, task_id, task_state, metadata, update):
-        is_terminal = True if task_state in self._terminal_task_counts \
-            else False
+        is_terminal = task_state in self._terminal_task_counts
 
         with self._lock:
             self.task_metadata = self.task_metadata.set(
@@ -681,8 +711,7 @@ class ExecutionFramework(Scheduler):
                             status_update=update
                         )
                     ),
-                    terminated=is_terminal,
-                    terminal_raw_status_update=update,
+                    terminated=is_terminal
                 )
             )
 
@@ -705,7 +734,7 @@ class ExecutionFramework(Scheduler):
             if all_tasks_terminated is True or state_changed is True:
                 # This means that all the nested containers in the pod have
                 # received this status update. So, it is okay for us to send
-                # a terminal event for the whole pod.
+                # an event for the whole pod.
                 self.event_queue.put(
                     mesos_status_to_pod_event(
                         task_state,
@@ -715,7 +744,7 @@ class ExecutionFramework(Scheduler):
                         ),
                         md.pod_id
                     ).set(
-                        task_config_per_task_id = \
+                        task_config_per_task_id= \
                         self._aggregate_task_configs_for_pod(
                             md.pod_id
                         )
@@ -729,7 +758,8 @@ class ExecutionFramework(Scheduler):
                         self.task_metadata = \
                             self.task_metadata.discard(t)
 
-                    self._pod_to_task_mappings.discard(metadata.pod_id)
+                    self._pod_to_task_mappings = self._pod_to_task_mappings.
+                        discard(metadata.pod_id)
 
                 get_metric(self._terminal_task_counts[task_state]).count(
                     1

@@ -9,7 +9,9 @@ from task_processing.plugins.mesos.execution_framework import (
 )
 from task_processing.plugins.mesos.task_config import MesosTaskConfig
 from task_processing.plugins.mesos.translator import mesos_status_to_event
-from task_processing.plugins.mesos.translator import mesos_status_to_task_event
+from task_processing.plugins.mesos.task_config import MesosPodConfig
+from task_processing.plugins.mesos.task_config import MesosTaskConfig
+
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
 logging.basicConfig(format=FORMAT)
@@ -27,7 +29,6 @@ class MesosExecutor(TaskExecutor):
         secret=None,
         mesos_address='127.0.0.1:5050',
         initial_decline_delay=1.0,
-        framework_translator=mesos_status_to_task_event,
         framework_name='taskproc-default',
         framework_staging_timeout=60,
     ):
@@ -43,7 +44,6 @@ class MesosExecutor(TaskExecutor):
             role=role,
             pool=pool,
             name=framework_name,
-            translator=framework_translator,
             task_staging_timeout_s=framework_staging_timeout,
             initial_decline_delay=initial_decline_delay
         )
