@@ -55,6 +55,16 @@ class MesosTaskConfig(PRecord):
                     factory=float,
                     mandatory=False,
                     invariant=lambda t: (t > 0, 'timeout > 0'))
+    # By default, the retrying executor retries 3 times. This task option
+    # overrides the executor setting.
+    retries = field(type=int,
+                    factory=int,
+                    mandatory=False,
+                    invariant=lambda r: (r >= 0, 'retries >= 0'))
+    cni_network = field(type=str, initial='cni-test')
+    http_health_check_port = field(type=(int, type(None)),
+                                   mandatory=False,
+                                   initial=type(None))
     volumes = field(type=PVector,
                     initial=v(),
                     factory=pvector,
@@ -77,6 +87,22 @@ class MesosTaskConfig(PRecord):
         mandatory=False,
         invariant=lambda t: (t > 0, 'timeout > 0')
     )
+
+    @property
+    def task_id(self):
+        return "{}.{}".format(self.name, self.uuid)
+
+
+class MesosPodConfig(PRecord):
+    name = field(type=str, initial="pod")
+    uuid = field(type=(str, uuid.UUID), initial=uuid.uuid4)
+    tasks = field(type=PVector, initial=v(), factory=pvector)
+    # By default, the retrying executor retries 3 times. This task option
+    # overrides the executor setting.
+    retries = field(type=int,
+                    factory=int,
+                    mandatory=False,
+                    invariant=lambda r: (r >= 0, 'retries >= 0'))
 
     @property
     def task_id(self):

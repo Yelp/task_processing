@@ -9,10 +9,12 @@ from pyrsistent import pmap
 from pyrsistent import PRecord
 
 
-EVENT_KINDS = ['task', 'control']
+EVENT_KINDS = ['task', 'control', 'pod']
 
 
 class Event(PRecord):
+    # TODO(sagarp): Add an invariant for task_id_task_config_mappings and
+    #
     kind = field(type=str,
                  mandatory=True,
                  invariant=lambda x: (x in EVENT_KINDS,
@@ -35,6 +37,13 @@ class Event(PRecord):
         invariant=lambda x: (isinstance(x, PMap),
                              'task_config must inherit from PMap'),
         factory=lambda x: pmap(x) if not isinstance(x, PMap) else x)
+
+    # This fields are only applicable to event of type pod
+    task_config_per_task_id = field(type=PMap)
+
+    # This fields are only applicable to event of type pod
+    mesos_status_per_task_id = field(type=PMap)
+
     # the task finished with exit code 0
     success = field(type=(bool, type(None)), initial=None)
     # platform-specific event type

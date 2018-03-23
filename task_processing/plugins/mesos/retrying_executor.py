@@ -7,6 +7,7 @@ from pyrsistent import m
 from six.moves.queue import Queue
 
 from task_processing.interfaces.task_executor import TaskExecutor
+from task_processing.plugins.mesos.utils import is_pod
 
 log = logging.getLogger(__name__)
 

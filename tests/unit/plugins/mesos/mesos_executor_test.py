@@ -4,7 +4,7 @@ import mock
 import pytest
 
 import task_processing.plugins.mesos.mesos_executor as me_module
-from task_processing.plugins.mesos.translator import mesos_status_to_event
+from task_processing.plugins.mesos.translator import mesos_status_to_task_event
 
 
 @pytest.fixture
@@ -37,7 +37,7 @@ def test_creates_execution_framework_and_driver(mock_Thread, mesos_executor):
         name="taskproc-default",
         task_staging_timeout_s=60,
         initial_decline_delay=1.0,
-        translator=mesos_status_to_event,
+        translator=mesos_status_to_task_event,
         pool=None,
         role="role"
     )
