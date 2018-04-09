@@ -26,7 +26,6 @@ class MesosExecutor(TaskExecutor):
         initial_decline_delay=1.0,
         framework_translator=mesos_status_to_event,
         framework_name='taskproc-default',
-        framework_staging_timeout=60,
     ):
         """
         Constructs the instance of a task execution, encapsulating all state
