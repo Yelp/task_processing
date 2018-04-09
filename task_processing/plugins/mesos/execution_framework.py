@@ -60,7 +60,7 @@ class ExecutionFramework(Scheduler):
         self,
         name,
         role,
-        task_staging_timeout_s=240,
+        task_staging_timeout_s,
         pool=None,
         translator=mesos_status_to_event,
         slave_blacklist_timeout_s=900,
