@@ -109,6 +109,7 @@ class ExecutionFramework(Scheduler):
             'TASK_KILLED': TASK_KILLED_COUNT,
             'TASK_FAILED': TASK_FAILED_COUNT,
             'TASK_ERROR': TASK_ERROR_COUNT,
+            'TASK_OFFER_TIMEOUT': TASK_OFFER_TIMEOUT,
         }
 
         self.stopping = False
@@ -156,7 +157,7 @@ class ExecutionFramework(Scheduler):
                                     success=False,
                                     message='stop'
                                 ))
-                            get_metric('TASK_OFFER_TIMEOUT').count(1)
+                            get_metric(TASK_OFFER_TIMEOUT).count(1)
 
                     # Task is not eligible for killing or reenqueuing
                     if time_now < (md.task_state_history[md.task_state] +
@@ -485,7 +486,8 @@ class ExecutionFramework(Scheduler):
             TASK_ENQUEUED_COUNT,                 TASK_INSUFFICIENT_OFFER_COUNT,
             TASK_STUCK_COUNT,                    BLACKLISTED_AGENTS_COUNT,
             TASK_LOST_DUE_TO_INVALID_OFFER_COUNT,
-            TASK_LAUNCH_FAILED_COUNT,            TASK_FAILED_TO_LAUNCH_COUNT
+            TASK_LAUNCH_FAILED_COUNT,            TASK_FAILED_TO_LAUNCH_COUNT,
+            TASK_OFFER_TIMEOUT,
         ]
         for cnt in counters:
             create_counter(cnt, default_dimensions)

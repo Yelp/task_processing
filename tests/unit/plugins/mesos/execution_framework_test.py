@@ -492,7 +492,7 @@ def test_initialize_metrics(ef):
 
     ef._initialize_metrics()
 
-    assert ef_mdl.create_counter.call_count == 13
+    assert ef_mdl.create_counter.call_count == 14
     ef_mdl_counters = [
         ef_mdl.TASK_LAUNCHED_COUNT,
         ef_mdl.TASK_FINISHED_COUNT,
@@ -507,6 +507,7 @@ def test_initialize_metrics(ef):
         ef_mdl.TASK_INSUFFICIENT_OFFER_COUNT,
         ef_mdl.TASK_STUCK_COUNT,
         ef_mdl.BLACKLISTED_AGENTS_COUNT,
+        ef_mdl.TASK_OFFER_TIMEOUT,
     ]
     for cnt in ef_mdl_counters:
         ef_mdl.create_counter.assert_any_call(cnt, default_dimensions)
