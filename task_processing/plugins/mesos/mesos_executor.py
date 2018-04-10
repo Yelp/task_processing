@@ -13,6 +13,7 @@ from task_processing.plugins.mesos.translator import mesos_status_to_event
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
 logging.basicConfig(format=FORMAT)
 
+
 class MesosExecutor(TaskExecutor):
     TASK_CONFIG_INTERFACE = MesosTaskConfig
 
@@ -26,7 +27,7 @@ class MesosExecutor(TaskExecutor):
         initial_decline_delay=1.0,
         framework_translator=mesos_status_to_event,
         framework_name='taskproc-default',
-        framework_staging_timeout=60,
+        framework_staging_timeout=240,
     ):
         """
         Constructs the instance of a task execution, encapsulating all state
