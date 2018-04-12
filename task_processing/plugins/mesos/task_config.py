@@ -9,6 +9,10 @@ from pyrsistent import PVector
 from pyrsistent import pvector
 from pyrsistent import v
 
+from task_processing.plugins.mesos.constraints import Constraint
+from task_processing.plugins.mesos.constraints import \
+    valid_constraint_operator_name
+
 VOLUME_KEYS = set(['mode', 'container_path', 'host_path'])
 
 
@@ -21,6 +25,21 @@ def valid_volumes(volumes):
                 '{}, was: {}'.format(VOLUME_KEYS, vol.keys())
             )
     return (True, None)
+
+
+def _valid_constraints(constraints):
+    invalid_operators = []
+    for constraint in constraints:
+        operator_name = constraint.operator
+        if not valid_constraint_operator_name(operator_name):
+            invalid_operators.append(operator_name)
+    if len(invalid_operators) > 0:
+        return (
+            False,
+            'Invalid constraint operator names: {}'.format(operator_name)
+        )
+    else:
+        return (True, None)
 
 
 class MesosTaskConfig(PRecord):
@@ -82,6 +101,13 @@ class MesosTaskConfig(PRecord):
         factory=float,
         mandatory=False,
         invariant=lambda t: (t > 0, 'timeout > 0')
+    )
+    constraints = field(
+        type=PVector,
+        initial=v(),
+        factory=lambda c: pvector((Constraint(attribute=v[0], operator=v[1],
+                                              value=v[2]) for v in c)),
+        invariant=_valid_constraints,
     )
 
     @property

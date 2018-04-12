@@ -11,6 +11,8 @@ from six.moves.queue import Queue
 
 from task_processing.plugins.mesos import execution_framework as ef_mdl
 from task_processing.plugins.mesos import mesos_executor as me_mdl
+from task_processing.plugins.mesos.constraints import \
+    offer_matches_task_constraints
 
 
 @pytest.fixture
@@ -79,7 +81,11 @@ def fake_offer():
             Dict(
                 name='pool',
                 text=Dict(value='fake_pool_text')
-            )
+            ),
+            Dict(
+                name='region',
+                text=Dict(value='fake_region_text'),
+            ),
         ]
     )
 
@@ -204,6 +210,35 @@ def test_offer_matches_pool_no_match(ef, fake_offer):
     ef.pool = 'fake_other_pool_text'
     match, _ = ef.offer_matches_pool(fake_offer)
 
+    assert not match
+
+
+def test_offer_matches_constraints_no_constraints(ef, fake_task, fake_offer):
+    match = offer_matches_task_constraints(fake_offer, fake_task)
+    assert match
+
+
+def test_offer_matches_constraints_match(ef, fake_offer):
+    fake_task = me_mdl.MesosTaskConfig(
+        image='fake_image',
+        cmd='echo "fake"',
+        constraints=[
+            ['region', '==', 'fake_region_text'],
+        ],
+    )
+    match = offer_matches_task_constraints(fake_offer, fake_task)
+    assert match
+
+
+def test_offer_matches_constraints_no_match(ef, fake_offer):
+    fake_task = me_mdl.MesosTaskConfig(
+        image='fake_image',
+        cmd='echo "fake"',
+        constraints=[
+            ['region', '==', 'another_fake_region_text'],
+        ],
+    )
+    match = offer_matches_task_constraints(fake_offer, fake_task)
     assert not match
 
 
@@ -554,6 +589,7 @@ def test_resource_offers_launch(
     mock_time.return_value = 2.0
     ef.suppress_after = 0.0
     ef.offer_matches_pool = mock.Mock(return_value=(True, None))
+    ef_mdl.offer_matches_task_constraints = mock.Mock(return_value=True)
     task_id = fake_task.task_id
     docker_task = Dict(task_id=Dict(value=task_id))
     task_metadata = ef_mdl.TaskMetadata(
@@ -594,6 +630,7 @@ def test_resource_offers_launch_tasks_failed(
     mock_time.return_value = 2.0
     ef.suppress_after = 0.0
     ef.offer_matches_pool = mock.Mock(return_value=(True, None))
+    ef_mdl.offer_matches_task_constraints = mock.Mock(return_value=True)
     task_id = fake_task.task_id
     docker_task = Dict(task_id=Dict(value=task_id))
     task_metadata = ef_mdl.TaskMetadata(
@@ -725,6 +762,37 @@ def test_resource_offers_not_for_pool(
     assert fake_driver.launchTasks.call_count == 0
     assert mock_get_metric.call_count == 0
     assert mock_get_metric.return_value.count.call_count == 0
+
+
+def test_resource_offers_not_for_constraints(
+    ef,
+    fake_task,
+    fake_offer,
+    fake_driver,
+    mock_get_metric,
+):
+    ef_mdl.offer_matches_task_constraints = mock.Mock(return_value=False)
+
+    ef.task_queue.put(fake_task)
+    ef.resourceOffers(fake_driver, [fake_offer])
+
+    assert ef_mdl.offer_matches_task_constraints.call_count == 1
+    assert ef_mdl.offer_matches_task_constraints.call_args == mock.call(
+        fake_offer,
+        fake_task,
+    )
+    assert fake_driver.declineOffer.call_count == 1
+    assert fake_driver.declineOffer.call_args == mock.call(
+        [fake_offer.id],
+        ef.offer_decline_filter,
+    )
+    assert fake_driver.launchTasks.call_count == 0
+    assert mock_get_metric.call_count == 1
+    assert mock_get_metric.call_args == mock.call(
+        ef_mdl.TASK_INSUFFICIENT_OFFER_COUNT,
+    )
+    assert mock_get_metric.return_value.count.call_count == 1
+    assert mock_get_metric.return_value.count.call_args == mock.call(1)
 
 
 def test_resource_offers_unmet_reqs(

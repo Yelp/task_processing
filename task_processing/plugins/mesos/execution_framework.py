@@ -19,6 +19,8 @@ from task_processing.interfaces.event import task_event
 from task_processing.metrics import create_counter
 from task_processing.metrics import create_timer
 from task_processing.metrics import get_metric
+from task_processing.plugins.mesos.constraints import \
+    offer_matches_task_constraints
 from task_processing.plugins.mesos.translator import mesos_status_to_event
 
 
@@ -350,7 +352,8 @@ class ExecutionFramework(Scheduler):
                      remaining_mem >= task.mem and
                      remaining_disk >= task.disk and
                      remaining_gpus >= task.gpus and
-                     len(available_ports) > 0)):
+                     len(available_ports) > 0 and
+                     offer_matches_task_constraints(offer, task))):
                     # This offer is sufficient for us to launch task
                     tasks_to_launch.append(
                         self.create_new_docker_task(
