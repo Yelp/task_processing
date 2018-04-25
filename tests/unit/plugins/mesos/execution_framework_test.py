@@ -26,8 +26,11 @@ def ef(mock_Thread):
     return ef_mdl.ExecutionFramework("fake_name", "fake_role", 240)
 
 
-@pytest.fixture
-def fake_task():
+@pytest.fixture(
+    params=[None, 'fake_pool_text'],
+    ids=['without_pool', 'with_default_pool'],
+)
+def fake_task(request):
     return me_mdl.MesosTaskConfig(
         name='fake_name',
         cpus=10.0,
@@ -35,7 +38,8 @@ def fake_task():
         disk=1000.0,
         gpus=1,
         image='fake_image',
-        cmd='echo "fake"'
+        cmd='echo "fake"',
+        pool=request.param,
     )
 
 
@@ -348,7 +352,7 @@ def test_get_tasks_to_launch_sufficient_offer(
 
     ef.task_queue.put(fake_task)
     ef.task_metadata = ef.task_metadata.set(fake_task.task_id, task_metadata)
-    tasks_to_launch = ef.get_tasks_to_launch(fake_offer)
+    tasks_to_launch, _ = ef.get_tasks_to_launch(fake_offer)
 
     assert ef.create_new_docker_task.return_value in tasks_to_launch
     assert ef.task_queue.qsize() == 0
@@ -388,7 +392,7 @@ def test_get_tasks_to_launch_insufficient_offer(
     )
 
     ef.task_queue.put(task)
-    tasks_to_launch = ef.get_tasks_to_launch(fake_offer)
+    tasks_to_launch, _ = ef.get_tasks_to_launch(fake_offer)
 
     assert len(tasks_to_launch) == 0
     assert ef.task_queue.qsize() == 1
@@ -597,7 +601,7 @@ def test_resource_offers_launch(
         task_state='fake_state',
         task_state_history=m(fake_state=time.time())
     )
-    ef.get_tasks_to_launch = mock.Mock(return_value=[docker_task])
+    ef.get_tasks_to_launch = mock.Mock(return_value=([docker_task], True))
 
     ef.task_queue.put(fake_task)
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
@@ -638,7 +642,7 @@ def test_resource_offers_launch_tasks_failed(
         task_state='fake_state',
         task_state_history=m(fake_state=time.time())
     )
-    ef.get_tasks_to_launch = mock.Mock(return_value=[docker_task])
+    ef.get_tasks_to_launch = mock.Mock(return_value=([docker_task], True))
     ef.task_queue.put(fake_task)
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef.resourceOffers(ef.driver, [fake_offer])
@@ -662,7 +666,7 @@ def test_get_tasks_to_launch_no_ports(
     ef.get_available_ports = mock.Mock(return_value=[])
     ef.task_queue.put(fake_task)
 
-    tasks = ef.get_tasks_to_launch(fake_offer)
+    tasks, _ = ef.get_tasks_to_launch(fake_offer)
 
     assert len(tasks) == 0
     assert ef.task_queue.qsize() == 1
@@ -689,7 +693,7 @@ def test_get_tasks_to_launch_ports_available(
         task_metadata
     )
 
-    tasks = ef.get_tasks_to_launch(fake_offer)
+    tasks, _ = ef.get_tasks_to_launch(fake_offer)
 
     assert len(tasks) == 1
     assert ef.task_queue.qsize() == 0
@@ -740,15 +744,13 @@ def test_resource_offers_blacklisted_offer(
     assert mock_get_metric.return_value.count.call_count == 0
 
 
-def test_resource_offers_not_for_pool(
+def offers_not_for_pool(
     ef,
     fake_task,
     fake_offer,
     fake_driver,
     mock_get_metric
 ):
-    ef.offer_matches_pool = mock.Mock(return_value=(False, None))
-
     ef.task_queue.put(fake_task)
     ef.resourceOffers(fake_driver, [fake_offer])
 
@@ -760,8 +762,64 @@ def test_resource_offers_not_for_pool(
         ef.offer_decline_filter
     )
     assert fake_driver.launchTasks.call_count == 0
-    assert mock_get_metric.call_count == 0
-    assert mock_get_metric.return_value.count.call_count == 0
+    assert mock_get_metric.call_count == 1
+    assert mock_get_metric.call_args == mock.call(
+        ef_mdl.TASK_INSUFFICIENT_OFFER_COUNT,
+    )
+    assert mock_get_metric.return_value.count.call_count == 1
+    assert mock_get_metric.return_value.count.call_args == mock.call(1)
+
+
+def test_resource_offers_not_for_pool(
+    ef,
+    fake_task,
+    fake_offer,
+    fake_driver,
+    mock_get_metric
+):
+    ef.offer_matches_pool = mock.Mock(return_value=(False, None))
+
+    offers_not_for_pool(
+        ef,
+        fake_task,
+        fake_offer,
+        fake_driver,
+        mock_get_metric,
+    )
+
+
+def test_resource_offers_not_for_task_pool(
+    ef,
+    fake_offer,
+    fake_driver,
+    mock_get_metric
+):
+    task = me_mdl.MesosTaskConfig(
+        name='fake_name',
+        cpus=10.0,
+        mem=1024.0,
+        disk=1000.0,
+        gpus=1,
+        image='fake_image',
+        cmd='echo "fake"',
+        pool='fake_other_pool_text',
+    )
+    task_metadata = ef_mdl.TaskMetadata(
+        task_config=task,
+        task_state='TASK_INITED',
+        task_state_history=m(TASK_INITED=time.time()),
+    )
+    ef.task_metadata = ef.task_metadata.set(task.task_id, task_metadata)
+
+    ef.offer_matches_pool = mock.Mock(return_value=(True, 'fake_pool_text'))
+
+    offers_not_for_pool(
+        ef,
+        task,
+        fake_offer,
+        fake_driver,
+        mock_get_metric,
+    )
 
 
 def test_resource_offers_not_for_constraints(
@@ -802,7 +860,7 @@ def test_resource_offers_unmet_reqs(
     fake_driver,
     mock_get_metric
 ):
-    ef.get_tasks_to_launch = mock.Mock(return_value=[])
+    ef.get_tasks_to_launch = mock.Mock(return_value=([], True))
 
     ef.task_queue.put(fake_task)
     ef.resourceOffers(fake_driver, [fake_offer])
