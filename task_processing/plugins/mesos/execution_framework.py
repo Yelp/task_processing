@@ -215,15 +215,18 @@ class ExecutionFramework(Scheduler):
         self._reconcile_tasks_at += self._task_reconciliation_delay
 
     def offer_matches_pool(self, offer):
-        if self.pool is None:
-            # If pool is not specified, then we can accept offer from any agent
-            return True, None
+        offer_pool = None
 
         for attribute in offer.attributes:
             if attribute.name == "pool":
-                return attribute.text.value == self.pool, attribute.text.value
+                offer_pool = attribute.text.value
+                break
 
-        return False, None
+        if self.pool is None:
+            # If pool is not specified, then we can accept offer from any agent
+            return True, offer_pool
+
+        return offer_pool is not None and offer_pool == self.pool, offer_pool
 
     def kill_task(self, task_id):
         tmp_list = []
@@ -338,6 +341,9 @@ class ExecutionFramework(Scheduler):
             )
         )
 
+        offer_pool_match, offer_pool = self.offer_matches_pool(offer)
+        any_pool_match = False
+
         tasks_to_put_back_in_queue = []
 
         # Need to lock here even though we are working on the task_queue, since
@@ -348,11 +354,18 @@ class ExecutionFramework(Scheduler):
             while not self.task_queue.empty():
                 task = self.task_queue.get()
 
+                # If the task's pool is specified then it should match offer's
+                # pool, otherwise offer's pool should match executor's pool.
+                pool_match = task.pool == offer_pool if task.pool is not None \
+                    else offer_pool_match
+
+                any_pool_match = any_pool_match or pool_match
                 if ((remaining_cpus >= task.cpus and
                      remaining_mem >= task.mem and
                      remaining_disk >= task.disk and
                      remaining_gpus >= task.gpus and
                      len(available_ports) > 0 and
+                     pool_match and
                      offer_matches_task_constraints(offer, task))):
                     # This offer is sufficient for us to launch task
                     tasks_to_launch.append(
@@ -383,7 +396,16 @@ class ExecutionFramework(Scheduler):
             self.task_queue.put(task)
             get_metric(TASK_INSUFFICIENT_OFFER_COUNT).count(1)
 
-        return tasks_to_launch
+        if not any_pool_match:
+            log.info(
+                "Declining offer {id}, its pool {op} matches "
+                "neither executor's pool {sp} nor any tasks' pool".format(
+                    id=offer.id.value,
+                    sp=self.pool,
+                    op=offer_pool
+                ))
+
+        return tasks_to_launch, any_pool_match
 
     def create_new_docker_task(self, offer, task_config, available_ports):
         # Handle the case of multiple port allocations
@@ -608,25 +630,14 @@ class ExecutionFramework(Scheduler):
                     declined_offer_ids.append(offer.id)
                     continue
 
-            offer_pool_match, offer_pool = self.offer_matches_pool(offer)
-            if not offer_pool_match:
-                log.info(
-                    "Declining offer {id}, required pool {sp} doesn't match "
-                    "offered pool {op}".format(
-                        id=offer.id.value,
-                        sp=self.pool,
-                        op=offer_pool
-                    ))
-                declined['bad pool'].append(offer.id.value)
-                declined_offer_ids.append(offer.id)
-                continue
-
-            tasks_to_launch = self.get_tasks_to_launch(offer)
+            tasks_to_launch, pool_match = self.get_tasks_to_launch(offer)
 
             if len(tasks_to_launch) == 0:
                 if self.task_queue.empty():
                     if offer.id.value not in declined['no tasks']:
                         declined['no tasks'].append(offer.id.value)
+                elif not pool_match:
+                    declined['bad pool'].append(offer.id.value)
                 else:
                     declined['bad resources'].append(offer.id.value)
                 declined_offer_ids.append(offer.id)

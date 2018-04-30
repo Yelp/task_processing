@@ -109,6 +109,7 @@ class MesosTaskConfig(PRecord):
                                               value=v[2]) for v in c)),
         invariant=_valid_constraints,
     )
+    pool = field(type=(str, type(None)), initial=None)
 
     @property
     def task_id(self):
