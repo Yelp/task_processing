@@ -98,8 +98,8 @@ class MesosTaskConfig(PRecord):
     environment = field(type=PMap, initial=m(), factory=pmap)
     offer_timeout = field(
         type=float,
+        initial=60.0,
         factory=float,
-        mandatory=False,
         invariant=lambda t: (t > 0, 'timeout > 0')
     )
     constraints = field(
