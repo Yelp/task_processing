@@ -63,6 +63,7 @@ class ExecutionFramework(Scheduler):
         name,
         role,
         task_staging_timeout_s,
+        offer_queue,
         pool=None,
         translator=mesos_status_to_event,
         slave_blacklist_timeout_s=900,
@@ -79,6 +80,7 @@ class ExecutionFramework(Scheduler):
         self.translator = translator
         self.slave_blacklist_timeout_s = slave_blacklist_timeout_s
         self.offer_backoff = offer_backoff
+        self.offer_queue = offer_queue
 
         # TODO: why does this need to be root, can it be "mesos plz figure out"
         self.framework_info = Dict(
@@ -306,171 +308,7 @@ class ExecutionFramework(Scheduler):
                 break
         return ports
 
-    def get_tasks_to_launch(self, offer):
-        tasks_to_launch = []
-        remaining_cpus = 0
-        remaining_mem = 0
-        remaining_disk = 0
-        remaining_gpus = 0
-        available_ports = []
-        for resource in offer.resources:
-            if resource.name == "cpus" and resource.role == self.role:
-                remaining_cpus += resource.scalar.value
-            elif resource.name == "mem" and resource.role == self.role:
-                remaining_mem += resource.scalar.value
-            elif resource.name == "disk" and resource.role == self.role:
-                remaining_disk += resource.scalar.value
-            elif resource.name == "gpus" and resource.role == self.role:
-                remaining_gpus += resource.scalar.value
-            elif resource.name == "ports" and resource.role == self.role:
-                # TODO: Validate if the ports available > ports required
-                available_ports = self.get_available_ports(resource)
 
-        log.info(
-            "Received offer {id} with cpus: {cpu}, mem: {mem}, "
-            "disk: {disk} gpus: {gpu} role: {role}".format(
-                id=offer.id.value,
-                cpu=remaining_cpus,
-                mem=remaining_mem,
-                disk=remaining_disk,
-                gpu=remaining_gpus,
-                role=self.role
-            )
-        )
-
-        tasks_to_put_back_in_queue = []
-
-        # Need to lock here even though we are working on the task_queue, since
-        # we are predicating on the queue's emptiness. If not locked, other
-        # threads can continue enqueueing, and we never terminate the loop.
-        with self._lock:
-            # Get all the tasks of the queue
-            while not self.task_queue.empty():
-                task = self.task_queue.get()
-
-                if ((remaining_cpus >= task.cpus and
-                     remaining_mem >= task.mem and
-                     remaining_disk >= task.disk and
-                     remaining_gpus >= task.gpus and
-                     len(available_ports) > 0 and
-                     offer_matches_task_constraints(offer, task))):
-                    # This offer is sufficient for us to launch task
-                    tasks_to_launch.append(
-                        self.create_new_docker_task(
-                            offer,
-                            task,
-                            available_ports
-                        )
-                    )
-
-                    # Deduct the resources taken by this task from the total
-                    # available resources.
-                    remaining_cpus -= task.cpus
-                    remaining_mem -= task.mem
-                    remaining_disk -= task.disk
-                    remaining_gpus -= task.gpus
-
-                    md = self.task_metadata[task.task_id]
-                    get_metric(TASK_QUEUED_TIME_TIMER).record(
-                        time.time() - md.task_state_history['TASK_INITED']
-                    )
-                else:
-                    # This offer is insufficient for this task. We need to put
-                    # it back in the queue
-                    tasks_to_put_back_in_queue.append(task)
-
-        for task in tasks_to_put_back_in_queue:
-            self.task_queue.put(task)
-            get_metric(TASK_INSUFFICIENT_OFFER_COUNT).count(1)
-
-        return tasks_to_launch
-
-    def create_new_docker_task(self, offer, task_config, available_ports):
-        # Handle the case of multiple port allocations
-        port_to_use = available_ports[0]
-        available_ports[:] = available_ports[1:]
-
-        # TODO: this probably belongs in the caller
-        with self._lock:
-            md = self.task_metadata[task_config.task_id]
-            self.task_metadata = self.task_metadata.set(
-                task_config.task_id,
-                md.set(agent_id=str(offer.agent_id.value))
-            )
-
-        if task_config.containerizer == 'DOCKER':
-            container = Dict(
-                type='DOCKER',
-                volumes=thaw(task_config.volumes),
-                docker=Dict(
-                    image=task_config.image,
-                    network='BRIDGE',
-                    port_mappings=[Dict(host_port=port_to_use,
-                                        container_port=8888)],
-                    parameters=thaw(task_config.docker_parameters),
-                    force_pull_image=True,
-                ),
-            )
-        elif task_config.containerizer == 'MESOS':
-            container = Dict(
-                type='MESOS',
-                # for docker, volumes should include parameters
-                volumes=thaw(task_config.volumes),
-                network_infos=Dict(
-                    port_mappings=[Dict(host_port=port_to_use,
-                                        container_port=8888)],
-                ),
-            )
-            # For this to work, image_providers needs to be set to 'docker'
-            # on mesos agents
-            if 'image' in task_config:
-                container.mesos = Dict(
-                    image=Dict(
-                        type='DOCKER',
-                        docker=Dict(name=task_config.image),
-                    )
-                )
-
-        return Dict(
-            task_id=Dict(value=task_config.task_id),
-            agent_id=Dict(value=offer.agent_id.value),
-            name='executor-{id}'.format(id=task_config.task_id),
-            resources=[
-                Dict(name='cpus',
-                     type='SCALAR',
-                     role=self.role,
-                     scalar=Dict(value=task_config.cpus)),
-                Dict(name='mem',
-                     type='SCALAR',
-                     role=self.role,
-                     scalar=Dict(value=task_config.mem)),
-                Dict(name='disk',
-                     type='SCALAR',
-                     role=self.role,
-                     scalar=Dict(value=task_config.disk)),
-                Dict(name='gpus',
-                     type='SCALAR',
-                     role=self.role,
-                     scalar=Dict(value=task_config.gpus)),
-                Dict(name='ports',
-                     type='RANGES',
-                     role=self.role,
-                     ranges=Dict(
-                         range=[Dict(begin=port_to_use, end=port_to_use)]))
-            ],
-            command=Dict(
-                value=task_config.cmd,
-                uris=[
-                    Dict(value=uri, extract=False)
-                    for uri in task_config.uris
-                ],
-                environment=Dict(variables=[
-                    Dict(name=k, value=v) for k, v in
-                    task_config.environment.items()
-                ])
-            ),
-            container=container
-        )
 
     def stop(self):
         self.stopping = True
@@ -558,6 +396,7 @@ class ExecutionFramework(Scheduler):
         declined_offer_ids = []
         accepted = []
 
+
         with self._lock:
             if self.task_queue.empty():
                 if not self.are_offers_suppressed:
@@ -595,34 +434,55 @@ class ExecutionFramework(Scheduler):
                     agent_id=offer.agent_id.value,
                     timeout=duration,
                 )
+            declined_offer_ids.append(offer.id)
 
         without_maintenance_window = [
             offer for offer in offers if offer not in with_maintenance_window
         ]
-        for offer in without_maintenance_window:
-            with self._lock:
-                if offer.agent_id.value in self.blacklisted_slaves:
-                    declined['blacklisted'].append('offer {} agent {}'.format(
-                        offer.id.value, offer.agent_id.value
-                    ))
-                    declined_offer_ids.append(offer.id)
-                    continue
 
-            offer_pool_match, offer_pool = self.offer_matches_pool(offer)
-            if not offer_pool_match:
-                log.info(
-                    "Declining offer {id}, required pool {sp} doesn't match "
-                    "offered pool {op}".format(
-                        id=offer.id.value,
-                        sp=self.pool,
-                        op=offer_pool
-                    ))
-                declined['bad pool'].append(offer.id.value)
-                declined_offer_ids.append(offer.id)
-                continue
+        blacklisted_agent_offers = [
+           offer for offer in without_maintenance_window
+           if offer.agent_id.value in self.blacklisted_slaves
+        ]
 
-            tasks_to_launch = self.get_tasks_to_launch(offer)
+        [declined['blacklisted'].append('offer {} agent {}'.format(
+            offer.id.value, offer.agent_id.value
+        )) for offer in blacklisted_agent_offers]
 
+        declined_offer_ids = declined_offer_ids + blacklisted_agent_offers
+
+
+        pool_matches = zip(offers, [
+            self.offer_matches_pool(offer) for offer in without_maintenance_window
+        ])
+        bad_pool_matches = [
+            offer.id for offer, match, pool in pool_matches if not match
+        ]
+        declined_offer_ids = declined_offer_ids + bad_pool_matches
+
+        for offer in bad_pool_matches:
+            log.info(
+                "Declining offer {id}, required pool {sp} doesn't match "
+                "offered pool {op}".format(
+                    id=offer.id.value,
+                    sp=self.pool,
+                    op=offer_pool
+            ))
+            declined['bad pool'].append(offer.id.value)
+            declined_offer_ids.append(offer.id)
+            continue
+
+        acceptable_offers = list(set(without_maintenance_window) - set(blacklisted_agent_offers) - set(bad_pool_matches))
+        self.offer_queue.append(acceptable_offers)
+
+        def launch_tasks(self, tasks_to_launch, offer):
+            for task in tasks_to_launch:
+                with self._lock:
+                    md = self.task_metadata[task_config.task_id]
+                    self.task_metadata = self.task_metadata.set(
+                        task_config.task_id,
+                        md.set(agent_id=str(offer.agent_id.value))
+                    )
             if len(tasks_to_launch) == 0:
                 if self.task_queue.empty():
                     if offer.id.value not in declined['no tasks']:
@@ -630,7 +490,6 @@ class ExecutionFramework(Scheduler):
                 else:
                     declined['bad resources'].append(offer.id.value)
                 declined_offer_ids.append(offer.id)
-                continue
 
             accepted.append('offer: {} agent: {} tasks: {}'.format(
                 offer.id.value, offer.agent_id.value, len(tasks_to_launch)))
@@ -679,14 +538,14 @@ class ExecutionFramework(Scheduler):
                         )
                         get_metric(TASK_LAUNCHED_COUNT).count(1)
 
+
+    def reject_offers(self, offers):
         if len(declined_offer_ids) > 0:
             driver.declineOffer(declined_offer_ids, self.offer_decline_filter)
         for reason, items in declined.items():
             if items:
                 log.info("Offers declined because of {}: {}".format(
                     reason, ', '.join(items)))
-        if accepted:
-            log.info("Offers accepted: {}".format(', '.join(accepted)))
 
     def statusUpdate(self, driver, update):
         task_id = update.task_id.value

@@ -23,7 +23,7 @@ def mock_Thread():
 
 @pytest.fixture
 def ef(mock_Thread):
-    return ef_mdl.ExecutionFramework("fake_name", "fake_role", 240)
+    return ef_mdl.ExecutionFramework("fake_name", "fake_role", 240, Queue())
 
 
 @pytest.fixture
