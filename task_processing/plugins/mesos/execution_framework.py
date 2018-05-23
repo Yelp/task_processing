@@ -674,8 +674,9 @@ class ExecutionFramework(Scheduler):
                             offer=offer,
                         )
                         self.event_queue.put(
-                            self.translator(update, task.task_id.value).set(
-                                task_config=md.task_config
+                            self.translator(
+                                update, task.task_id.value,
+                                task_config=md.task_config,
                             )
                         )
                         get_metric(TASK_LAUNCHED_COUNT).count(1)
@@ -740,8 +741,7 @@ class ExecutionFramework(Scheduler):
                 )
 
             self.event_queue.put(
-                self.translator(update, task_id).set(
-                    task_config=md.task_config)
+                self.translator(update, task_id, task_config=md.task_config)
             )
 
             if task_state in self._terminal_task_counts:
