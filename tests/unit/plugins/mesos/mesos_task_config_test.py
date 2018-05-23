@@ -1,3 +1,5 @@
+from pyrsistent import InvariantException
+
 from task_processing.plugins.mesos.mesos_executor import MesosTaskConfig
 
 
@@ -16,3 +18,10 @@ def test_mesos_task_config_factories():
 
     assert type(m.gpus) is int
     assert m.gpus == 6
+
+    try:
+        m = m.set(name='a'*256)
+        assert False, 'Task id longer than 255 characters was accepted'
+    except InvariantException as e:
+        print(e)
+        assert True
