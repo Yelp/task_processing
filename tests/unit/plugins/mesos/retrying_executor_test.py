@@ -194,3 +194,24 @@ def test_retry_loop_does_not_retry_task(mock_retrying_executor):
 
     assert mock_retrying_executor.dest_queue.qsize() == 1
     assert len(mock_retrying_executor.task_retries) == 0
+
+
+def test_retry_loop_filters_out_non_task(mock_retrying_executor):
+    mock_event = Event(
+        kind='control',
+        raw='some message',
+        message='stop',
+        terminal=True
+    )
+
+    mock_retrying_executor.stopping = True
+    mock_retrying_executor._is_current_attempt = mock.Mock(return_value=True)
+    mock_retrying_executor.event_with_retries = mock.Mock()
+    mock_retrying_executor.retry = mock.Mock(return_value=True)
+    mock_retrying_executor.retry_pred = mock.Mock(return_value=True)
+    mock_retrying_executor.src_queue = Queue()
+    mock_retrying_executor.src_queue.put(mock_event)
+
+    mock_retrying_executor.retry_loop()
+
+    assert mock_retrying_executor.dest_queue.qsize() == 1
