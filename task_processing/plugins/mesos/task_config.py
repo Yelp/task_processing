@@ -44,8 +44,16 @@ def _valid_constraints(constraints):
 
 class MesosTaskConfig(PRecord):
     def __invariant__(conf):
-        return ('image' in conf if conf.containerizer == 'DOCKER' else True,
-                'Image required for chosen containerizer')
+        return (
+            (
+                'image' in conf if conf.containerizer == 'DOCKER' else True,
+                'Image required for chosen containerizer',
+            ),
+            (
+                len(conf.task_id) <= 255,
+                'task_id is longer than 255 chars: {}'.format(conf.task_id)
+            ),
+        )
 
     uuid = field(type=(str, uuid.UUID), initial=uuid.uuid4)
     name = field(type=str, initial="default")
