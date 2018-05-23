@@ -54,6 +54,7 @@ texts = st.text(max_size=5)
 events = st.builds(
     Event,
     kind=st.sampled_from(['task', 'control']),
+    task_id=texts,
     timestamp=st.floats(min_value=0, allow_nan=False, allow_infinity=False),
     terminal=st.booleans(),
     success=st.booleans(),
