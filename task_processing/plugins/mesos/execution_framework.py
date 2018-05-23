@@ -157,7 +157,8 @@ class ExecutionFramework(Scheduler):
                                     terminal=True,
                                     timestamp=time.time(),
                                     success=False,
-                                    message='stop'
+                                    message='stop',
+                                    task_config=md.task_config,
                                 ))
                             get_metric(TASK_OFFER_TIMEOUT).count(1)
 

@@ -66,6 +66,11 @@ class RetryingExecutor(TaskExecutor):
         while True:
             while not self.src_queue.empty():
                 e = self.src_queue.get()
+
+                if e.kind != 'task':
+                    self.dest_queue.put(e)
+                    continue
+
                 # This is to remove trailing '-retry*'
                 original_task_id = '-'.join([item for item in
                                              e.task_id.split('-')[:-1]])
@@ -77,10 +82,6 @@ class RetryingExecutor(TaskExecutor):
 
                 # Set the task id back to original task_id
                 e = self._restore_task_id(e, original_task_id)
-
-                if e.kind != 'task':
-                    self.dest_queue.put(e)
-                    continue
 
                 e = self.event_with_retries(e)
 
