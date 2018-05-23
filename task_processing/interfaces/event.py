@@ -16,7 +16,7 @@ EVENT_TASK_ATTRS = {'task_id', 'task_config'}
 class Event(PRecord):
 
     @staticmethod
-    def validate_task(r):
+    def validate_task_event(r):
         if r.kind != 'task':
             return True, 'Not a task event'
 
@@ -27,7 +27,7 @@ class Event(PRecord):
         return True, 'Task is valid'
 
     def __invariant__(r): return (
-        Event.validate_task(r),
+        Event.validate_task_event(r),
     )
 
     kind = field(type=str,
