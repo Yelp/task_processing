@@ -37,10 +37,11 @@ MESOS_STATUS_MAP = {
 
 
 def mesos_status_to_event(mesos_status, task_id, **kwargs):
-    return task_event(
+    kwargs2 = dict(
         raw=mesos_status,
         task_id=str(task_id),
         timestamp=time.time(),
-        **MESOS_STATUS_MAP[mesos_status.state],
-        **kwargs,
     )
+    kwargs2.update(MESOS_STATUS_MAP[mesos_status.state])
+    kwargs2.update(kwargs)
+    return task_event(**kwargs2)
