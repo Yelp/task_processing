@@ -2,6 +2,7 @@
 import logging
 
 from common import parse_args
+from pyrsistent import v
 
 from task_processing.runners.sync import Sync
 from task_processing.task_processor import TaskProcessor
@@ -33,13 +34,19 @@ def main():
     )
 
     TaskConfig = mesos_executor.TASK_CONFIG_INTERFACE
+    PodConfig = mesos_executor.POD_CONFIG_INTERFACE
     runner = Sync(executor=executor)
-    task_config = TaskConfig(
-        image='docker-dev.yelpcorp.com/dumb-busybox',
-        cmd='/bin/false',
-        retries=2
+    pod_config = PodConfig(
+        tasks=v(
+            TaskConfig(
+                containerizer='MESOS',
+                image='docker-dev.yelpcorp.com/trusty_yelp',
+                cmd='/bin/sleep 20 && /bin/false'
+            )
+        ),
+        retries=3
     )
-    result = runner.run(task_config)
+    result = runner.run(pod_config)
     print(result)
 
     runner.stop()

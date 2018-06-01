@@ -38,6 +38,7 @@ def main():
     )
 
     TaskConfig = mesos_executor.TASK_CONFIG_INTERFACE
+    PodConfig = mesos_executor.POD_CONFIG_INTERFACE
     runner = Async(
         mesos_executor,
         [EventHandler(
@@ -45,20 +46,21 @@ def main():
             cb=c.process_event,
         )]
     )
-    timeout_task_config = TaskConfig(
+    pod_config = TaskConfig(
         image='busybox',
         cmd='exec /bin/sleep 100',
         offer_timeout=5.0,
-        cpus=20,
+        cpus=40,
         mem=2048,
         disk=2000,
     )
-    runner.run(timeout_task_config)
+
+    runner.run(pod_config)
 
     for _ in range(50):
         if c.terminated >= 1:
             break
-        print("waiting for task %s to finish" % (timeout_task_config.task_id))
+        print("waiting for task %s to finish" % (pod_config.task_id))
         time.sleep(2)
 
     runner.stop()

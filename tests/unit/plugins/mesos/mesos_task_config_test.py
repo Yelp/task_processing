@@ -1,4 +1,4 @@
-from task_processing.plugins.mesos.task_config import MesosTaskConfig
+from task_processing.plugins.mesos.config import MesosTaskConfig
 
 
 def test_mesos_task_config_factories():

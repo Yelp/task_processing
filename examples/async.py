@@ -3,6 +3,7 @@ import logging
 import time
 
 from common import parse_args
+from pyrsistent import v
 
 from task_processing.runners.async import Async
 from task_processing.runners.async import EventHandler
@@ -45,13 +46,29 @@ def main():
     )
 
     TaskConfig = executor.TASK_CONFIG_INTERFACE
-    tasks_to_launch = 2
-    for _ in range(tasks_to_launch):
-        task_config = TaskConfig(image='busybox', cmd='/bin/true')
-        runner.run(task_config)
+    PodConfig = executor.POD_CONFIG_INTERFACE
+    tasks_to_launch = 5
+    task_configs = []
 
-    for _ in range(5):
-        print('terminated {} tasks'.format(counter.terminated))
+    pod_config = PodConfig(
+        tasks=v(
+            TaskConfig(containerizer='MESOS', cni_network='cni-test',
+                       image='alpine', cmd='/bin/sleep 1200'),
+            TaskConfig(containerizer='MESOS', cni_network='cni-test',
+                       image='alpine', cmd='/bin/sleep 1200'),
+            TaskConfig(containerizer='MESOS', cni_network='cni-test',
+                       image='alpine', cmd='/bin/sleep 1200'),
+            TaskConfig(containerizer='MESOS', cni_network='cni-test',
+                       image='alpine', cmd='/bin/sleep 1200'),
+            TaskConfig(containerizer='MESOS', cni_network='cni-test',
+                       image='alpine', cmd='/bin/sleep 1200'),
+        )
+    )
+    runner.run(pod_config)
+    # runner.run(TaskConfig(containerizer='MESOS', image='busybox', cmd='/bin/sleep 120'))
+    time.sleep(20)
+
+    while True:
         if counter.terminated >= tasks_to_launch:
             break
         time.sleep(2)

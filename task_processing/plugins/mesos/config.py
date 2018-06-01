@@ -61,7 +61,7 @@ class MesosTaskConfig(PRecord):
                     factory=int,
                     mandatory=False,
                     invariant=lambda r: (r >= 0, 'retries >= 0'))
-    cni_network = field(type=str, initial='cni-test')
+    cni_network = field(type=(str, type(None)), initial=None)
     http_health_check_port = field(type=(int, type(None)),
                                    mandatory=False,
                                    initial=type(None))

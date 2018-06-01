@@ -5,7 +5,7 @@ import pytest
 from six.moves.queue import Queue
 
 from task_processing.interfaces.event import Event
-from task_processing.plugins.mesos.task_config import MesosTaskConfig
+from task_processing.plugins.mesos.config import MesosTaskConfig
 from task_processing.plugins.mesos.retrying_executor import RetryingExecutor
 
 

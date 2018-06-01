@@ -4,13 +4,11 @@ import threading
 from pymesos import MesosSchedulerDriver
 
 from task_processing.interfaces.task_executor import TaskExecutor
+from task_processing.plugins.mesos.config import MesosPodConfig
+from task_processing.plugins.mesos.config import MesosTaskConfig
 from task_processing.plugins.mesos.execution_framework import (
     ExecutionFramework
 )
-from task_processing.plugins.mesos.task_config import MesosTaskConfig
-from task_processing.plugins.mesos.translator import mesos_status_to_event
-from task_processing.plugins.mesos.task_config import MesosPodConfig
-from task_processing.plugins.mesos.task_config import MesosTaskConfig
 
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'

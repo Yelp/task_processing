@@ -1,6 +1,9 @@
+import logging
 import time
 
 from task_processing.interfaces.event import task_event
+
+log = logging.getLogger(__name__)
 
 # https://github.com/apache/mesos/blob/master/include/mesos/mesos.proto
 
@@ -40,7 +43,10 @@ MESOS_STATUS_MAP = {
 
 
 def mesos_status_to_task_event(mesos_status, task_id):
+    log.warning(
+        'This should not be getting called ************************* {}'.format(mesos_status.task_id))
     return MESOS_STATUS_MAP[mesos_status.state].set(
+        kind='task',
         raw=mesos_status,
         task_id=str(task_id),
         timestamp=time.time(),
@@ -49,6 +55,7 @@ def mesos_status_to_task_event(mesos_status, task_id):
 
 def mesos_status_to_pod_event(task_state, mesos_status_per_task, pod_id):
     return MESOS_STATUS_MAP[task_state].set(
+        kind='pod',
         mesos_status_per_task_id=mesos_status_per_task,
         task_id=str(pod_id),
         timestamp=time.time(),

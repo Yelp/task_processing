@@ -53,6 +53,7 @@ log = logging.getLogger(__name__)
 
 class TaskMetadata(PRecord):
     agent_id = field(type=str, initial='')
+    is_pod = field(type=bool, initial=False)
     pod_id = field(type=(str, type(None)), initial=None)
     terminated = field(type=bool, initial=False)
     task_config = field(type=PRecord, mandatory=True)
@@ -71,7 +72,7 @@ class ExecutionFramework(Scheduler):
         offer_backoff=10,
         suppress_delay=10,
         initial_decline_delay=1,
-        task_reconciliation_delay=300,
+        task_reconciliation_delay=300
     ):
         self.name = name
         self._framework_id = None
@@ -131,12 +132,14 @@ class ExecutionFramework(Scheduler):
             with self._lock:
                 for task_id in self.task_metadata.keys():
                     md = self.task_metadata[task_id]
+                    if md.is_pod is True:
+                        continue
 
                     if md.task_state == 'TASK_INITED':
                         # give up if the task hasn't launched after
                         # offer_timeout
                         if time_now >= (
-                            md.task_state_history[md.task_state] +
+                            md.task_state_history[md.task_state]['time_stamp'] +
                             md.task_config.offer_timeout
                         ):
                             log.warning((
@@ -161,11 +164,11 @@ class ExecutionFramework(Scheduler):
                                     success=False,
                                     message='stop'
                                 ))
-                            get_metric('TASK_OFFER_TIMEOUT').count(1)
+                            get_metric(TASK_OFFER_TIMEOUT).count(1)
 
                     # Task is not eligible for killing or reenqueuing
                     if time_now < (md.task_state_history[md.task_state]
-                        ['time_stamp'] + self.task_staging_timeout_s):
+                                   ['time_stamp'] + self.task_staging_timeout_s):
                         continue
 
                     if md.task_state == 'UNKNOWN':
@@ -238,10 +241,11 @@ class ExecutionFramework(Scheduler):
                     if task in self._pod_to_task_mappings:
                         for t in self._pod_to_task_mappings[task_id]:
                             self.task_metadata = self.task_metadata.discard(t)
+
                         self._pod_to_task_mappings = \
                             self._pod_to_task_mappings.discard(task_id)
-                    else:
-                        self.task_metadata = self.task_metadata.discard(t)
+
+                    self.task_metadata = self.task_metadata.discard(task_id)
                 else:
                     tmp_list.append(task)
 
@@ -285,6 +289,22 @@ class ExecutionFramework(Scheduler):
         # task_state and task_state_history get reset every time
         # a task is enqueued.
         with self._lock:
+            self.task_metadata = self.task_metadata.set(
+                task_config.task_id,
+                TaskMetadata(
+                    task_config=task_config,
+                    pod_id=None,
+                    is_pod=is_pod(task_config),
+                    task_state='TASK_INITED',
+                    task_state_history=m(
+                        TASK_INITED=m(
+                            time_stamp=time.time(),
+                            status_update=Dict()
+                        )
+                    ),
+                )
+            )
+
             if is_pod(task_config):
                 pod_id = task_config.task_id
                 nested_container_ids = []
@@ -300,6 +320,7 @@ class ExecutionFramework(Scheduler):
                         TaskMetadata(
                             task_config=task,
                             pod_id=pod_id,
+                            is_pod=False,
                             task_state='TASK_INITED',
                             task_state_history=m(
                                 TASK_INITED=m(
@@ -318,23 +339,11 @@ class ExecutionFramework(Scheduler):
                 get_metric(POD_ENQUEUED_COUNT).count(1)
 
             else:
-                self.task_metadata = self.task_metadata.set(
-                    task_config.task_id,
-                    TaskMetadata(
-                        task_config=task_config,
-                        pod_id=None,
-                        task_state='TASK_INITED',
-                        task_state_history=m(
-                            TASK_INITED=m(
-                                time_stamp=time.time(),
-                                status_update=Dict()
-                            )
-                        ),
-                    )
-                )
                 get_metric(TASK_ENQUEUED_COUNT).count(1)
 
     def enqueue_task(self, task_config):
+        log.warning('Calling enqueue task again for {}'.format(
+            task_config.task_id))
         self._initialize_metadata(task_config)
         with self._lock:
             # Need to lock on task_queue to prevent enqueues when getting
@@ -419,6 +428,7 @@ class ExecutionFramework(Scheduler):
                 else:
                     cpus = task.cpus
                     mem = task.mem
+                    disk = task.disk
                     ports = task.ports
                     gpus = task.gpus
                     ports = len(task.ports)
@@ -597,7 +607,7 @@ class ExecutionFramework(Scheduler):
                     ),
                 )
 
-            if 'cni_network' in task_config:
+            if task_config.cni_network is not None:
                 container.network_infos = [Dict(
                     protocol='IPv4',
                     port_mappings=port_mappings,
@@ -696,8 +706,9 @@ class ExecutionFramework(Scheduler):
 
         return tm
 
-    def _update_internal_state(self, task_id, task_state, metadata, update):
+    def _update_internal_state(self, task_id, task_state, update):
         is_terminal = task_state in self._terminal_task_counts
+        metadata = self.task_metadata[task_id]
 
         with self._lock:
             self.task_metadata = self.task_metadata.set(
@@ -717,7 +728,7 @@ class ExecutionFramework(Scheduler):
 
         if metadata.pod_id is not None:
             # This container belongs to a pod. Iterate over all the nested
-            # tasks and check the status of those tasks.
+            # tasks of this pod and check the status of those tasks.
             all_tasks_terminated = True
             state_changed = True
             for t in self._pod_to_task_mappings[metadata.pod_id]:
@@ -744,10 +755,10 @@ class ExecutionFramework(Scheduler):
                         ),
                         md.pod_id
                     ).set(
-                        task_config_per_task_id= \
-                        self._aggregate_task_configs_for_pod(
+                        task_config_per_task_id=self._aggregate_task_configs_for_pod(
                             md.pod_id
-                        )
+                        ),
+                        task_config=self.task_metadata[metadata.pod_id].task_config
                     )
                 )
 
@@ -758,8 +769,8 @@ class ExecutionFramework(Scheduler):
                         self.task_metadata = \
                             self.task_metadata.discard(t)
 
-                    self._pod_to_task_mappings = self._pod_to_task_mappings.
-                        discard(metadata.pod_id)
+                    self._pod_to_task_mappings = \
+                        self._pod_to_task_mappings.discard(metadata.pod_id)
 
                 get_metric(self._terminal_task_counts[task_state]).count(
                     1
@@ -791,7 +802,7 @@ class ExecutionFramework(Scheduler):
             TASK_STUCK_COUNT,                    BLACKLISTED_AGENTS_COUNT,
             TASK_LOST_DUE_TO_INVALID_OFFER_COUNT,
             TASK_LAUNCH_FAILED_COUNT,            TASK_FAILED_TO_LAUNCH_COUNT,
-            POD_ENQUEUED_COUNT
+            POD_ENQUEUED_COUNT,                  TASK_OFFER_TIMEOUT
         ]
         for cnt in counters:
             create_counter(cnt, default_dimensions)
@@ -990,13 +1001,10 @@ class ExecutionFramework(Scheduler):
                             state='TASK_STAGING',
                             offer=offer,
                         )
-                        self.event_queue.put(
-                            mesos_status_to_task_event(
-                                update,
-                                task.task_id.value
-                            ).set(
-                                task_config=md.task_config
-                            )
+                        self._update_internal_state(
+                            task.task_id.value,
+                            'TASK_STAGING',
+                            update
                         )
                         get_metric(TASK_LAUNCHED_COUNT).count(1)
 
@@ -1049,7 +1057,7 @@ class ExecutionFramework(Scheduler):
         # Record state changes, send a new event and emit metrics only if the
         # task state has actually changed.
         if md.task_state != task_state:
-            self._update_internal_state(task_id, task_state, md, update)
+            self._update_internal_state(task_id, task_state, update)
 
         # We have to do this because we are not using implicit
         # acknowledgements.

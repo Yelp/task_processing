@@ -4,6 +4,7 @@ from threading import Lock
 from threading import Thread
 
 from pyrsistent import m
+from pyrsistent import v
 from six.moves.queue import Queue
 
 from task_processing.interfaces.task_executor import TaskExecutor
@@ -47,10 +48,10 @@ class RetryingExecutor(TaskExecutor):
             return False
 
         total_retries = self._task_or_executor_retries(event.task_config)
-        log.info(
-            'Retrying task {}, {} of {}, fail event: {}'.format(
+        log.warning(
+            'Retrying task {}, {} of {} '.format(
                 event.task_config.name, total_retries - retries_remaining + 1,
-                total_retries, event.raw
+                total_retries
             )
         )
 
@@ -59,6 +60,7 @@ class RetryingExecutor(TaskExecutor):
                 event.task_id,
                 retries_remaining - 1
             )
+
         self.run(event.task_config)
 
         return True
@@ -67,9 +69,8 @@ class RetryingExecutor(TaskExecutor):
         while True:
             while not self.src_queue.empty():
                 e = self.src_queue.get()
-                # This is to remove trailing '-retry*'
-                original_task_id = '-'.join([item for item in
-                                             e.task_id.split('-')[:-1]])
+
+                original_task_id = self._remove_retry_suffix(e.task_id)
 
                 # Check if the update is for current attempt. Discard if
                 # it is not.
@@ -79,7 +80,7 @@ class RetryingExecutor(TaskExecutor):
                 # Set the task id back to original task_id
                 e = self._restore_task_id(e, original_task_id)
 
-                if e.kind != 'task':
+                if e.kind not in ('task', 'pod'):
                     self.dest_queue.put(e)
                     continue
 
@@ -108,7 +109,11 @@ class RetryingExecutor(TaskExecutor):
                     task_config.task_id,
                     self._task_or_executor_retries(task_config)
                 )
-        self.executor.run(self._task_config_with_retry(task_config))
+
+        if is_pod(task_config):
+            self.executor.run(self._task_config_with_retry(task_config))
+        else:
+            self.executor.run(self._task_config_with_retry(task_config))
 
     def kill(self, task_id):
         # retries = -1 so that manually killed tasks can be distinguished
@@ -128,12 +133,72 @@ class RetryingExecutor(TaskExecutor):
         return self.dest_queue
 
     def _task_config_with_retry(self, task_config):
-        return task_config.set(uuid='{id}-retry{attempt}'.format(
-            id=task_config.uuid,
-            attempt=self.task_retries[task_config.task_id]
-        ))
+        if not is_pod(task_config):
+            return task_config.set(uuid='{id}-retry{attempt}'.format(
+                id=task_config.uuid,
+                attempt=self.task_retries[task_config.task_id]
+            ))
+        else:
+            attempt = self.task_retries[task_config.task_id]
+            tmp_list = v()
+            for task in task_config.tasks:
+                tmp_list = tmp_list.append(
+                    task.set(uuid='{id}-retry{attempt}'.format(
+                        id=task_config.uuid,
+                        attempt=attempt
+                    ))
+                )
+            task_config = task_config.set(
+                uuid='{id}-retry{attempt}'.format(
+                    id=task_config.uuid,
+                    attempt=attempt
+                ),
+                tasks=tmp_list
+            )
+            return task_config
 
     def _restore_task_id(self, e, original_task_id):
+        if e.kind is 'pod':
+            # Fix the uuid of the nested containers
+            tmp_task_config_map = m()
+            tmp_mesos_status_map = m()
+            for task_id in e.task_config_per_task_id:
+                task_config = e.task_config_per_task_id[task_id]
+                task_config = task_config.set(
+                    uuid='-'.join(
+                        [item for item in
+                         str(task_config.uuid).split('-')[:-1]]
+                    )
+                )
+                tmp_task_config_map = tmp_task_config_map.set(
+                    task_config.task_id,
+                    task_config
+                )
+
+                status_update = e.mesos_status_per_task_id[task_id]
+                status_update['task_id'] = task_config.task_id
+                tmp_mesos_status_map = tmp_mesos_status_map.set(
+                    status_update.task_id,
+                    status_update
+                )
+
+            task_config = e.task_config
+            task_config = task_config.set(
+                uuid='-'.join(
+                    [item for item in
+                     str(task_config.uuid).split('-')[:-1]]
+                )
+            )
+
+            e = e.set(
+                task_id=original_task_id,
+                task_config_per_task_id=tmp_task_config_map,
+                mesos_status_per_task_id=tmp_mesos_status_map,
+                task_config=task_config
+            )
+
+            return e
+
         task_config = e.task_config.set(uuid='-'.join(
             [item for item in str(e.task_config.uuid).split('-')[:-1]]
         ))
@@ -158,3 +223,7 @@ class RetryingExecutor(TaskExecutor):
     def _task_or_executor_retries(self, task_config):
         return task_config.retries \
             if 'retries' in task_config else self.retries
+
+    def _remove_retry_suffix(self, task_id):
+        return '-'.join([item for item in
+                         task_id.split('-')[:-1]])
