@@ -22,10 +22,6 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 # Read task log in 4K chunks
 TASK_LOG_CHUNK_LEN = 4096
-DESTINATIONS = {
-    'standard',  # stdout/stderr
-    'python',  # Python logging
-}
 DEFAULT_FORMAT = '{task_id}[{container_id}@{agent}]: {line}'
 
 class LogMetadata(PRecord):
@@ -38,17 +34,19 @@ class LogMetadata(PRecord):
     executor_id = field(type=str, initial='')
 
 
+def standard_handler(task_id, message, stream):
+    print(message, file=sys.stderr if stream is 'stderr' else sys.stdout)
+
 class MesosLoggingExecutor(TaskExecutor):
     def __init__(
         self,
         downstream_executor,
-        destination='standard',
-        name=None,
+        handler=None,
         format_string=None,
     ):
         self.downstream_executor = downstream_executor
         self.TASK_CONFIG_INTERFACE = downstream_executor.TASK_CONFIG_INTERFACE
-        self.name = name or (__name__ + '.tasks')
+        self.handler = handler or standard_handler
         self.format_string = format_string or DEFAULT_FORMAT
 
         self.src_queue = downstream_executor.get_event_queue()
@@ -58,7 +56,6 @@ class MesosLoggingExecutor(TaskExecutor):
         self.staging_tasks = m()
         self.running_tasks = m()
         self.done_tasks = v()
-        self.setup_loggers(destination)
 
         # A lock is needed to synchronize logging and event processing
         self.task_lock = Lock()
@@ -71,44 +68,14 @@ class MesosLoggingExecutor(TaskExecutor):
         self.logging_thread.daemon = True
         self.logging_thread.start()
 
-    def setup_loggers(self, destination):
-        if destination not in DESTINATIONS:
-            log.warning(
-                'Logging destination {dest} not supported, '
-                'using stdout/err'.format(destination)
-            )
-            destination = 'standard'
-        if destination == 'python':
-            self.task_loggers = m()
-        self.destination = destination
-
-    def setup_task_logger(self, task_id):
-        if self.destination == 'python':
-            if task_id not in self.task_loggers:
-                self.task_loggers = self.task_loggers.set(task_id, {
-                    'stderr': logging.getLogger('{}.{}.{}'.format(self.name, task_id, 'stderr')),
-                    'stdout': logging.getLogger('{}.{}.{}'.format(self.name, task_id, 'stdout')),
-                })
-
-    def cleanup_task_logger(self, task_id):
-        if self.destination == 'python':
-            self.task_loggers = self.task_loggers.discard(task_id)
-
     def log_line(self, stream, line, task_id, container_id, agent):
-        self.setup_task_logger(task_id)
         formatted_line = self.format_string.format(
             task_id=task_id,
             container_id=container_id,
             agent=agent,
             line=line,
         )
-        if self.destination == 'standard':
-            print(
-                formatted_line,
-                file=sys.stderr if stream is 'stderr' else sys.stdout,
-            )
-        elif self.destination == 'python':
-            self.task_loggers[task_id][stream].info(formatted_line)
+        self.handler(task_id, formatted_line, stream)
 
     def set_task_log_path(self, task_id):
         log_md = self.running_tasks[task_id]
@@ -242,7 +209,6 @@ class MesosLoggingExecutor(TaskExecutor):
                 with self.task_lock:
                     self.done_tasks = self.done_tasks.remove(task_id)
                     self.running_tasks = self.running_tasks.discard(task_id)
-                    self.cleanup_task_logger(task_id)
 
             if self.stopping:
                 return
