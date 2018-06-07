@@ -13,6 +13,7 @@ from task_processing.plugins.mesos.translator import mesos_status_to_event
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
 logging.basicConfig(format=FORMAT)
 
+
 class MesosExecutor(TaskExecutor):
     TASK_CONFIG_INTERFACE = MesosTaskConfig
 

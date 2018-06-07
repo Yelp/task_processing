@@ -24,6 +24,7 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 TASK_LOG_CHUNK_LEN = 4096
 DEFAULT_FORMAT = '{task_id}[{container_id}@{agent}]: {line}'
 
+
 class LogMetadata(PRecord):
     log_url = field(type=str, initial='')
     log_path = field(type=str, initial='')
@@ -37,17 +38,18 @@ class LogMetadata(PRecord):
 def standard_handler(task_id, message, stream):
     print(message, file=sys.stderr if stream is 'stderr' else sys.stdout)
 
+
 class MesosLoggingExecutor(TaskExecutor):
     def __init__(
         self,
         downstream_executor,
-        handler=None,
-        format_string=None,
+        handler=standard_handler,
+        format_string=DEFAULT_FORMAT,
     ):
         self.downstream_executor = downstream_executor
         self.TASK_CONFIG_INTERFACE = downstream_executor.TASK_CONFIG_INTERFACE
-        self.handler = handler or standard_handler
-        self.format_string = format_string or DEFAULT_FORMAT
+        self.handler = handler
+        self.format_string = format_string
 
         self.src_queue = downstream_executor.get_event_queue()
         self.dest_queue = Queue()
