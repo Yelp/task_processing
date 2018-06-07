@@ -1,5 +1,0 @@
-# Library so -e .
--e .
-boto3
-pyrsistent
-requests

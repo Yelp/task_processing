@@ -1,7 +1,6 @@
 import abc
 import uuid
 
-import six
 from pyrsistent import field
 from pyrsistent import PRecord
 
@@ -11,8 +10,7 @@ class DefaultTaskConfigInterface(PRecord):
     name = field(type=str, initial='default')
 
 
-@six.add_metaclass(abc.ABCMeta)
-class TaskExecutor(object):
+class TaskExecutor(metaclass=abc.ABCMeta):
     """The core interface for Task Processing
     This is the class you want to implement to add a new TaskExecutor
     """

@@ -1,10 +1,7 @@
 import abc
 
-import six
 
-
-@six.add_metaclass(abc.ABCMeta)
-class Persister():
+class Persister(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def read(self, task_id):

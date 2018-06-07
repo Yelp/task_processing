@@ -5,7 +5,7 @@ except Exception:
     METRICS_ENABLED = False
 
 
-class _DummyMetricType(object):
+class _DummyMetricType:
     """
     Emulates a yelp_meteorite counter, gauge, or timer
     """

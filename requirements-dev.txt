@@ -1,5 +1,7 @@
-hypothesis
 # Testing dependencies
+docker-compose
+flake8
+hypothesis
 mock
 pre-commit
 pytest

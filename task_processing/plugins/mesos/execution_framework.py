@@ -2,6 +2,7 @@ import logging
 import socket
 import threading
 import time
+from queue import Queue
 
 from addict import Dict
 from pymesos.interface import Scheduler
@@ -12,7 +13,6 @@ from pyrsistent import pmap
 from pyrsistent import PRecord
 from pyrsistent import thaw
 from pyrsistent import v
-from six.moves.queue import Queue
 
 from task_processing.interfaces.event import control_event
 from task_processing.interfaces.event import task_event

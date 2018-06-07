@@ -42,7 +42,6 @@ services:
       - mesosagent
       - dynamodb
     volumes:
-      - ../..:/src
       - /var/run/docker.sock:/var/run/docker.sock
   dynamodb:
     image: deangiberson/aws-dynamodb-local

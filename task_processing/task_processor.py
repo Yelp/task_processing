@@ -41,7 +41,7 @@ class Registry(PRecord):
     """
 
 
-class TaskProcessor(object):
+class TaskProcessor:
     """Main Entry Point for Task Processing plugins
 
     This is the entrypoint to registering plugins (which know how to

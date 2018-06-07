@@ -1,10 +1,9 @@
 import collections
 import logging
 import time
+from queue import Queue
 from threading import Lock
 from threading import Thread
-
-from six.moves.queue import Queue
 
 from task_processing.interfaces.task_executor import TaskExecutor
 

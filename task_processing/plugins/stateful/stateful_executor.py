@@ -1,8 +1,7 @@
 import logging
 import threading
 import traceback
-
-from six.moves.queue import Queue
+from queue import Queue
 
 from task_processing.interfaces.task_executor import TaskExecutor
 
