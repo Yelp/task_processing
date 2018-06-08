@@ -19,7 +19,7 @@ class _DummyMetricType:
 
 
 _dummy_metric = _DummyMetricType()
-_registered_metrics = {}
+_registered_metrics: dict = {}
 
 
 def create_counter(name, dimensions={}):

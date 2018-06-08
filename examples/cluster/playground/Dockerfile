@@ -11,7 +11,10 @@ RUN apt-get update -q && \
 
 RUN add-apt-repository ppa:jonathonf/python-3.6 
 RUN apt-get update -q && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3.6
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3.6 python3.6-dev python3.6-venv
+RUN wget https://bootstrap.pypa.io/get-pip.py
+RUN python3.6 get-pip.py
+RUN ln -s /usr/bin/python3.6 /usr/local/bin/python3
 
 RUN cd /tmp && \
     wget http://mirrors.kernel.org/ubuntu/pool/universe/d/dh-virtualenv/dh-virtualenv_1.0-1_all.deb && \

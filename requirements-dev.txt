@@ -3,6 +3,7 @@ docker-compose
 flake8
 hypothesis
 mock
+mypy
 pre-commit
 pytest
 pytest-cov
