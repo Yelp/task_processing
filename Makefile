@@ -1,4 +1,4 @@
-.PHONY: all test dev_env docs
+.PHONY: all test dev_env docs venv pypi
 
 TOX=".tox/dev/bin/tox"
 
@@ -8,6 +8,9 @@ ifeq ($(findstring .yelpcorp.com, $(shell hostname -f)), .yelpcorp.com)
 else
 	BUILD_ENV?=$(shell hostname -f)
 endif
+
+venv:
+	tox -e venv
 
 test: dev_env
 	${TOX}
@@ -36,3 +39,4 @@ clean:
 	rm -rf .tox .taskproc
 	rm -rf dist build
 	rm -rf task_processing.egg-info
+	rm -rf venv

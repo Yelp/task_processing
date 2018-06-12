@@ -28,11 +28,12 @@ setup(
     packages=find_packages(exclude=('tests')),
     include_package_data=True,
     install_requires=[
-        'pyrsistent'
+        'pyrsistent',
     ],
     extras_require={
         # We can add the Mesos specific dependencies here
-        'mesos_executor': ['pymesos'],
+        'mesos_executor': ['addict', 'pymesos', 'requests'],
         'metrics': ['yelp-meteorite'],
+        'persistence': ['boto3'],
     }
 )

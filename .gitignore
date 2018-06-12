@@ -92,3 +92,5 @@ ENV/
 
 # Vim
 *.sw[nop]
+
+.pytest_cache

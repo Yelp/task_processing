@@ -1,7 +1,6 @@
+from queue import Empty
+from queue import Full
 from threading import Thread
-
-from six.moves.queue import Empty
-from six.moves.queue import Full
 
 from task_processing.interfaces.runner import Runner
 

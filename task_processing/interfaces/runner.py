@@ -1,12 +1,9 @@
 import abc
 
-import six
-
 from task_processing.interfaces.task_executor import DefaultTaskConfigInterface
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Runner(object):
+class Runner(metaclass=abc.ABCMeta):
     TASK_CONFIG_INTERFACE = DefaultTaskConfigInterface
     """
     The interface, specified as a PRecord of

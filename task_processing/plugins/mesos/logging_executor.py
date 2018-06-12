@@ -1,6 +1,7 @@
 import logging
 import sys
 import time
+from queue import Queue
 from threading import Lock
 from threading import Thread
 from urllib.parse import urlparse
@@ -12,7 +13,6 @@ from pyrsistent import PMap
 from pyrsistent import pmap
 from pyrsistent import PRecord
 from pyrsistent import v
-from six.moves.queue import Queue
 
 from task_processing.interfaces.task_executor import TaskExecutor
 

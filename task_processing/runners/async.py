@@ -2,9 +2,8 @@ import logging
 import os
 import traceback
 from collections import namedtuple
+from queue import Empty
 from threading import Thread
-
-from six.moves.queue import Empty
 
 from task_processing.interfaces.runner import Runner
 

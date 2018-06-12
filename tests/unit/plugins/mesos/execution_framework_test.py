@@ -1,13 +1,13 @@
 import socket
 import threading
 import time
+from queue import Queue
 
 import mock
 import pytest
 from addict import Dict
 from pyrsistent import m
 from pyrsistent import v
-from six.moves.queue import Queue
 
 from task_processing.plugins.mesos import execution_framework as ef_mdl
 from task_processing.plugins.mesos import mesos_executor as me_mdl
