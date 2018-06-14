@@ -324,11 +324,6 @@ class ExecutionFramework(Scheduler):
                             consumed_resources,
                         )
                     )
-
-                    md = self.task_metadata[task.task_id]
-                    get_metric(TASK_QUEUED_TIME_TIMER).record(
-                        time.time() - md.task_state_history['TASK_INITED']
-                    )
                 else:
                     # This offer is insufficient for this task. We need to put
                     # it back in the queue
@@ -342,13 +337,6 @@ class ExecutionFramework(Scheduler):
 
     def create_new_docker_task(self, offer, task_config, consumed_resources):
         port = consumed_resources['ports'][0]
-        # TODO: this probably belongs in the caller
-        with self._lock:
-            md = self.task_metadata[task_config.task_id]
-            self.task_metadata = self.task_metadata.set(
-                task_config.task_id,
-                md.set(agent_id=str(offer.agent_id.value))
-            )
 
         if task_config.containerizer == 'DOCKER':
             container = Dict(
@@ -573,64 +561,22 @@ class ExecutionFramework(Scheduler):
                 declined_offer_ids.append(offer.id)
                 continue
 
-            tasks_to_launch = self.get_tasks_to_launch(offer)
-
-            if len(tasks_to_launch) == 0:
-                if self.task_queue.empty():
-                    if offer.id.value not in declined['no tasks']:
-                        declined['no tasks'].append(offer.id.value)
-                else:
-                    declined['bad resources'].append(offer.id.value)
-                declined_offer_ids.append(offer.id)
-                continue
-
-            accepted.append('offer: {} agent: {} tasks: {}'.format(
-                offer.id.value, offer.agent_id.value, len(tasks_to_launch)))
-
-            task_launch_failed = False
-            try:
-                driver.launchTasks(offer.id, tasks_to_launch)
-            except (socket.timeout, Exception):
-                log.warning('Failed to launch following tasks {tasks}.'
-                            'Thus, moving them to UNKNOWN state'.format(
-                                tasks=', '.join([
-                                    task.task_id.value for task in
-                                    tasks_to_launch
-                                ]),
-                            )
-                            )
-                task_launch_failed = True
-                get_metric(TASK_LAUNCH_FAILED_COUNT).count(1)
-
-            # 'UNKNOWN' state is for internal tracking. It will not be
-            # propogated to users.
-            current_task_state = 'UNKNOWN' if task_launch_failed else \
-                'TASK_STAGING'
             with self._lock:
-                for task in tasks_to_launch:
-                    md = self.task_metadata[task.task_id.value]
-                    self.task_metadata = self.task_metadata.set(
-                        task.task_id.value,
-                        md.set(
-                            task_state=current_task_state,
-                            task_state_history=md.task_state_history.set(
-                                current_task_state, time.time()),
+                tasks_to_launch = self.get_tasks_to_launch(offer)
 
-                        )
-                    )
-                    # Emit the staging event for successful launches
-                    if not task_launch_failed:
-                        update = Dict(
-                            state='TASK_STAGING',
-                            offer=offer,
-                        )
-                        self.event_queue.put(
-                            self.translator(
-                                update, task.task_id.value,
-                                task_config=md.task_config,
-                            )
-                        )
-                        get_metric(TASK_LAUNCHED_COUNT).count(1)
+                if len(tasks_to_launch) == 0:
+                    if self.task_queue.empty():
+                        if offer.id.value not in declined['no tasks']:
+                            declined['no tasks'].append(offer.id.value)
+                    else:
+                        declined['bad resources'].append(offer.id.value)
+                    declined_offer_ids.append(offer.id)
+                    continue
+
+                accepted.append('offer: {} agent: {} tasks: {}'.format(
+                    offer.id.value, offer.agent_id.value, len(tasks_to_launch)))
+
+                self.launch_tasks_for_offer(driver, offer, tasks_to_launch)
 
         if len(declined_offer_ids) > 0:
             driver.declineOffer(declined_offer_ids, self.offer_decline_filter)
@@ -640,6 +586,55 @@ class ExecutionFramework(Scheduler):
                     reason, ', '.join(items)))
         if accepted:
             log.info("Offers accepted: {}".format(', '.join(accepted)))
+
+    def launch_tasks_for_offer(self, driver, offer, tasks_to_launch):
+        task_launch_failed = False
+        try:
+            driver.launchTasks(offer.id, tasks_to_launch)
+        except (socket.timeout, Exception):
+            tasks = ', '.join(
+                [task.task_id.value for task in tasks_to_launch]
+            )
+            log.warning(
+                f'Failed to launch following tasks {tasks}.'
+                'Thus, moving them to UNKNOWN state.')
+            task_launch_failed = True
+            get_metric(TASK_LAUNCH_FAILED_COUNT).count(1)
+
+        # 'UNKNOWN' state is for internal tracking. It will not be
+        # propogated to users.
+        current_task_state = 'UNKNOWN' if task_launch_failed else \
+            'TASK_STAGING'
+
+        for task in tasks_to_launch:
+            md = self.task_metadata[task.task_id.value]
+            self.task_metadata = self.task_metadata.set(
+                task.task_id.value,
+                md.set(
+                    task_state=current_task_state,
+                    task_state_history=md.task_state_history.set(
+                        current_task_state, time.time()),
+                    agent_id=str(offer.agent_id.value),
+                )
+            )
+
+            get_metric(TASK_QUEUED_TIME_TIMER).record(
+                time.time() - md.task_state_history['TASK_INITED']
+            )
+
+            # Emit the staging event for successful launches
+            if not task_launch_failed:
+                update = Dict(
+                    state='TASK_STAGING',
+                    offer=offer,
+                )
+                self.event_queue.put(
+                    self.translator(
+                        update, task.task_id.value,
+                        task_config=md.task_config,
+                    )
+                )
+                get_metric(TASK_LAUNCHED_COUNT).count(1)
 
     def statusUpdate(self, driver, update):
         task_id = update.task_id.value
