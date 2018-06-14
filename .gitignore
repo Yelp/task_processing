@@ -94,3 +94,4 @@ ENV/
 *.sw[nop]
 
 .pytest_cache
+.mypy_cache

@@ -19,8 +19,10 @@ from task_processing.interfaces.event import task_event
 from task_processing.metrics import create_counter
 from task_processing.metrics import create_timer
 from task_processing.metrics import get_metric
-from task_processing.plugins.mesos.constraints import \
-    offer_matches_task_constraints
+from task_processing.plugins.mesos.constraints import offer_matches_task_constraints
+from task_processing.plugins.mesos.resource_helpers import allocate_task_resources
+from task_processing.plugins.mesos.resource_helpers import get_offer_resources
+from task_processing.plugins.mesos.resource_helpers import task_fits
 from task_processing.plugins.mesos.translator import mesos_status_to_event
 
 
@@ -293,52 +295,11 @@ class ExecutionFramework(Scheduler):
 
         get_metric(TASK_ENQUEUED_COUNT).count(1)
 
-    def get_available_ports(self, resource):
-        i = 0
-        ports = []
-        while True:
-            try:
-                ports = ports + list(range(
-                    resource.ranges.range[i].begin,
-                    resource.ranges.range[i].end
-                ))
-                i += 1
-            except Exception as e:
-                break
-        return ports
-
     def get_tasks_to_launch(self, offer):
         tasks_to_launch = []
-        remaining_cpus = 0
-        remaining_mem = 0
-        remaining_disk = 0
-        remaining_gpus = 0
-        available_ports = []
-        for resource in offer.resources:
-            if resource.name == "cpus" and resource.role == self.role:
-                remaining_cpus += resource.scalar.value
-            elif resource.name == "mem" and resource.role == self.role:
-                remaining_mem += resource.scalar.value
-            elif resource.name == "disk" and resource.role == self.role:
-                remaining_disk += resource.scalar.value
-            elif resource.name == "gpus" and resource.role == self.role:
-                remaining_gpus += resource.scalar.value
-            elif resource.name == "ports" and resource.role == self.role:
-                # TODO: Validate if the ports available > ports required
-                available_ports = self.get_available_ports(resource)
+        offer_resources = get_offer_resources(offer, self.role)
 
-        log.info(
-            "Received offer {id} with cpus: {cpu}, mem: {mem}, "
-            "disk: {disk} gpus: {gpu} role: {role}".format(
-                id=offer.id.value,
-                cpu=remaining_cpus,
-                mem=remaining_mem,
-                disk=remaining_disk,
-                gpu=remaining_gpus,
-                role=self.role
-            )
-        )
-
+        log.info(f'Received offer {id} for role {self.role}: {offer_resources}')
         tasks_to_put_back_in_queue = []
 
         # Need to lock here even though we are working on the task_queue, since
@@ -349,27 +310,20 @@ class ExecutionFramework(Scheduler):
             while not self.task_queue.empty():
                 task = self.task_queue.get()
 
-                if ((remaining_cpus >= task.cpus and
-                     remaining_mem >= task.mem and
-                     remaining_disk >= task.disk and
-                     remaining_gpus >= task.gpus and
-                     len(available_ports) > 0 and
-                     offer_matches_task_constraints(offer, task))):
-                    # This offer is sufficient for us to launch task
+                if (task_fits(task, offer_resources) and
+                        offer_matches_task_constraints(offer, task)):
+
+                    consumed_resources, offer_resources = allocate_task_resources(
+                        task,
+                        offer_resources,
+                    )
                     tasks_to_launch.append(
                         self.create_new_docker_task(
                             offer,
                             task,
-                            available_ports
+                            consumed_resources,
                         )
                     )
-
-                    # Deduct the resources taken by this task from the total
-                    # available resources.
-                    remaining_cpus -= task.cpus
-                    remaining_mem -= task.mem
-                    remaining_disk -= task.disk
-                    remaining_gpus -= task.gpus
 
                     md = self.task_metadata[task.task_id]
                     get_metric(TASK_QUEUED_TIME_TIMER).record(
@@ -386,11 +340,8 @@ class ExecutionFramework(Scheduler):
 
         return tasks_to_launch
 
-    def create_new_docker_task(self, offer, task_config, available_ports):
-        # Handle the case of multiple port allocations
-        port_to_use = available_ports[0]
-        available_ports[:] = available_ports[1:]
-
+    def create_new_docker_task(self, offer, task_config, consumed_resources):
+        port = consumed_resources['ports'][0]
         # TODO: this probably belongs in the caller
         with self._lock:
             md = self.task_metadata[task_config.task_id]
@@ -406,7 +357,7 @@ class ExecutionFramework(Scheduler):
                 docker=Dict(
                     image=task_config.image,
                     network='BRIDGE',
-                    port_mappings=[Dict(host_port=port_to_use,
+                    port_mappings=[Dict(host_port=port,
                                         container_port=8888)],
                     parameters=thaw(task_config.docker_parameters),
                     force_pull_image=True,
@@ -418,7 +369,7 @@ class ExecutionFramework(Scheduler):
                 # for docker, volumes should include parameters
                 volumes=thaw(task_config.volumes),
                 network_infos=Dict(
-                    port_mappings=[Dict(host_port=port_to_use,
+                    port_mappings=[Dict(host_port=port,
                                         container_port=8888)],
                 ),
             )
@@ -457,7 +408,7 @@ class ExecutionFramework(Scheduler):
                      type='RANGES',
                      role=self.role,
                      ranges=Dict(
-                         range=[Dict(begin=port_to_use, end=port_to_use)]))
+                         range=[Dict(begin=port, end=port)]))
             ],
             command=Dict(
                 value=task_config.cmd,

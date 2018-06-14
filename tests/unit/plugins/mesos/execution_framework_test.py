@@ -27,70 +27,6 @@ def ef(mock_Thread):
 
 
 @pytest.fixture
-def fake_task():
-    return me_mdl.MesosTaskConfig(
-        name='fake_name',
-        cpus=10.0,
-        mem=1024.0,
-        disk=1000.0,
-        gpus=1,
-        image='fake_image',
-        cmd='echo "fake"'
-    )
-
-
-@pytest.fixture
-def fake_offer():
-    return Dict(
-        id=Dict(value='fake_offer_id'),
-        agent_id=Dict(value='fake_agent_id'),
-        hostname='fake_hostname',
-        resources=[
-            Dict(
-                role='fake_role',
-                name='cpus',
-                scalar=Dict(value=10),
-                type='SCALAR',
-            ),
-            Dict(
-                role='fake_role',
-                name='mem',
-                scalar=Dict(value=1024),
-                type='SCALAR',
-            ),
-            Dict(
-                role='fake_role',
-                name='disk',
-                scalar=Dict(value=1000),
-                type='SCALAR',
-            ),
-            Dict(
-                role='fake_role',
-                name='gpus',
-                scalar=Dict(value=1),
-                type='SCALAR',
-            ),
-            Dict(
-                role='fake_role',
-                name='ports',
-                ranges=Dict(range=[Dict(begin=31200, end=31500)]),
-                type='RANGES',
-            ),
-        ],
-        attributes=[
-            Dict(
-                name='pool',
-                text=Dict(value='fake_pool_text')
-            ),
-            Dict(
-                name='region',
-                text=Dict(value='fake_region_text'),
-            ),
-        ]
-    )
-
-
-@pytest.fixture
 def fake_driver():
     fake_driver = mock.Mock(spec=[
         'id',
@@ -322,21 +258,14 @@ def test_enqueue_task(
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
 
 
-def test_get_available_ports(ef, fake_offer):
-    ports_resource = [r for r in fake_offer.resources if r.name is 'ports'][0]
-
-    ports = ef.get_available_ports(ports_resource)
-
-    for p in range(31200, 31500):
-        assert p in ports
-
-
-def test_get_tasks_to_launch_sufficient_offer(
+@pytest.mark.parametrize('offer_sufficient', [True, False])
+def test_get_tasks_to_launch(
     ef,
     fake_task,
     fake_offer,
     mock_get_metric,
-    mock_time
+    mock_time,
+    offer_sufficient,
 ):
     task_metadata = ef_mdl.TaskMetadata(
         task_config=fake_task,
@@ -348,59 +277,32 @@ def test_get_tasks_to_launch_sufficient_offer(
 
     ef.task_queue.put(fake_task)
     ef.task_metadata = ef.task_metadata.set(fake_task.task_id, task_metadata)
-    tasks_to_launch = ef.get_tasks_to_launch(fake_offer)
+    with mock.patch(
+        'task_processing.plugins.mesos.execution_framework.get_offer_resources'
+    ), mock.patch(
+        'task_processing.plugins.mesos.execution_framework.allocate_task_resources'
+    ) as mock_allocate, mock.patch(
+        'task_processing.plugins.mesos.execution_framework.task_fits'
+    ) as mock_task_fits:
+        mock_allocate.return_value = (mock.Mock(), mock.Mock())
+        mock_task_fits.return_value = offer_sufficient
+        tasks_to_launch = ef.get_tasks_to_launch(fake_offer)
 
-    assert ef.create_new_docker_task.return_value in tasks_to_launch
-    assert ef.task_queue.qsize() == 0
-    assert mock_get_metric.call_count == 1
-    assert mock_get_metric.call_args == mock.call(
-        ef_mdl.TASK_QUEUED_TIME_TIMER
-    )
-    assert mock_get_metric.return_value.record.call_count == 1
-    assert mock_get_metric.return_value.record.call_args == mock.call(1.0)
-
-
-@pytest.mark.parametrize(
-    "task_cpus,task_mem,task_disk,task_gpus",
-    [(20.0, 1024.0, 1000.0, 1),
-     (10.0, 2048.0, 1000.0, 1),
-     (10.0, 1024.0, 2000.0, 1),
-     (10.0, 1024.0, 1000.0, 2)]
-)
-def test_get_tasks_to_launch_insufficient_offer(
-    ef,
-    fake_offer,
-    mock_get_metric,
-    task_cpus,
-    task_mem,
-    task_disk,
-    task_gpus,
-):
-    ef.create_new_docker_task = mock.Mock()
-    task = me_mdl.MesosTaskConfig(
-        cmd='/bin/true',
-        name='fake_name',
-        image='fake_image',
-        cpus=task_cpus,
-        mem=task_mem,
-        disk=task_disk,
-        gpus=task_gpus,
-    )
-
-    ef.task_queue.put(task)
-    tasks_to_launch = ef.get_tasks_to_launch(fake_offer)
-
-    assert len(tasks_to_launch) == 0
-    assert ef.task_queue.qsize() == 1
-    assert mock_get_metric.call_count == 1
-    assert mock_get_metric.call_args == mock.call(
-        ef_mdl.TASK_INSUFFICIENT_OFFER_COUNT
-    )
-    assert mock_get_metric.call_args != mock.call(
-        ef_mdl.TASK_QUEUED_TIME_TIMER
-    )
-    assert mock_get_metric.return_value.count.call_count == 1
-    assert mock_get_metric.return_value.count.call_args == mock.call(1)
+    if offer_sufficient:
+        assert ef.create_new_docker_task.return_value in tasks_to_launch
+        assert ef.task_queue.qsize() == 0
+        assert mock_get_metric.call_count == 1
+        assert mock_get_metric.call_args == mock.call(ef_mdl.TASK_QUEUED_TIME_TIMER)
+        assert mock_get_metric.return_value.record.call_count == 1
+        assert mock_get_metric.return_value.record.call_args == mock.call(1.0)
+    else:
+        assert len(tasks_to_launch) == 0
+        assert ef.task_queue.qsize() == 1
+        assert mock_get_metric.call_count == 1
+        assert mock_get_metric.call_args == mock.call(ef_mdl.TASK_INSUFFICIENT_OFFER_COUNT)
+        assert mock_get_metric.call_args != mock.call(ef_mdl.TASK_QUEUED_TIME_TIMER)
+        assert mock_get_metric.return_value.count.call_count == 1
+        assert mock_get_metric.return_value.count.call_args == mock.call(1)
 
 
 @pytest.mark.parametrize('gpus_count,containerizer,container', [
@@ -447,7 +349,7 @@ def test_create_new_docker_task(
     containerizer,
     container,
 ):
-    available_ports = [31200]
+    consumed_resources = {'ports': [31200]}
     task_id = fake_task.task_id
     task_metadata = ef_mdl.TaskMetadata(
         task_config=fake_task,
@@ -470,7 +372,7 @@ def test_create_new_docker_task(
     docker_task = ef.create_new_docker_task(
         fake_offer,
         fake_task,
-        available_ports
+        consumed_resources,
     )
 
     new_docker_task = Dict(
@@ -659,7 +561,7 @@ def test_get_tasks_to_launch_no_ports(
     mock_get_metric
 ):
     ef.create_new_docker_task = mock.Mock()
-    ef.get_available_ports = mock.Mock(return_value=[])
+    fake_offer.resources[-1].ranges.range = []
     ef.task_queue.put(fake_task)
 
     tasks = ef.get_tasks_to_launch(fake_offer)
