@@ -117,6 +117,7 @@ class MesosTaskConfig(PRecord):
                                               value=v[2]) for v in c)),
         invariant=_valid_constraints,
     )
+    use_cached_image = field(type=bool, initial=True, factory=bool)
 
     @property
     def task_id(self):

@@ -1,3 +1,6 @@
+import threading
+
+import mock
 import pytest
 from addict import Dict
 
@@ -72,3 +75,20 @@ def fake_offer():
             ),
         ]
     )
+
+
+@pytest.fixture
+def mock_Thread():
+    with mock.patch.object(threading, 'Thread') as mock_Thread:
+        yield mock_Thread
+
+
+@pytest.fixture
+def mock_fw_and_driver():
+    with mock.patch(
+        'task_processing.plugins.mesos.mesos_executor.ExecutionFramework'
+    ) as mock_execution_framework, mock.patch(
+        'task_processing.plugins.mesos.mesos_executor.MesosSchedulerDriver'
+    ) as mock_scheduler_driver:
+        mock_execution_framework.return_value.framework_info = mock.Mock()
+        yield mock_execution_framework, mock_scheduler_driver

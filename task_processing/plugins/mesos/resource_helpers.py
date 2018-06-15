@@ -1,5 +1,6 @@
 from typing import Tuple
 
+import addict
 from pyrsistent import field
 from pyrsistent import pmap
 from pyrsistent import PRecord
@@ -26,7 +27,7 @@ class ResourceSet(PRecord):
     ports = field(type=PVector, initial=v(), factory=pvector)
 
 
-def get_offer_resources(offer, role: str) -> ResourceSet:
+def get_offer_resources(offer: addict.Dict, role: str) -> ResourceSet:
     """ Get the resources from a Mesos offer
 
     :param offer: the payload from a Mesos resourceOffer call

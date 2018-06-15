@@ -11,7 +11,6 @@ from pyrsistent import m
 from pyrsistent import PMap
 from pyrsistent import pmap
 from pyrsistent import PRecord
-from pyrsistent import thaw
 from pyrsistent import v
 
 from task_processing.interfaces.event import control_event
@@ -19,32 +18,8 @@ from task_processing.interfaces.event import task_event
 from task_processing.metrics import create_counter
 from task_processing.metrics import create_timer
 from task_processing.metrics import get_metric
-from task_processing.plugins.mesos.constraints import offer_matches_task_constraints
-from task_processing.plugins.mesos.resource_helpers import allocate_task_resources
-from task_processing.plugins.mesos.resource_helpers import get_offer_resources
-from task_processing.plugins.mesos.resource_helpers import task_fits
+from task_processing.plugins.mesos import metrics
 from task_processing.plugins.mesos.translator import mesos_status_to_event
-
-
-TASK_LAUNCHED_COUNT = 'taskproc.mesos.task_launched_count'
-TASK_FAILED_TO_LAUNCH_COUNT = 'taskproc.mesos.tasks_failed_to_launch_count'
-TASK_LAUNCH_FAILED_COUNT = 'taskproc.mesos.task_launch_failed_count'
-TASK_FINISHED_COUNT = 'taskproc.mesos.task_finished_count'
-TASK_FAILED_COUNT = 'taskproc.mesos.task_failure_count'
-TASK_KILLED_COUNT = 'taskproc.mesos.task_killed_count'
-TASK_LOST_COUNT = 'taskproc.mesos.task_lost_count'
-TASK_LOST_DUE_TO_INVALID_OFFER_COUNT = \
-    'taskproc.mesos.task_lost_due_to_invalid_offer_count'
-TASK_ERROR_COUNT = 'taskproc.mesos.task_error_count'
-TASK_OFFER_TIMEOUT = 'taskproc.mesos.task_offer_timeout'
-
-TASK_ENQUEUED_COUNT = 'taskproc.mesos.task_enqueued_count'
-TASK_QUEUED_TIME_TIMER = 'taskproc.mesos.task_queued_time'
-TASK_INSUFFICIENT_OFFER_COUNT = 'taskproc.mesos.task_insufficient_offer_count'
-TASK_STUCK_COUNT = 'taskproc.mesos.task_stuck_count'
-
-OFFER_DELAY_TIMER = 'taskproc.mesos.offer_delay'
-BLACKLISTED_AGENTS_COUNT = 'taskproc.mesos.blacklisted_agents_count'
 
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
@@ -64,6 +39,7 @@ class ExecutionFramework(Scheduler):
         self,
         name,
         role,
+        handle_offer_callback,
         task_staging_timeout_s,
         pool=None,
         translator=mesos_status_to_event,
@@ -78,6 +54,7 @@ class ExecutionFramework(Scheduler):
         self.task_staging_timeout_s = task_staging_timeout_s
         self.pool = pool
         self.role = role
+        self.handle_offer = handle_offer_callback
         self.translator = translator
         self.slave_blacklist_timeout_s = slave_blacklist_timeout_s
         self.offer_backoff = offer_backoff
@@ -108,12 +85,12 @@ class ExecutionFramework(Scheduler):
         self._initialize_metrics()
         self._last_offer_time = None
         self._terminal_task_counts = {
-            'TASK_FINISHED': TASK_FINISHED_COUNT,
-            'TASK_LOST': TASK_LOST_COUNT,
-            'TASK_KILLED': TASK_KILLED_COUNT,
-            'TASK_FAILED': TASK_FAILED_COUNT,
-            'TASK_ERROR': TASK_ERROR_COUNT,
-            'TASK_OFFER_TIMEOUT': TASK_OFFER_TIMEOUT,
+            'TASK_FINISHED': metrics.TASK_FINISHED_COUNT,
+            'TASK_LOST': metrics.TASK_LOST_COUNT,
+            'TASK_KILLED': metrics.TASK_KILLED_COUNT,
+            'TASK_FAILED': metrics.TASK_FAILED_COUNT,
+            'TASK_ERROR': metrics.TASK_ERROR_COUNT,
+            'TASK_OFFER_TIMEOUT': metrics.TASK_OFFER_TIMEOUT,
         }
 
         self.stopping = False
@@ -162,7 +139,7 @@ class ExecutionFramework(Scheduler):
                                     message='stop',
                                     task_config=md.task_config,
                                 ))
-                            get_metric(TASK_OFFER_TIMEOUT).count(1)
+                            get_metric(metrics.TASK_OFFER_TIMEOUT).count(1)
 
                     # Task is not eligible for killing or reenqueuing
                     if time_now < (md.task_state_history[md.task_state] +
@@ -178,7 +155,7 @@ class ExecutionFramework(Scheduler):
                                     ))
                         # Re-enqueue task
                         self.enqueue_task(md.task_config)
-                        get_metric(TASK_FAILED_TO_LAUNCH_COUNT).count(1)
+                        get_metric(metrics.TASK_FAILED_TO_LAUNCH_COUNT).count(1)
                         continue
 
                     if md.task_state == 'TASK_STAGING':
@@ -190,7 +167,7 @@ class ExecutionFramework(Scheduler):
                             agent_id=self.task_metadata[task_id].agent_id,
                             timeout=self.slave_blacklist_timeout_s,
                         )
-                        get_metric(TASK_STUCK_COUNT).count(1)
+                        get_metric(metrics.TASK_STUCK_COUNT).count(1)
 
             self._reconcile_tasks(
                 [Dict({'task_id': Dict({'value': task_id})}) for
@@ -255,7 +232,7 @@ class ExecutionFramework(Scheduler):
                 secs=timeout
             ))
             self.blacklisted_slaves = self.blacklisted_slaves.append(agent_id)
-            get_metric(BLACKLISTED_AGENTS_COUNT).count(1)
+            get_metric(metrics.BLACKLISTED_AGENTS_COUNT).count(1)
         unblacklist_thread = threading.Thread(
             target=self.unblacklist_slave,
             kwargs={'timeout': timeout, 'agent_id': agent_id},
@@ -293,136 +270,7 @@ class ExecutionFramework(Scheduler):
                 self.are_offers_suppressed = False
                 log.info('Reviving offers because we have tasks to run.')
 
-        get_metric(TASK_ENQUEUED_COUNT).count(1)
-
-    def get_tasks_to_launch(self, offer):
-        tasks_to_launch = []
-        offer_resources = get_offer_resources(offer, self.role)
-
-        log.info(f'Received offer {id} for role {self.role}: {offer_resources}')
-        tasks_to_put_back_in_queue = []
-
-        # Need to lock here even though we are working on the task_queue, since
-        # we are predicating on the queue's emptiness. If not locked, other
-        # threads can continue enqueueing, and we never terminate the loop.
-        with self._lock:
-            # Get all the tasks of the queue
-            while not self.task_queue.empty():
-                task = self.task_queue.get()
-
-                if (task_fits(task, offer_resources) and
-                        offer_matches_task_constraints(offer, task)):
-
-                    consumed_resources, offer_resources = allocate_task_resources(
-                        task,
-                        offer_resources,
-                    )
-                    tasks_to_launch.append(
-                        self.create_new_docker_task(
-                            offer,
-                            task,
-                            consumed_resources,
-                        )
-                    )
-
-                    md = self.task_metadata[task.task_id]
-                    get_metric(TASK_QUEUED_TIME_TIMER).record(
-                        time.time() - md.task_state_history['TASK_INITED']
-                    )
-                else:
-                    # This offer is insufficient for this task. We need to put
-                    # it back in the queue
-                    tasks_to_put_back_in_queue.append(task)
-
-        for task in tasks_to_put_back_in_queue:
-            self.task_queue.put(task)
-            get_metric(TASK_INSUFFICIENT_OFFER_COUNT).count(1)
-
-        return tasks_to_launch
-
-    def create_new_docker_task(self, offer, task_config, consumed_resources):
-        port = consumed_resources['ports'][0]
-        # TODO: this probably belongs in the caller
-        with self._lock:
-            md = self.task_metadata[task_config.task_id]
-            self.task_metadata = self.task_metadata.set(
-                task_config.task_id,
-                md.set(agent_id=str(offer.agent_id.value))
-            )
-
-        if task_config.containerizer == 'DOCKER':
-            container = Dict(
-                type='DOCKER',
-                volumes=thaw(task_config.volumes),
-                docker=Dict(
-                    image=task_config.image,
-                    network='BRIDGE',
-                    port_mappings=[Dict(host_port=port,
-                                        container_port=8888)],
-                    parameters=thaw(task_config.docker_parameters),
-                    force_pull_image=True,
-                ),
-            )
-        elif task_config.containerizer == 'MESOS':
-            container = Dict(
-                type='MESOS',
-                # for docker, volumes should include parameters
-                volumes=thaw(task_config.volumes),
-                network_infos=Dict(
-                    port_mappings=[Dict(host_port=port,
-                                        container_port=8888)],
-                ),
-            )
-            # For this to work, image_providers needs to be set to 'docker'
-            # on mesos agents
-            if 'image' in task_config:
-                container.mesos = Dict(
-                    image=Dict(
-                        type='DOCKER',
-                        docker=Dict(name=task_config.image),
-                    )
-                )
-
-        return Dict(
-            task_id=Dict(value=task_config.task_id),
-            agent_id=Dict(value=offer.agent_id.value),
-            name='executor-{id}'.format(id=task_config.task_id),
-            resources=[
-                Dict(name='cpus',
-                     type='SCALAR',
-                     role=self.role,
-                     scalar=Dict(value=task_config.cpus)),
-                Dict(name='mem',
-                     type='SCALAR',
-                     role=self.role,
-                     scalar=Dict(value=task_config.mem)),
-                Dict(name='disk',
-                     type='SCALAR',
-                     role=self.role,
-                     scalar=Dict(value=task_config.disk)),
-                Dict(name='gpus',
-                     type='SCALAR',
-                     role=self.role,
-                     scalar=Dict(value=task_config.gpus)),
-                Dict(name='ports',
-                     type='RANGES',
-                     role=self.role,
-                     ranges=Dict(
-                         range=[Dict(begin=port, end=port)]))
-            ],
-            command=Dict(
-                value=task_config.cmd,
-                uris=[
-                    Dict(value=uri, extract=False)
-                    for uri in task_config.uris
-                ],
-                environment=Dict(variables=[
-                    Dict(name=k, value=v) for k, v in
-                    task_config.environment.items()
-                ])
-            ),
-            container=container
-        )
+        get_metric(metrics.TASK_ENQUEUED_COUNT).count(1)
 
     def stop(self):
         self.stopping = True
@@ -435,19 +283,19 @@ class ExecutionFramework(Scheduler):
         }
 
         counters = [
-            TASK_LAUNCHED_COUNT,                 TASK_FINISHED_COUNT,
-            TASK_FAILED_COUNT,                   TASK_KILLED_COUNT,
-            TASK_LOST_COUNT,                     TASK_ERROR_COUNT,
-            TASK_ENQUEUED_COUNT,                 TASK_INSUFFICIENT_OFFER_COUNT,
-            TASK_STUCK_COUNT,                    BLACKLISTED_AGENTS_COUNT,
-            TASK_LOST_DUE_TO_INVALID_OFFER_COUNT,
-            TASK_LAUNCH_FAILED_COUNT,            TASK_FAILED_TO_LAUNCH_COUNT,
-            TASK_OFFER_TIMEOUT,
+            metrics.TASK_LAUNCHED_COUNT,                 metrics.TASK_FINISHED_COUNT,
+            metrics.TASK_FAILED_COUNT,                   metrics.TASK_KILLED_COUNT,
+            metrics.TASK_LOST_COUNT,                     metrics.TASK_ERROR_COUNT,
+            metrics.TASK_ENQUEUED_COUNT,                 metrics.TASK_INSUFFICIENT_OFFER_COUNT,
+            metrics.TASK_STUCK_COUNT,                    metrics.BLACKLISTED_AGENTS_COUNT,
+            metrics.TASK_LOST_DUE_TO_INVALID_OFFER_COUNT,
+            metrics.TASK_LAUNCH_FAILED_COUNT,            metrics.TASK_FAILED_TO_LAUNCH_COUNT,
+            metrics.TASK_OFFER_TIMEOUT,
         ]
         for cnt in counters:
             create_counter(cnt, default_dimensions)
 
-        timers = [OFFER_DELAY_TIMER, TASK_QUEUED_TIME_TIMER]
+        timers = [metrics.OFFER_DELAY_TIMER, metrics.TASK_QUEUED_TIME_TIMER]
         for tmr in timers:
             create_timer(tmr, default_dimensions)
 
@@ -492,7 +340,7 @@ class ExecutionFramework(Scheduler):
 
         current_offer_time = time.time()
         if self._last_offer_time is not None:
-            get_metric(OFFER_DELAY_TIMER).record(
+            get_metric(metrics.OFFER_DELAY_TIMER).record(
                 current_offer_time - self._last_offer_time
             )
         self._last_offer_time = current_offer_time
@@ -573,14 +421,31 @@ class ExecutionFramework(Scheduler):
                 declined_offer_ids.append(offer.id)
                 continue
 
-            tasks_to_launch = self.get_tasks_to_launch(offer)
+            # Need to lock here even though we are only reading the task_queue, since
+            # we are predicating on the queue's emptiness. If not locked, other
+            # threads can continue enqueueing, and we never terminate the loop.
+            task_configs = []
+            with self._lock:
+                while not self.task_queue.empty():
+                    task_configs.append(self.task_queue.get())
+
+            tasks_to_launch, tasks_to_defer = self.handle_offer(task_configs, offer)
+
+            with self._lock:
+                for task in tasks_to_launch:
+                    task_id = task.task_id.value
+                    task_metadata = self.task_metadata[task_id]
+                    task_metadata = task_metadata.set(agent_id=offer.agent_id.value)
+                    self.task_metadata = self.task_metadata.set(task_id, task_metadata)
+                    get_metric(metrics.TASK_QUEUED_TIME_TIMER).record(
+                        time.time() - task_metadata.task_state_history['TASK_INITED'],
+                    )
+                for task in tasks_to_defer:
+                    self.task_queue.put(task)
+                    get_metric(metrics.TASK_INSUFFICIENT_OFFER_COUNT).count(1)
 
             if len(tasks_to_launch) == 0:
-                if self.task_queue.empty():
-                    if offer.id.value not in declined['no tasks']:
-                        declined['no tasks'].append(offer.id.value)
-                else:
-                    declined['bad resources'].append(offer.id.value)
+                declined['bad resources'].append(offer.id.value)
                 declined_offer_ids.append(offer.id)
                 continue
 
@@ -600,7 +465,7 @@ class ExecutionFramework(Scheduler):
                             )
                             )
                 task_launch_failed = True
-                get_metric(TASK_LAUNCH_FAILED_COUNT).count(1)
+                get_metric(metrics.TASK_LAUNCH_FAILED_COUNT).count(1)
 
             # 'UNKNOWN' state is for internal tracking. It will not be
             # propogated to users.
@@ -630,7 +495,7 @@ class ExecutionFramework(Scheduler):
                                 task_config=md.task_config,
                             )
                         )
-                        get_metric(TASK_LAUNCHED_COUNT).count(1)
+                        get_metric(metrics.TASK_LAUNCHED_COUNT).count(1)
 
         if len(declined_offer_ids) > 0:
             driver.declineOffer(declined_offer_ids, self.offer_decline_filter)
@@ -674,7 +539,7 @@ class ExecutionFramework(Scheduler):
                         're-enqueue this task {id}'.format(id=task_id))
             # Re-enqueue task
             self.enqueue_task(md.task_config)
-            get_metric(TASK_LOST_DUE_TO_INVALID_OFFER_COUNT).count(1)
+            get_metric(metrics.TASK_LOST_DUE_TO_INVALID_OFFER_COUNT).count(1)
             driver.acknowledgeStatusUpdate(update)
             return
 

@@ -1,21 +1,18 @@
+import abc
 import logging
 import threading
 
 from pymesos import MesosSchedulerDriver
 
 from task_processing.interfaces.task_executor import TaskExecutor
-from task_processing.plugins.mesos.execution_framework import (
-    ExecutionFramework
-)
-from task_processing.plugins.mesos.task_config import MesosTaskConfig
+from task_processing.plugins.mesos.execution_framework import ExecutionFramework
 from task_processing.plugins.mesos.translator import mesos_status_to_event
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
 logging.basicConfig(format=FORMAT)
 
 
-class MesosExecutor(TaskExecutor):
-    TASK_CONFIG_INTERFACE = MesosTaskConfig
+class AbstractMesosExecutor(TaskExecutor, metaclass=abc.ABCMeta):
 
     def __init__(
         self,
@@ -33,15 +30,17 @@ class MesosExecutor(TaskExecutor):
         Constructs the instance of a task execution, encapsulating all state
         required to run, monitor and stop the job.
 
-        :param dict credentials: Mesos principal and secret.
+        TODO param docstrings
         """
 
         self.logger = logging.getLogger(__name__)
+        self.role = role
 
         self.execution_framework = ExecutionFramework(
             role=role,
             pool=pool,
             name=framework_name,
+            handle_offer_callback=self.handle_offer,
             translator=framework_translator,
             task_staging_timeout_s=framework_staging_timeout,
             initial_decline_delay=initial_decline_delay
@@ -77,3 +76,7 @@ class MesosExecutor(TaskExecutor):
 
     def get_event_queue(self):
         return self.execution_framework.event_queue
+
+    @abc.abstractmethod
+    def handle_offer(self, task_configs, offer):
+        pass
