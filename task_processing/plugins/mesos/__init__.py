@@ -11,6 +11,7 @@ TASK_PROCESSING_PLUGIN = 'mesos_plugin'
 def register_plugin(registry):
     return registry \
         .register_task_executor('logging', MesosLoggingExecutor) \
+        .register_deprecated_task_executor('mesos', MesosTaskExecutor) \
         .register_task_executor('mesos_task', MesosTaskExecutor) \
         .register_task_executor('mesos_pod', MesosPodExecutor) \
         .register_task_executor('retrying', RetryingExecutor) \
