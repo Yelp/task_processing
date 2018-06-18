@@ -3,6 +3,8 @@ import socket
 import threading
 import time
 from queue import Queue
+from typing import Optional
+from typing import TYPE_CHECKING
 
 from addict import Dict
 from pymesos.interface import Scheduler
@@ -19,7 +21,10 @@ from task_processing.metrics import create_counter
 from task_processing.metrics import create_timer
 from task_processing.metrics import get_metric
 from task_processing.plugins.mesos import metrics
-from task_processing.plugins.mesos.translator import mesos_status_to_event
+
+
+if TYPE_CHECKING:
+    from .mesos_executor import MesosExecutorCallbackInterface  # noqa
 
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
@@ -35,27 +40,27 @@ class TaskMetadata(PRecord):
 
 
 class ExecutionFramework(Scheduler):
+    cb_interface: 'MesosExecutorCallbackInterface'
+
     def __init__(
         self,
         name,
         role,
-        handle_offer_callback,
+        callback_interface: 'MesosExecutorCallbackInterface',
         task_staging_timeout_s,
         pool=None,
-        translator=mesos_status_to_event,
         slave_blacklist_timeout_s=900,
         offer_backoff=10,
         suppress_delay=10,
         initial_decline_delay=1,
         task_reconciliation_delay=300,
-    ):
+    ) -> None:
         self.name = name
         # wait this long for a task to launch.
         self.task_staging_timeout_s = task_staging_timeout_s
         self.pool = pool
         self.role = role
-        self.handle_offer = handle_offer_callback
-        self.translator = translator
+        self.cb_interface = callback_interface
         self.slave_blacklist_timeout_s = slave_blacklist_timeout_s
         self.offer_backoff = offer_backoff
 
@@ -67,8 +72,8 @@ class ExecutionFramework(Scheduler):
             role=self.role
         )
 
-        self.task_queue = Queue()
-        self.event_queue = Queue()
+        self.task_queue: Queue = Queue()
+        self.event_queue: Queue = Queue()
         self.driver = None
         self.are_offers_suppressed = False
         self.suppress_after = int(time.time()) + suppress_delay
@@ -83,7 +88,7 @@ class ExecutionFramework(Scheduler):
         self.task_metadata = m()
 
         self._initialize_metrics()
-        self._last_offer_time = None
+        self._last_offer_time: Optional[float] = None
         self._terminal_task_counts = {
             'TASK_FINISHED': metrics.TASK_FINISHED_COUNT,
             'TASK_LOST': metrics.TASK_LOST_COUNT,
@@ -288,8 +293,7 @@ class ExecutionFramework(Scheduler):
 
         # 'UNKNOWN' state is for internal tracking. It will not be
         # propogated to users.
-        current_task_state = 'UNKNOWN' if task_launch_failed else \
-            'TASK_STAGING'
+        current_task_state = 'UNKNOWN' if task_launch_failed else 'TASK_STAGING'
 
         for task in tasks_to_launch:
             md = self.task_metadata[task.task_id.value]
@@ -309,14 +313,10 @@ class ExecutionFramework(Scheduler):
 
             # Emit the staging event for successful launches
             if not task_launch_failed:
-                update = Dict(
-                    state='TASK_STAGING',
-                    offer=offer,
-                )
                 self.event_queue.put(
-                    self.translator(
-                        update, task.task_id.value,
-                        task_config=md.task_config,
+                    self.cb_interface.process_status_update(
+                        Dict(state='TASK_STAGING', offer=offer),
+                        md.task_config,
                     )
                 )
                 get_metric(metrics.TASK_LAUNCHED_COUNT).count(1)
@@ -383,7 +383,7 @@ class ExecutionFramework(Scheduler):
             role=self.role
         ))
 
-    def resourceOffers(self, driver, offers):
+    def resourceOffers(self, driver, offers) -> None:
         if self.driver is None:
             self.driver = driver
 
@@ -398,7 +398,7 @@ class ExecutionFramework(Scheduler):
         if self.task_queue.empty() and current_offer_time < self.decline_after:
             time.sleep(self.decline_after - current_offer_time)
 
-        declined = {
+        declined: dict = {
             'blacklisted': [],
             'bad pool': [],
             'bad resources': [],
@@ -478,7 +478,10 @@ class ExecutionFramework(Scheduler):
                 while not self.task_queue.empty():
                     task_configs.append(self.task_queue.get())
 
-                tasks_to_launch, tasks_to_defer = self.handle_offer(task_configs, offer)
+                tasks_to_launch, tasks_to_defer = self.cb_interface.get_tasks_for_offer(
+                    task_configs,
+                    offer,
+                )
 
                 for task in tasks_to_defer:
                     self.task_queue.put(task)
@@ -554,7 +557,7 @@ class ExecutionFramework(Scheduler):
                 )
 
             self.event_queue.put(
-                self.translator(update, task_id, task_config=md.task_config)
+                self.cb_interface.process_status_update(update, md.task_config),
             )
 
             if task_state in self._terminal_task_counts:

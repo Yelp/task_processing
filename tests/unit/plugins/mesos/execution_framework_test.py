@@ -332,7 +332,7 @@ def test_resource_offers_launch(
         task_state_history=m(fake_state=time.time(), TASK_INITED=time.time())
     )
     fake_task_2 = mock.Mock()
-    ef.handle_offer = mock.Mock(return_value=([docker_task], [fake_task_2]))
+    ef.cb_interface.get_tasks_for_offer = mock.Mock(return_value=([docker_task], [fake_task_2]))
 
     ef.task_queue.put(fake_task)
     ef.task_queue.put(fake_task_2)
@@ -374,7 +374,7 @@ def test_resource_offers_launch_tasks_failed(
         task_state='fake_state',
         task_state_history=m(fake_state=time.time(), TASK_INITED=time.time())
     )
-    ef.handle_offer = mock.Mock(return_value=([docker_task], []))
+    ef.cb_interface.get_tasks_for_offer = mock.Mock(return_value=([docker_task], []))
     ef.task_queue.put(fake_task)
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef.resourceOffers(ef.driver, [fake_offer])
@@ -462,7 +462,7 @@ def test_resource_offers_unmet_reqs(
     mock_driver,
     mock_get_metric
 ):
-    ef.handle_offer = mock.Mock(return_value=([], [fake_task]))
+    ef.cb_interface.get_tasks_for_offer = mock.Mock(return_value=([], [fake_task]))
 
     ef.task_queue.put(fake_task)
     ef.resourceOffers(mock_driver, [fake_offer])

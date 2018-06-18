@@ -6,13 +6,22 @@ from pymesos import MesosSchedulerDriver
 
 from task_processing.interfaces.task_executor import TaskExecutor
 from task_processing.plugins.mesos.execution_framework import ExecutionFramework
-from task_processing.plugins.mesos.translator import mesos_status_to_event
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
 logging.basicConfig(format=FORMAT)
 
 
-class AbstractMesosExecutor(TaskExecutor, metaclass=abc.ABCMeta):
+class MesosExecutorCallbackInterface(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def get_tasks_for_offer(self, task_configs, offer):
+        pass
+
+    @abc.abstractmethod
+    def process_status_update(self, update, task_config):
+        pass
+
+
+class AbstractMesosExecutor(TaskExecutor, MesosExecutorCallbackInterface):
 
     def __init__(
         self,
@@ -22,7 +31,6 @@ class AbstractMesosExecutor(TaskExecutor, metaclass=abc.ABCMeta):
         secret=None,
         mesos_address='127.0.0.1:5050',
         initial_decline_delay=1.0,
-        framework_translator=mesos_status_to_event,
         framework_name='taskproc-default',
         framework_staging_timeout=240,
     ):
@@ -40,8 +48,7 @@ class AbstractMesosExecutor(TaskExecutor, metaclass=abc.ABCMeta):
             role=role,
             pool=pool,
             name=framework_name,
-            handle_offer_callback=self.handle_offer,
-            translator=framework_translator,
+            callback_interface=self,
             task_staging_timeout_s=framework_staging_timeout,
             initial_decline_delay=initial_decline_delay
         )
@@ -76,7 +83,3 @@ class AbstractMesosExecutor(TaskExecutor, metaclass=abc.ABCMeta):
 
     def get_event_queue(self):
         return self.execution_framework.event_queue
-
-    @abc.abstractmethod
-    def handle_offer(self, task_configs, offer):
-        pass

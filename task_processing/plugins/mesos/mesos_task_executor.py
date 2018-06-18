@@ -4,6 +4,7 @@ from typing import Tuple
 
 import addict
 
+from task_processing.interfaces.event import Event
 from task_processing.plugins.mesos.constraints import offer_matches_task_constraints
 from task_processing.plugins.mesos.mesos_executor import AbstractMesosExecutor
 from task_processing.plugins.mesos.resource_helpers import allocate_task_resources
@@ -11,6 +12,7 @@ from task_processing.plugins.mesos.resource_helpers import get_offer_resources
 from task_processing.plugins.mesos.resource_helpers import task_fits
 from task_processing.plugins.mesos.task_config import MesosTaskConfig
 from task_processing.plugins.mesos.translator import make_mesos_task_info
+from task_processing.plugins.mesos.translator import mesos_update_to_event
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
 logging.basicConfig(format=FORMAT)
@@ -20,7 +22,7 @@ log = logging.getLogger(__name__)
 class MesosTaskExecutor(AbstractMesosExecutor):
     TASK_CONFIG_INTERFACE = MesosTaskConfig
 
-    def handle_offer(
+    def get_tasks_for_offer(
         self,
         task_configs: List[MesosTaskConfig],
         offer: addict.Dict,
@@ -47,3 +49,6 @@ class MesosTaskExecutor(AbstractMesosExecutor):
                 tasks_to_defer.append(task_config)
 
         return tasks_to_launch, tasks_to_defer
+
+    def process_status_update(self, update: addict.Dict, task_config: MesosTaskConfig) -> Event:
+        return mesos_update_to_event(update, task_config)

@@ -15,9 +15,12 @@ log = logging.getLogger(__name__)
 
 class MesosPodExecutor(AbstractMesosExecutor):
 
-    def handle_offer(
+    def get_tasks_for_offer(
         self,
         task_configs: List[MesosTaskConfig],
         offer: addict.Dict,
     ) -> Tuple[List[Any], List[MesosTaskConfig]]:
+        raise NotImplementedError
+
+    def process_status_update(self):
         raise NotImplementedError

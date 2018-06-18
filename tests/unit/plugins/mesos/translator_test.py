@@ -7,7 +7,7 @@ from task_processing.interfaces.event import Event
 from task_processing.plugins.mesos.resource_helpers import ResourceSet
 from task_processing.plugins.mesos.translator import make_mesos_task_info
 from task_processing.plugins.mesos.translator import MESOS_STATUS_MAP
-from task_processing.plugins.mesos.translator import mesos_status_to_event
+from task_processing.plugins.mesos.translator import mesos_update_to_event
 
 
 @pytest.mark.parametrize('gpus_count,containerizer,container', [
@@ -119,11 +119,19 @@ def test_make_mesos_task_info(
     assert task_info == expected_task_info
 
 
-def test_translator_maps_status_to_event():
-    for k in MESOS_STATUS_MAP:
+@mock.patch('task_processing.plugins.mesos.translator.time')
+def test_mesos_update_to_event(mock_time):
+    mock_time.time.return_value = 12345678.0
+    for key, val in MESOS_STATUS_MAP.items():
         mesos_status = mock.MagicMock()
-        mesos_status.state = k
-        assert isinstance(
-            mesos_status_to_event(mesos_status, 123, task_config={}),
-            Event,
+        mesos_status.state = key
+        assert mesos_update_to_event(mesos_status, addict.Dict(task_id='123')) == Event(
+            kind='task',
+            raw=mesos_status,
+            task_id='123',
+            task_config={'task_id': '123'},
+            timestamp=12345678.0,
+            terminal=val.terminal,
+            platform_type=val.platform_type,
+            success=val.get('success', None),
         )

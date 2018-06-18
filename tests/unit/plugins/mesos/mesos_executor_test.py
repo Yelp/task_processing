@@ -2,11 +2,13 @@ import mock
 import pytest
 
 from task_processing.plugins.mesos.mesos_executor import AbstractMesosExecutor
-from task_processing.plugins.mesos.translator import mesos_status_to_event
 
 
 class DummyMesosExecutor(AbstractMesosExecutor):
-    def handle_offer(task_configs, offer):
+    def get_tasks_for_offer(self, task_configs, offer):
+        pass
+
+    def process_status_update(self, update, task_config):
         pass
 
 
@@ -28,10 +30,9 @@ def test_creates_execution_framework_and_driver(mock_Thread, mesos_executor, moc
         name="taskproc-default",
         task_staging_timeout_s=240,
         initial_decline_delay=1.0,
-        translator=mesos_status_to_event,
         pool=None,
         role="role",
-        handle_offer_callback=mesos_executor.handle_offer,
+        callback_interface=mesos_executor,
     )
 
     assert mesos_executor.driver is mesos_driver.return_value
