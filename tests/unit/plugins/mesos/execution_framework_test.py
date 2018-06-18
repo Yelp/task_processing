@@ -328,8 +328,8 @@ def test_resource_offers_launch(
     docker_task = Dict(task_id=Dict(value=task_id))
     task_metadata = TaskMetadata(
         task_config=fake_task,
-        task_state='TASK_INITED',
-        task_state_history=m(TASK_INITED=time.time())
+        task_state='fake_state',
+        task_state_history=m(fake_state=time.time(), TASK_INITED=time.time())
     )
     fake_task_2 = mock.Mock()
     ef.handle_offer = mock.Mock(return_value=([docker_task], [fake_task_2]))
@@ -339,17 +339,16 @@ def test_resource_offers_launch(
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef.resourceOffers(ef.driver, [fake_offer])
 
-    assert ef.task_queue.qsize() == 1
-    assert ef.task_queue.get() == fake_task_2
+    assert ef.task_metadata[task_id].agent_id == 'fake_agent_id'
     assert mock_driver.suppressOffers.call_count == 0
     assert not ef.are_offers_suppressed
     assert mock_driver.declineOffer.call_count == 0
     assert mock_driver.launchTasks.call_count == 1
     assert mock_get_metric.call_count == 4
-    mock_get_metric.assert_any_call(metrics.TASK_INSUFFICIENT_OFFER_COUNT)
     mock_get_metric.assert_any_call(metrics.OFFER_DELAY_TIMER)
-    mock_get_metric.assert_any_call(metrics.TASK_QUEUED_TIME_TIMER)
     mock_get_metric.assert_any_call(metrics.TASK_LAUNCHED_COUNT)
+    mock_get_metric.assert_any_call(metrics.TASK_QUEUED_TIME_TIMER)
+    mock_get_metric.assert_any_call(metrics.TASK_INSUFFICIENT_OFFER_COUNT)
     assert mock_get_metric.return_value.record.call_count == 2
     assert mock_get_metric.return_value.count.call_count == 2
 
@@ -372,8 +371,8 @@ def test_resource_offers_launch_tasks_failed(
     docker_task = Dict(task_id=Dict(value=task_id))
     task_metadata = TaskMetadata(
         task_config=fake_task,
-        task_state='TASK_INITED',
-        task_state_history=m(TASK_INITED=time.time())
+        task_state='fake_state',
+        task_state_history=m(fake_state=time.time(), TASK_INITED=time.time())
     )
     ef.handle_offer = mock.Mock(return_value=([docker_task], []))
     ef.task_queue.put(fake_task)
@@ -385,8 +384,6 @@ def test_resource_offers_launch_tasks_failed(
     assert mock_driver.declineOffer.call_count == 0
     assert mock_driver.launchTasks.call_count == 1
     assert mock_get_metric.call_count == 2
-    mock_get_metric.assert_any_call(metrics.TASK_QUEUED_TIME_TIMER)
-    mock_get_metric.assert_any_call(metrics.TASK_LAUNCH_FAILED_COUNT)
     assert ef.task_metadata[task_id].task_state == 'UNKNOWN'
 
 

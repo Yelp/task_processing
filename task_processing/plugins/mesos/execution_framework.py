@@ -272,6 +272,55 @@ class ExecutionFramework(Scheduler):
 
         get_metric(metrics.TASK_ENQUEUED_COUNT).count(1)
 
+    def launch_tasks_for_offer(self, driver, offer, tasks_to_launch):
+        task_launch_failed = False
+        try:
+            driver.launchTasks(offer.id, tasks_to_launch)
+        except (socket.timeout, Exception):
+            tasks = ', '.join(
+                [task.task_id.value for task in tasks_to_launch]
+            )
+            log.warning(
+                f'Failed to launch following tasks {tasks}.'
+                'Thus, moving them to UNKNOWN state.')
+            task_launch_failed = True
+            get_metric(metrics.TASK_LAUNCH_FAILED_COUNT).count(1)
+
+        # 'UNKNOWN' state is for internal tracking. It will not be
+        # propogated to users.
+        current_task_state = 'UNKNOWN' if task_launch_failed else \
+            'TASK_STAGING'
+
+        for task in tasks_to_launch:
+            md = self.task_metadata[task.task_id.value]
+            self.task_metadata = self.task_metadata.set(
+                task.task_id.value,
+                md.set(
+                    task_state=current_task_state,
+                    task_state_history=md.task_state_history.set(
+                        current_task_state, time.time()),
+                    agent_id=str(offer.agent_id.value),
+                )
+            )
+
+            get_metric(metrics.TASK_QUEUED_TIME_TIMER).record(
+                time.time() - md.task_state_history['TASK_INITED']
+            )
+
+            # Emit the staging event for successful launches
+            if not task_launch_failed:
+                update = Dict(
+                    state='TASK_STAGING',
+                    offer=offer,
+                )
+                self.event_queue.put(
+                    self.translator(
+                        update, task.task_id.value,
+                        task_config=md.task_config,
+                    )
+                )
+                get_metric(metrics.TASK_LAUNCHED_COUNT).count(1)
+
     def stop(self):
         self.stopping = True
 
@@ -429,73 +478,21 @@ class ExecutionFramework(Scheduler):
                 while not self.task_queue.empty():
                     task_configs.append(self.task_queue.get())
 
-            tasks_to_launch, tasks_to_defer = self.handle_offer(task_configs, offer)
+                tasks_to_launch, tasks_to_defer = self.handle_offer(task_configs, offer)
 
-            with self._lock:
-                for task in tasks_to_launch:
-                    task_id = task.task_id.value
-                    task_metadata = self.task_metadata[task_id]
-                    task_metadata = task_metadata.set(agent_id=offer.agent_id.value)
-                    self.task_metadata = self.task_metadata.set(task_id, task_metadata)
-                    get_metric(metrics.TASK_QUEUED_TIME_TIMER).record(
-                        time.time() - task_metadata.task_state_history['TASK_INITED'],
-                    )
                 for task in tasks_to_defer:
                     self.task_queue.put(task)
                     get_metric(metrics.TASK_INSUFFICIENT_OFFER_COUNT).count(1)
 
-            if len(tasks_to_launch) == 0:
-                declined['bad resources'].append(offer.id.value)
-                declined_offer_ids.append(offer.id)
-                continue
+                if len(tasks_to_launch) == 0:
+                    declined['bad resources'].append(offer.id.value)
+                    declined_offer_ids.append(offer.id)
+                    continue
 
-            accepted.append('offer: {} agent: {} tasks: {}'.format(
-                offer.id.value, offer.agent_id.value, len(tasks_to_launch)))
+                accepted.append('offer: {} agent: {} tasks: {}'.format(
+                    offer.id.value, offer.agent_id.value, len(tasks_to_launch)))
 
-            task_launch_failed = False
-            try:
-                driver.launchTasks(offer.id, tasks_to_launch)
-            except (socket.timeout, Exception):
-                log.warning('Failed to launch following tasks {tasks}.'
-                            'Thus, moving them to UNKNOWN state'.format(
-                                tasks=', '.join([
-                                    task.task_id.value for task in
-                                    tasks_to_launch
-                                ]),
-                            )
-                            )
-                task_launch_failed = True
-                get_metric(metrics.TASK_LAUNCH_FAILED_COUNT).count(1)
-
-            # 'UNKNOWN' state is for internal tracking. It will not be
-            # propogated to users.
-            current_task_state = 'UNKNOWN' if task_launch_failed else \
-                'TASK_STAGING'
-            with self._lock:
-                for task in tasks_to_launch:
-                    md = self.task_metadata[task.task_id.value]
-                    self.task_metadata = self.task_metadata.set(
-                        task.task_id.value,
-                        md.set(
-                            task_state=current_task_state,
-                            task_state_history=md.task_state_history.set(
-                                current_task_state, time.time()),
-
-                        )
-                    )
-                    # Emit the staging event for successful launches
-                    if not task_launch_failed:
-                        update = Dict(
-                            state='TASK_STAGING',
-                            offer=offer,
-                        )
-                        self.event_queue.put(
-                            self.translator(
-                                update, task.task_id.value,
-                                task_config=md.task_config,
-                            )
-                        )
-                        get_metric(metrics.TASK_LAUNCHED_COUNT).count(1)
+                self.launch_tasks_for_offer(driver, offer, tasks_to_launch)
 
         if len(declined_offer_ids) > 0:
             driver.declineOffer(declined_offer_ids, self.offer_decline_filter)

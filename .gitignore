@@ -90,8 +90,9 @@ ENV/
 # Rope project settings
 .ropeproject
 
-# Vim
+# Editors
 *.sw[nop]
+.vscode
 
 .pytest_cache
 .mypy_cache
