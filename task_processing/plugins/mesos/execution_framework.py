@@ -299,7 +299,8 @@ class ExecutionFramework(Scheduler):
         tasks_to_launch = []
         offer_resources = get_offer_resources(offer, self.role)
 
-        log.info(f'Received offer {id} for role {self.role}: {offer_resources}')
+        log.info(
+            f'Received offer {id} for role {self.role}: {offer_resources}')
         tasks_to_put_back_in_queue = []
 
         # Need to lock here even though we are working on the task_queue, since
