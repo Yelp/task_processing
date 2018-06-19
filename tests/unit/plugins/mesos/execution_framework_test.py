@@ -296,7 +296,8 @@ def test_get_tasks_to_launch(
         assert len(tasks_to_launch) == 0
         assert ef.task_queue.qsize() == 1
         assert mock_get_metric.call_count == 1
-        assert mock_get_metric.call_args == mock.call(ef_mdl.TASK_INSUFFICIENT_OFFER_COUNT)
+        assert mock_get_metric.call_args == mock.call(
+            ef_mdl.TASK_INSUFFICIENT_OFFER_COUNT)
         assert mock_get_metric.return_value.count.call_count == 1
         assert mock_get_metric.return_value.count.call_args == mock.call(1)
 

@@ -230,4 +230,4 @@ class MesosLoggingExecutor(TaskExecutor):
         return self.dest_queue
 
     def kill(self, task_id):
-        self.executor.kill(task_id)
+        self.downstream_executor.kill(task_id)
