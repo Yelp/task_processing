@@ -9,9 +9,10 @@ from addict import Dict
 from pyrsistent import m
 
 from task_processing.plugins.mesos import metrics
-from task_processing.plugins.mesos.constraints import offer_matches_task_constraints
+from task_processing.plugins.mesos.constraints import attributes_match_constraints
 from task_processing.plugins.mesos.execution_framework import ExecutionFramework
 from task_processing.plugins.mesos.execution_framework import TaskMetadata
+from task_processing.plugins.mesos.mesos_executor import MesosExecutorCallbacks
 from task_processing.plugins.mesos.task_config import MesosTaskConfig
 
 
@@ -73,6 +74,7 @@ def test_ef_kills_stuck_tasks(
     ef.kill_task = mock.Mock()
     ef.blacklist_slave = mock.Mock()
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
+    ef.callbacks = MesosExecutorCallbacks(mock.Mock(), mock.Mock(), mock.Mock())
 
     ef._background_check()
 
@@ -140,11 +142,13 @@ def test_offer_matches_pool_no_match(ef, fake_offer):
 
 
 def test_offer_matches_constraints_no_constraints(ef, fake_task, fake_offer):
-    match = offer_matches_task_constraints(fake_offer, fake_task)
+    attributes = {attribute.name: attribute.value for attribute in fake_offer.attributes}
+    match = attributes_match_constraints(attributes, fake_task.constraints)
     assert match
 
 
 def test_offer_matches_constraints_match(ef, fake_offer):
+    attributes = {attribute.name: attribute.text.value for attribute in fake_offer.attributes}
     fake_task = MesosTaskConfig(
         image='fake_image',
         cmd='echo "fake"',
@@ -152,11 +156,12 @@ def test_offer_matches_constraints_match(ef, fake_offer):
             ['region', '==', 'fake_region_text'],
         ],
     )
-    match = offer_matches_task_constraints(fake_offer, fake_task)
+    match = attributes_match_constraints(attributes, fake_task.constraints)
     assert match
 
 
 def test_offer_matches_constraints_no_match(ef, fake_offer):
+    attributes = {attribute.name: attribute.text.value for attribute in fake_offer.attributes}
     fake_task = MesosTaskConfig(
         image='fake_image',
         cmd='echo "fake"',
@@ -164,7 +169,7 @@ def test_offer_matches_constraints_no_match(ef, fake_offer):
             ['region', '==', 'another_fake_region_text'],
         ],
     )
-    match = offer_matches_task_constraints(fake_offer, fake_task)
+    match = attributes_match_constraints(attributes, fake_task.constraints)
     assert not match
 
 
@@ -325,14 +330,13 @@ def test_resource_offers_launch(
     mock_time.return_value = 2.0
     ef.suppress_after = 0.0
     ef.offer_matches_pool = mock.Mock(return_value=(True, None))
-    docker_task = Dict(task_id=Dict(value=task_id))
     task_metadata = TaskMetadata(
         task_config=fake_task,
         task_state='fake_state',
         task_state_history=m(fake_state=time.time(), TASK_INITED=time.time())
     )
     fake_task_2 = mock.Mock()
-    ef.cb_interface.get_tasks_for_offer = mock.Mock(return_value=([docker_task], [fake_task_2]))
+    ef.callbacks.get_tasks_for_offer = mock.Mock(return_value=([fake_task], [fake_task_2]))
 
     ef.task_queue.put(fake_task)
     ef.task_queue.put(fake_task_2)
@@ -368,13 +372,12 @@ def test_resource_offers_launch_tasks_failed(
     mock_time.return_value = 2.0
     ef.suppress_after = 0.0
     ef.offer_matches_pool = mock.Mock(return_value=(True, None))
-    docker_task = Dict(task_id=Dict(value=task_id))
     task_metadata = TaskMetadata(
         task_config=fake_task,
         task_state='fake_state',
         task_state_history=m(fake_state=time.time(), TASK_INITED=time.time())
     )
-    ef.cb_interface.get_tasks_for_offer = mock.Mock(return_value=([docker_task], []))
+    ef.callbacks.get_tasks_for_offer = mock.Mock(return_value=([fake_task], []))
     ef.task_queue.put(fake_task)
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef.resourceOffers(ef.driver, [fake_offer])
@@ -462,7 +465,7 @@ def test_resource_offers_unmet_reqs(
     mock_driver,
     mock_get_metric
 ):
-    ef.cb_interface.get_tasks_for_offer = mock.Mock(return_value=([], [fake_task]))
+    ef.callbacks.get_tasks_for_offer = mock.Mock(return_value=([], [fake_task]))
 
     ef.task_queue.put(fake_task)
     ef.resourceOffers(mock_driver, [fake_offer])

@@ -21,10 +21,11 @@ from task_processing.metrics import create_counter
 from task_processing.metrics import create_timer
 from task_processing.metrics import get_metric
 from task_processing.plugins.mesos import metrics
+from task_processing.plugins.mesos.resource_helpers import get_offer_resources
 
 
 if TYPE_CHECKING:
-    from .mesos_executor import MesosExecutorCallbackInterface  # noqa
+    from .mesos_executor import MesosExecutorCallbacks  # noqa
 
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
@@ -40,13 +41,13 @@ class TaskMetadata(PRecord):
 
 
 class ExecutionFramework(Scheduler):
-    cb_interface: 'MesosExecutorCallbackInterface'
+    callbacks: 'MesosExecutorCallbacks'
 
     def __init__(
         self,
         name,
         role,
-        callback_interface: 'MesosExecutorCallbackInterface',
+        callbacks: 'MesosExecutorCallbacks',
         task_staging_timeout_s,
         pool=None,
         slave_blacklist_timeout_s=900,
@@ -60,7 +61,7 @@ class ExecutionFramework(Scheduler):
         self.task_staging_timeout_s = task_staging_timeout_s
         self.pool = pool
         self.role = role
-        self.cb_interface = callback_interface
+        self.callbacks = callbacks
         self.slave_blacklist_timeout_s = slave_blacklist_timeout_s
         self.offer_backoff = offer_backoff
 
@@ -74,7 +75,7 @@ class ExecutionFramework(Scheduler):
 
         self.task_queue: Queue = Queue()
         self.event_queue: Queue = Queue()
-        self.driver = None
+        self.driver: Optional[Scheduler] = None
         self.are_offers_suppressed = False
         self.suppress_after = int(time.time()) + suppress_delay
         self.decline_after = time.time() + initial_decline_delay
@@ -277,13 +278,21 @@ class ExecutionFramework(Scheduler):
 
         get_metric(metrics.TASK_ENQUEUED_COUNT).count(1)
 
-    def launch_tasks_for_offer(self, driver, offer, tasks_to_launch):
+    def launch_tasks_for_offer(self, offer, tasks_to_launch) -> None:
         task_launch_failed = False
+        mesos_protobuf_tasks = [
+            self.callbacks.make_mesos_protobuf(task_config, offer.agent_id.value, self.role)
+            for task_config in tasks_to_launch
+        ]
         try:
-            driver.launchTasks(offer.id, tasks_to_launch)
+            if self.driver:
+                self.driver.launchTasks(offer.id, mesos_protobuf_tasks)
+            else:
+                log.error('No driver present, could not launch tasks')
+                return
         except (socket.timeout, Exception):
             tasks = ', '.join(
-                [task.task_id.value for task in tasks_to_launch]
+                [task.task_id for task in tasks_to_launch]
             )
             log.warning(
                 f'Failed to launch following tasks {tasks}.'
@@ -296,9 +305,9 @@ class ExecutionFramework(Scheduler):
         current_task_state = 'UNKNOWN' if task_launch_failed else 'TASK_STAGING'
 
         for task in tasks_to_launch:
-            md = self.task_metadata[task.task_id.value]
+            md = self.task_metadata[task.task_id]
             self.task_metadata = self.task_metadata.set(
-                task.task_id.value,
+                task.task_id,
                 md.set(
                     task_state=current_task_state,
                     task_state_history=md.task_state_history.set(
@@ -314,7 +323,7 @@ class ExecutionFramework(Scheduler):
             # Emit the staging event for successful launches
             if not task_launch_failed:
                 self.event_queue.put(
-                    self.cb_interface.process_status_update(
+                    self.callbacks.handle_status_update(
                         Dict(state='TASK_STAGING', offer=offer),
                         md.task_config,
                     )
@@ -478,9 +487,17 @@ class ExecutionFramework(Scheduler):
                 while not self.task_queue.empty():
                     task_configs.append(self.task_queue.get())
 
-                tasks_to_launch, tasks_to_defer = self.cb_interface.get_tasks_for_offer(
+                offer_resources = get_offer_resources(offer, self.role)
+                offer_attributes = {
+                    attribute.name: attribute.text.value
+                    for attribute in offer.attributes
+                }
+                log.info(f'Received offer {offer.id.value} for role {self.role}: {offer_resources}')
+                tasks_to_launch, tasks_to_defer = self.callbacks.get_tasks_for_offer(
                     task_configs,
-                    offer,
+                    offer_resources,
+                    offer_attributes,
+                    self.role,
                 )
 
                 for task in tasks_to_defer:
@@ -495,7 +512,10 @@ class ExecutionFramework(Scheduler):
                 accepted.append('offer: {} agent: {} tasks: {}'.format(
                     offer.id.value, offer.agent_id.value, len(tasks_to_launch)))
 
-                self.launch_tasks_for_offer(driver, offer, tasks_to_launch)
+                if self.driver:
+                    self.launch_tasks_for_offer(offer, tasks_to_launch)
+                else:
+                    log.error('No driver present, could not launch tasks')
 
         if len(declined_offer_ids) > 0:
             driver.declineOffer(declined_offer_ids, self.offer_decline_filter)
@@ -506,7 +526,7 @@ class ExecutionFramework(Scheduler):
         if accepted:
             log.info("Offers accepted: {}".format(', '.join(accepted)))
 
-    def statusUpdate(self, driver, update):
+    def statusUpdate(self, driver, update) -> None:
         task_id = update.task_id.value
         task_state = str(update.state)
 
@@ -557,7 +577,7 @@ class ExecutionFramework(Scheduler):
                 )
 
             self.event_queue.put(
-                self.cb_interface.process_status_update(update, md.task_config),
+                self.callbacks.handle_status_update(update, md.task_config),
             )
 
             if task_state in self._terminal_task_counts:

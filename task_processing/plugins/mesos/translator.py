@@ -6,18 +6,17 @@ from pyrsistent import thaw
 
 from task_processing.interfaces.event import Event
 from task_processing.interfaces.event import task_event
-from task_processing.plugins.mesos.resource_helpers import ResourceSet
 from task_processing.plugins.mesos.task_config import MesosTaskConfig
 
 # https://github.com/apache/mesos/blob/master/include/mesos/mesos.proto
 
 
-def make_mesos_container_info(task_config: MesosTaskConfig, port: int) -> addict.Dict:
+def make_mesos_container_info(task_config: MesosTaskConfig) -> addict.Dict:
     container_info = addict.Dict(
         type=task_config.containerizer,
         volumes=thaw(task_config.volumes),
     )
-    port_mappings = [addict.Dict(host_port=port, container_port=8888)]
+    port_mappings = [addict.Dict(host_port=task_config.ports[0].begin, container_port=8888)]
     if container_info.type == 'DOCKER':
         container_info.docker = addict.Dict(
             image=task_config.image,
@@ -40,8 +39,7 @@ def make_mesos_container_info(task_config: MesosTaskConfig, port: int) -> addict
 
 
 def make_mesos_resources(
-    consumed_resources: ResourceSet,
-    port: int,
+    task_config: MesosTaskConfig,
     role: str,
 ) -> List[addict.Dict]:
     return [
@@ -49,31 +47,31 @@ def make_mesos_resources(
             name='cpus',
             type='SCALAR',
             role=role,
-            scalar=addict.Dict(value=consumed_resources.cpus),
+            scalar=addict.Dict(value=task_config.cpus),
         ),
         addict.Dict(
             name='mem',
             type='SCALAR',
             role=role,
-            scalar=addict.Dict(value=consumed_resources.mem)
+            scalar=addict.Dict(value=task_config.mem)
         ),
         addict.Dict(
             name='disk',
             type='SCALAR',
             role=role,
-            scalar=addict.Dict(value=consumed_resources.disk)
+            scalar=addict.Dict(value=task_config.disk)
         ),
         addict.Dict(
             name='gpus',
             type='SCALAR',
             role=role,
-            scalar=addict.Dict(value=consumed_resources.gpus)
+            scalar=addict.Dict(value=task_config.gpus)
         ),
         addict.Dict(
             name='ports',
             type='RANGES',
             role=role,
-            ranges=addict.Dict(range=[addict.Dict(begin=port, end=port)])
+            ranges=addict.Dict(range=thaw(task_config.ports)),
         ),
     ]
 
@@ -90,19 +88,17 @@ def make_mesos_command_info(task_config: MesosTaskConfig) -> addict.Dict:
 
 def make_mesos_task_info(
     task_config: MesosTaskConfig,
-    consumed_resources: ResourceSet,
-    offer: addict.Dict,
+    agent_id: str,
     role: str,
 ) -> addict.Dict:
 
-    port = consumed_resources['ports'][0]
-    container_info = make_mesos_container_info(task_config, port)
-    resources = make_mesos_resources(consumed_resources, port, role)
+    container_info = make_mesos_container_info(task_config)
+    resources = make_mesos_resources(task_config, role)
     command_info = make_mesos_command_info(task_config)
 
     return addict.Dict(
         task_id=addict.Dict(value=task_config.task_id),
-        agent_id=addict.Dict(value=offer.agent_id.value),
+        agent_id=addict.Dict(value=agent_id),
         name=f'executor-{task_config.task_id}',
         resources=resources,
         command=command_info,

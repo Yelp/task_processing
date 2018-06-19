@@ -1,20 +1,21 @@
 import mock
 import pytest
 
-from task_processing.plugins.mesos.mesos_executor import AbstractMesosExecutor
-
-
-class DummyMesosExecutor(AbstractMesosExecutor):
-    def get_tasks_for_offer(self, task_configs, offer):
-        pass
-
-    def process_status_update(self, update, task_config):
-        pass
+from task_processing.plugins.mesos.mesos_executor import MesosExecutor
+from task_processing.plugins.mesos.mesos_executor import MesosExecutorCallbacks
 
 
 @pytest.fixture
-def mesos_executor(request, mock_Thread, mock_fw_and_driver):
-    dummy_executor = DummyMesosExecutor('role')
+def mock_callbacks():
+    return MesosExecutorCallbacks(mock.Mock(), mock.Mock(), mock.Mock()),
+
+
+@pytest.fixture
+def mesos_executor(request, mock_callbacks, mock_Thread, mock_fw_and_driver):
+    dummy_executor = MesosExecutor(
+        'role',
+        callbacks=mock_callbacks
+    )
 
     def mesos_executor_teardown():
         dummy_executor.stop()
@@ -23,7 +24,12 @@ def mesos_executor(request, mock_Thread, mock_fw_and_driver):
     return dummy_executor
 
 
-def test_creates_execution_framework_and_driver(mock_Thread, mesos_executor, mock_fw_and_driver):
+def test_creates_execution_framework_and_driver(
+    mock_callbacks,
+    mock_Thread,
+    mesos_executor,
+    mock_fw_and_driver,
+):
     execution_framework, mesos_driver = mock_fw_and_driver
     assert mesos_executor.execution_framework is execution_framework.return_value
     assert execution_framework.call_args == mock.call(
@@ -32,7 +38,7 @@ def test_creates_execution_framework_and_driver(mock_Thread, mesos_executor, moc
         initial_decline_delay=1.0,
         pool=None,
         role="role",
-        callback_interface=mesos_executor,
+        callbacks=mock_callbacks,
     )
 
     assert mesos_executor.driver is mesos_driver.return_value

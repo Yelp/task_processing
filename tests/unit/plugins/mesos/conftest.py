@@ -1,8 +1,10 @@
 import threading
 
+import addict
 import mock
 import pytest
-from addict import Dict
+from pyrsistent import m
+from pyrsistent import v
 
 from task_processing.plugins.mesos.task_config import MesosTaskConfig
 
@@ -15,6 +17,7 @@ def fake_task():
         mem=1024.0,
         disk=1000.0,
         gpus=1,
+        ports=v(m(begin=31200, end=31200)),
         image='fake_image',
         cmd='echo "fake"'
     )
@@ -22,56 +25,56 @@ def fake_task():
 
 @pytest.fixture
 def fake_offer():
-    return Dict(
-        id=Dict(value='fake_offer_id'),
-        agent_id=Dict(value='fake_agent_id'),
+    return addict.Dict(
+        id=addict.Dict(value='fake_offer_id'),
+        agent_id=addict.Dict(value='fake_agent_id'),
         hostname='fake_hostname',
         resources=[
-            Dict(
+            addict.Dict(
                 role='fake_role',
                 name='cpus',
-                scalar=Dict(value=10),
+                scalar=addict.Dict(value=10),
                 type='SCALAR',
             ),
-            Dict(
+            addict.Dict(
                 role='other_fake_role',
                 name='cpus',
-                scalar=Dict(value=20),
+                scalar=addict.Dict(value=20),
                 type='SCALAR',
             ),
-            Dict(
+            addict.Dict(
                 role='fake_role',
                 name='mem',
-                scalar=Dict(value=1024),
+                scalar=addict.Dict(value=1024),
                 type='SCALAR',
             ),
-            Dict(
+            addict.Dict(
                 role='fake_role',
                 name='disk',
-                scalar=Dict(value=1000),
+                scalar=addict.Dict(value=1000),
                 type='SCALAR',
             ),
-            Dict(
+            addict.Dict(
                 role='fake_role',
                 name='gpus',
-                scalar=Dict(value=1),
+                scalar=addict.Dict(value=1),
                 type='SCALAR',
             ),
-            Dict(
+            addict.Dict(
                 role='fake_role',
                 name='ports',
-                ranges=Dict(range=[Dict(begin=31200, end=31500)]),
+                ranges=addict.Dict(range=[addict.Dict(begin=31200, end=31500)]),
                 type='RANGES',
             ),
         ],
         attributes=[
-            Dict(
+            addict.Dict(
                 name='pool',
-                text=Dict(value='fake_pool_text')
+                text=addict.Dict(value='fake_pool_text')
             ),
-            Dict(
+            addict.Dict(
                 name='region',
-                text=Dict(value='fake_region_text'),
+                text=addict.Dict(value='fake_region_text'),
             ),
         ]
     )

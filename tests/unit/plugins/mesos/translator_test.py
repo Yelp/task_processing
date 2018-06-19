@@ -4,7 +4,6 @@ import pytest
 from pyrsistent import v
 
 from task_processing.interfaces.event import Event
-from task_processing.plugins.mesos.resource_helpers import ResourceSet
 from task_processing.plugins.mesos.translator import make_mesos_task_info
 from task_processing.plugins.mesos.translator import MESOS_STATUS_MAP
 from task_processing.plugins.mesos.translator import mesos_update_to_event
@@ -52,7 +51,6 @@ def test_make_mesos_task_info(
     containerizer,
     container,
 ):
-    consumed_resources = ResourceSet(cpus=10, mem=1024, disk=1000, gpus=gpus_count, ports=v(31200))
     tid = fake_task.task_id
     fake_task = fake_task.set(
         volumes=v(
@@ -68,8 +66,7 @@ def test_make_mesos_task_info(
 
     task_info = make_mesos_task_info(
         fake_task,
-        consumed_resources,
-        fake_offer,
+        fake_offer.agent_id.value,
         'fake_role',
     )
 
