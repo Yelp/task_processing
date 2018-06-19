@@ -20,7 +20,7 @@ def test_mesos_task_config_factories():
     assert m.gpus == 6
 
     try:
-        m = m.set(name='a'*256)
+        m = m.set(name='a' * 256)
         assert False, 'Task id longer than 255 characters was accepted'
     except InvariantException as e:
         print(e)
