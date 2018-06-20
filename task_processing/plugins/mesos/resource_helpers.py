@@ -56,7 +56,9 @@ def allocate_task_resources(
     :param task: the specification for the task to allocate
     :param offer_resources: a mapping of resource name -> available resources
         (should come from :func:`get_offer_resources`)
-    :returns: a pair of (consumed_resources, remaining_resources)
+    :returns: a pair of (`prepared_task_config`, `remaining_resources`), where
+        `prepared_task_config` is the task_config object modified with the
+        actual resources consumed
     """
     for res, val in offer_resources.items():
         if res not in _NUMERIC_RESOURCES:

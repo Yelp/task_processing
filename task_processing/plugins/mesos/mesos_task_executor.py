@@ -24,8 +24,11 @@ def get_tasks_for_offer(
     for task_config in task_configs:
         if (task_fits(task_config, offer_resources) and
                 attributes_match_constraints(offer_attributes, task_config.constraints)):
-            task_config, offer_resources = allocate_task_resources(task_config, offer_resources)
-            tasks_to_launch.append(task_config)
+            prepared_task_config, offer_resources = allocate_task_resources(
+                task_config,
+                offer_resources,
+            )
+            tasks_to_launch.append(prepared_task_config)
         else:
             tasks_to_defer.append(task_config)
 
