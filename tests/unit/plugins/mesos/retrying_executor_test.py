@@ -5,8 +5,8 @@ import mock
 import pytest
 
 from task_processing.interfaces.event import Event
-from task_processing.plugins.mesos.mesos_executor import MesosTaskConfig
 from task_processing.plugins.mesos.retrying_executor import RetryingExecutor
+from task_processing.plugins.mesos.task_config import MesosTaskConfig
 # from task_processing.plugins.mesos.translator import mesos_status_to_event
 
 

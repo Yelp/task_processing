@@ -28,7 +28,7 @@ def main():
     processor = TaskProcessor()
     processor.load_plugin(provider_module='task_processing.plugins.mesos')
     mesos_executor = processor.executor_from_config(
-        provider='mesos',
+        provider='mesos_task',
         provider_config={
             'secret': args.secret,
             'mesos_address': args.master,

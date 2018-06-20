@@ -63,9 +63,3 @@ class Constraint(PRecord):
     attribute = field(type=str)
     operator = field(type=str, invariant=valid_constraint_operator_name)
     value = field(type=str)
-
-
-def offer_matches_task_constraints(offer, task):
-    attributes = {attribute.name: attribute.text.value for attribute in
-                  offer.attributes}
-    return attributes_match_constraints(attributes, task.constraints)

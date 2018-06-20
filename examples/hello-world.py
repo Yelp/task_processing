@@ -27,7 +27,7 @@ def main():
     # executor) using this defined configuration. this config can also be used
     # to specify other Mesos properties, such as which role to use
     executor = processor.executor_from_config(
-        provider='mesos',
+        provider='mesos_task',
         provider_config={
             'secret': secret,
             'mesos_address': mesos_address,

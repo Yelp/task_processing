@@ -21,7 +21,7 @@ def main():
     for p in ['mesos', 'stateful']:
         processor.load_plugin(provider_module='task_processing.plugins.' + p)
     mesos_executor = processor.executor_from_config(
-        provider='mesos',
+        provider='mesos_task',
         provider_config={
             'secret': secret,
             'mesos_address': mesos_address,

@@ -1,4 +1,5 @@
 import importlib
+import logging
 
 from pyrsistent import field
 from pyrsistent import m
@@ -7,6 +8,10 @@ from pyrsistent import pmap
 from pyrsistent import PRecord
 
 from task_processing.interfaces import TaskExecutor
+
+FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
+logging.basicConfig(format=FORMAT)
+log = logging.getLogger(__name__)
 
 
 class Registry(PRecord):
@@ -24,6 +29,12 @@ class Registry(PRecord):
             ('task_executors', name), lambda _: task_executor_cls
         )
 
+    def register_deprecated_task_executor(self, name, task_executor_cls):
+        """Helper method for adding an deprecated executor"""
+        return self.transform(
+            ('deprecated_task_executors', name), lambda _: task_executor_cls
+        )
+
     def _executor_invariant(task_executors):
         """Invariant that task_executors must be TaskExecutors"""
         return (
@@ -33,7 +44,11 @@ class Registry(PRecord):
 
     task_executors = field(
         type=PMap, initial=m(), factory=pmap,
-        invariant=_executor_invariant
+        invariant=_executor_invariant,
+    )
+    deprecated_task_executors = field(
+        type=PMap, initial=m(), factory=pmap,
+        invariant=_executor_invariant,
     )
     """
     A map of task executor names (str) to a class definition which implements
@@ -103,13 +118,17 @@ class TaskProcessor:
         :param dict provider_config: The arguments needed to instantiate
             the provider.
         """
-        if provider not in self.registry.task_executors:
+        if provider in self.registry.task_executors:
+            return self.registry.task_executors[provider]
+        elif provider in self.registry.deprecated_task_executors:
+            log.warning(f'{provider} is a deprecated executor and will be removed in the future')
+            return self.registry.deprecated_task_executors[provider]
+        else:
             raise ValueError(
                 '{0} provider not registered; available providers: {1}'.format(
                     provider, self.registry.task_executors.keys().tolist()
                 )
             )
-        return self.registry.task_executors[provider]
 
     def executor_from_config(self, provider, provider_config=None):
         if provider_config is None:
