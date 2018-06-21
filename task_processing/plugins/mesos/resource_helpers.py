@@ -9,7 +9,7 @@ from pyrsistent import PVector
 from pyrsistent import pvector
 from pyrsistent import v
 
-from task_processing.plugins.mesos.task_config import MesosTaskConfig
+from task_processing.plugins.mesos.config import MesosTaskConfig
 
 NUMERIC_RESOURCE = field(
     type=float,

@@ -6,7 +6,7 @@ import pytest
 from pyrsistent import m
 from pyrsistent import v
 
-from task_processing.plugins.mesos.task_config import MesosTaskConfig
+from task_processing.plugins.mesos.config import MesosTaskConfig
 
 
 @pytest.fixture

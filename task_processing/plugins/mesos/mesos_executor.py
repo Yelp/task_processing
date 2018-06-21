@@ -4,31 +4,40 @@ from typing import Callable
 from typing import List
 from typing import NamedTuple
 from typing import Tuple
+from typing import TypeVar
 
 import addict
+from mypy_extensions import NamedArg
 from pymesos import MesosSchedulerDriver
 
 from task_processing.interfaces.event import Event
 from task_processing.interfaces.task_executor import TaskExecutor
+from task_processing.plugins.mesos.config import MesosPodConfig
+from task_processing.plugins.mesos.config import MesosTaskConfig
 from task_processing.plugins.mesos.execution_framework import ExecutionFramework
 from task_processing.plugins.mesos.resource_helpers import ResourceSet
-from task_processing.plugins.mesos.task_config import MesosTaskConfig
 
+ConfigType = TypeVar('ConfigType', MesosTaskConfig, MesosPodConfig)
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
 logging.basicConfig(format=FORMAT)
 
 
 class MesosExecutorCallbacks(NamedTuple):
     get_tasks_for_offer: Callable[
-        [List[MesosTaskConfig], ResourceSet, dict, str],
-        Tuple[List[addict.Dict], List[MesosTaskConfig]]
+        [List[ConfigType], ResourceSet, dict, str],
+        Tuple[List[addict.Dict], List[ConfigType]]
     ]
     handle_status_update: Callable[
-        [addict.Dict, MesosTaskConfig],
+        [addict.Dict, ConfigType],
         Event,
     ]
     make_mesos_protobuf: Callable[
-        [MesosTaskConfig, str, str],
+        [
+            MesosTaskConfig,
+            NamedArg(str, 'agent_id'),
+            NamedArg(str, 'framework_id'),
+            NamedArg(str, 'role'),
+        ],
         addict.Dict,
     ]
 

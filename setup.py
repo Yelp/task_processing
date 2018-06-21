@@ -29,6 +29,7 @@ setup(
     include_package_data=True,
     install_requires=[
         'pyrsistent',
+        'mypy-extensions',
     ],
     extras_require={
         # We can add the Mesos specific dependencies here

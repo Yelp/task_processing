@@ -72,6 +72,7 @@ class ExecutionFramework(Scheduler):
             checkpoint=True,
             role=self.role
         )
+        self._framework_id: Optional[str] = None
 
         self.task_queue: Queue = Queue()
         self.event_queue: Queue = Queue()
@@ -280,16 +281,25 @@ class ExecutionFramework(Scheduler):
 
     def launch_tasks_for_offer(self, offer, tasks_to_launch) -> None:
         task_launch_failed = False
-        mesos_protobuf_tasks = [
-            self.callbacks.make_mesos_protobuf(task_config, offer.agent_id.value, self.role)
+
+        if not self._framework_id:
+            log.error('No framework ID recorded, could not launch tasks')
+            return
+
+        mesos_protobuf_operations = [
+            self.callbacks.make_mesos_protobuf(
+                task_config,
+                agent_id=offer.agent_id.value,
+                framework_id=self._framework_id,
+                role=self.role,
+            )
             for task_config in tasks_to_launch
         ]
         try:
-            if self.driver:
-                self.driver.launchTasks(offer.id, mesos_protobuf_tasks)
-            else:
+            if not self.driver:
                 log.error('No driver present, could not launch tasks')
                 return
+            self.driver.acceptOffers(offer.id, mesos_protobuf_operations)
         except (socket.timeout, Exception):
             tasks = ', '.join(
                 [task.task_id for task in tasks_to_launch]
@@ -385,6 +395,7 @@ class ExecutionFramework(Scheduler):
             id=frameworkId.value,
             role=self.role
         ))
+        self._framework_id = frameworkId.value
 
     def reregistered(self, driver, masterInfo):
         log.warning("Re-registered to {master} with role {role}".format(

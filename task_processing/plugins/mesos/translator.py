@@ -1,17 +1,30 @@
 import time
 from typing import List
+from typing import Union
 
 import addict
 from pyrsistent import thaw
 
 from task_processing.interfaces.event import Event
 from task_processing.interfaces.event import task_event
-from task_processing.plugins.mesos.task_config import MesosTaskConfig
+from task_processing.plugins.mesos.config import MesosPodConfig
+from task_processing.plugins.mesos.config import MesosTaskConfig
+from task_processing.plugins.mesos.mesos_executor import ConfigType
 
 # https://github.com/apache/mesos/blob/master/include/mesos/mesos.proto
 
 
-def make_mesos_container_info(task_config: MesosTaskConfig) -> addict.Dict:
+def _make_mesos_command_info(task_config: MesosTaskConfig) -> addict.Dict:
+    return addict.Dict(
+        value=task_config.cmd,
+        uris=[addict.Dict(value=uri, extract=False) for uri in task_config.uris],
+        environment=addict.Dict(
+            variables=[addict.Dict(name=k, value=v) for k, v in task_config.environment.items()],
+        )
+    )
+
+
+def _make_mesos_container_info(task_config: MesosTaskConfig) -> addict.Dict:
     container_info = addict.Dict(
         type=task_config.containerizer,
         volumes=thaw(task_config.volumes),
@@ -27,6 +40,8 @@ def make_mesos_container_info(task_config: MesosTaskConfig) -> addict.Dict:
         )
     elif container_info.type == 'MESOS':
         container_info.network_infos = addict.Dict(port_mappings=port_mappings)
+        if task_config.cni_network:
+            container_info.network_infos.name = task_config.cni_network
         # For this to work, image_providers needs to be set to 'docker' on mesos agents (as opposed
         # to 'appc' or 'oci'; we're still running docker images, we're just using the UCR to do it).
         if 'image' in task_config:
@@ -38,8 +53,21 @@ def make_mesos_container_info(task_config: MesosTaskConfig) -> addict.Dict:
     return container_info
 
 
-def make_mesos_resources(
-    task_config: MesosTaskConfig,
+def _make_mesos_executor_info(
+    pod_config: MesosPodConfig,
+    framework_id: str,
+    role: str,
+) -> addict.Dict:
+    return addict.Dict(
+        type='DEFAULT',
+        executor_id=f'executor-{pod_config.task_id}',
+        framework_id=framework_id,
+        resources=_make_mesos_resources(pod_config, role),
+    )
+
+
+def _make_mesos_resources(
+    task_config: Union[MesosTaskConfig, MesosPodConfig],
     role: str,
 ) -> List[addict.Dict]:
     return [
@@ -76,33 +104,54 @@ def make_mesos_resources(
     ]
 
 
-def make_mesos_command_info(task_config: MesosTaskConfig) -> addict.Dict:
-    return addict.Dict(
-        value=task_config.cmd,
-        uris=[addict.Dict(value=uri, extract=False) for uri in task_config.uris],
-        environment=addict.Dict(
-            variables=[addict.Dict(name=k, value=v) for k, v in task_config.environment.items()],
-        )
-    )
-
-
-def make_mesos_task_info(
+def _make_mesos_task_info(
     task_config: MesosTaskConfig,
     agent_id: str,
     role: str,
 ) -> addict.Dict:
-
-    container_info = make_mesos_container_info(task_config)
-    resources = make_mesos_resources(task_config, role)
-    command_info = make_mesos_command_info(task_config)
-
     return addict.Dict(
         task_id=addict.Dict(value=task_config.task_id),
         agent_id=addict.Dict(value=agent_id),
         name=f'executor-{task_config.task_id}',
-        resources=resources,
-        command=command_info,
-        container=container_info
+        command=_make_mesos_command_info(task_config),
+        container=_make_mesos_container_info(task_config),
+        resources=_make_mesos_resources(task_config, role),
+    )
+
+
+def make_mesos_task_operation(
+    task_config: ConfigType,
+    *,
+    agent_id: str,
+    framework_id: str,
+    role: str,
+) -> addict.Dict:
+    return addict.Dict(
+        type='LAUNCH',
+        launch=addict.Dict(
+            task_infos=_make_mesos_task_info(task_config, agent_id, role),
+        ),
+    )
+
+
+def make_mesos_pod_operation(
+    pod_config: ConfigType,
+    *,
+    agent_id: str,
+    framework_id: str,
+    role: str,
+) -> addict.Dict:
+    task_infos = [
+        _make_mesos_task_info(task_config, agent_id, role)
+        for task_config in pod_config.tasks
+    ]
+
+    return addict.Dict(
+        type='LAUNCH_GROUP',
+        launch_group=addict.Dict(
+            executor=_make_mesos_executor_info(pod_config, framework_id, role),
+            task_group=task_infos,
+        )
     )
 
 
@@ -138,7 +187,7 @@ MESOS_STATUS_MAP = {
 }
 
 
-def mesos_update_to_event(mesos_status: addict.Dict, task_config: MesosTaskConfig) -> Event:
+def mesos_update_to_event(mesos_status: addict.Dict, task_config: ConfigType) -> Event:
     kwargs = dict(
         raw=mesos_status,
         task_id=task_config.task_id,

@@ -9,11 +9,11 @@ from addict import Dict
 from pyrsistent import m
 
 from task_processing.plugins.mesos import metrics
+from task_processing.plugins.mesos.config import MesosTaskConfig
 from task_processing.plugins.mesos.constraints import attributes_match_constraints
 from task_processing.plugins.mesos.execution_framework import ExecutionFramework
 from task_processing.plugins.mesos.execution_framework import TaskMetadata
 from task_processing.plugins.mesos.mesos_executor import MesosExecutorCallbacks
-from task_processing.plugins.mesos.task_config import MesosTaskConfig
 
 
 @pytest.fixture
@@ -24,7 +24,9 @@ def mock_Thread():
 
 @pytest.fixture
 def ef(mock_Thread):
-    return ExecutionFramework("fake_name", "fake_role", mock.Mock(), 240)
+    ef = ExecutionFramework("fake_name", "fake_role", mock.Mock(), 240)
+    ef._framework_id = 'fake_framework'
+    return ef
 
 
 @pytest.fixture
@@ -347,7 +349,7 @@ def test_resource_offers_launch(
     assert mock_driver.suppressOffers.call_count == 0
     assert not ef.are_offers_suppressed
     assert mock_driver.declineOffer.call_count == 0
-    assert mock_driver.launchTasks.call_count == 1
+    assert mock_driver.acceptOffers.call_count == 1
     assert mock_get_metric.call_count == 4
     mock_get_metric.assert_any_call(metrics.OFFER_DELAY_TIMER)
     mock_get_metric.assert_any_call(metrics.TASK_LAUNCHED_COUNT)
@@ -367,7 +369,7 @@ def test_resource_offers_launch_tasks_failed(
 ):
     task_id = fake_task.task_id
     ef.driver = mock_driver
-    ef.driver.launchTasks = mock.Mock(side_effect=socket.timeout)
+    ef.driver.acceptOffers = mock.Mock(side_effect=socket.timeout)
     ef._last_offer_time = None
     mock_time.return_value = 2.0
     ef.suppress_after = 0.0
@@ -385,7 +387,7 @@ def test_resource_offers_launch_tasks_failed(
     assert mock_driver.suppressOffers.call_count == 0
     assert not ef.are_offers_suppressed
     assert mock_driver.declineOffer.call_count == 0
-    assert mock_driver.launchTasks.call_count == 1
+    assert mock_driver.acceptOffers.call_count == 1
     assert mock_get_metric.call_count == 2
     assert ef.task_metadata[task_id].task_state == 'UNKNOWN'
 
@@ -406,7 +408,7 @@ def test_resource_offers_no_tasks_to_launch(
     )
     assert mock_driver.suppressOffers.call_count == 1
     assert ef.are_offers_suppressed
-    assert mock_driver.launchTasks.call_count == 0
+    assert mock_driver.acceptOffers.call_count == 0
     assert mock_get_metric.call_count == 0
     assert mock_get_metric.return_value.count.call_count == 0
 
@@ -429,7 +431,7 @@ def test_resource_offers_blacklisted_offer(
         [fake_offer.id],
         ef.offer_decline_filter
     )
-    assert mock_driver.launchTasks.call_count == 0
+    assert mock_driver.acceptOffers.call_count == 0
     assert mock_get_metric.call_count == 0
     assert mock_get_metric.return_value.count.call_count == 0
 
@@ -453,7 +455,7 @@ def test_resource_offers_not_for_pool(
         [fake_offer.id],
         ef.offer_decline_filter
     )
-    assert mock_driver.launchTasks.call_count == 0
+    assert mock_driver.acceptOffers.call_count == 0
     assert mock_get_metric.call_count == 0
     assert mock_get_metric.return_value.count.call_count == 0
 
@@ -475,7 +477,7 @@ def test_resource_offers_unmet_reqs(
         [fake_offer.id],
         ef.offer_decline_filter
     )
-    assert mock_driver.launchTasks.call_count == 0
+    assert mock_driver.acceptOffers.call_count == 0
     assert mock_get_metric.call_count == 1
     mock_get_metric.assert_any_call(metrics.TASK_INSUFFICIENT_OFFER_COUNT)
     assert mock_get_metric.return_value.count.call_count == 1

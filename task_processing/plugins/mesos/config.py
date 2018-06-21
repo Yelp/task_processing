@@ -7,6 +7,7 @@ from pyrsistent import pmap
 from pyrsistent import PRecord
 from pyrsistent import PVector
 from pyrsistent import pvector
+from pyrsistent import pvector_field
 from pyrsistent import v
 
 from task_processing.plugins.mesos.constraints import Constraint
@@ -88,6 +89,7 @@ class MesosTaskConfig(PRecord):
                     factory=int,
                     mandatory=False,
                     invariant=lambda r: (r >= 0, 'retries >= 0'))
+    cni_network = field(type=str, initial='')
     volumes = field(type=PVector,
                     initial=v(),
                     factory=pvector,
@@ -96,7 +98,6 @@ class MesosTaskConfig(PRecord):
     cap_add = field(type=PVector, initial=v(), factory=pvector)
     ulimit = field(type=PVector, initial=v(), factory=pvector)
     uris = field(type=PVector, initial=v(), factory=pvector)
-    # TODO: containerization + containerization_args ?
     docker_parameters = field(type=PVector, initial=v(), factory=pvector)
     containerizer = field(type=str,
                           initial='DOCKER',
@@ -118,6 +119,34 @@ class MesosTaskConfig(PRecord):
         invariant=_valid_constraints,
     )
     use_cached_image = field(type=bool, initial=True, factory=bool)
+
+    @property
+    def task_id(self):
+        return "{}.{}".format(self.name, self.uuid)
+
+
+class MesosPodConfig(PRecord):
+    name = field(type=str, initial="pod")
+    uuid = field(type=(str, uuid.UUID), initial=uuid.uuid4)
+    tasks = pvector_field(MesosTaskConfig)
+
+    cpus = field(type=float,
+                 initial=0.1,
+                 factory=float,
+                 invariant=lambda c: (c > 0, 'cpus > 0'))
+    mem = field(type=float,
+                initial=32.0,
+                factory=float,
+                invariant=lambda m: (m >= 32, 'mem is >= 32'))
+    disk = field(type=float,
+                 initial=10.0,
+                 factory=float,
+                 invariant=lambda d: (d > 0, 'disk > 0'))
+    gpus = field(type=int,
+                 initial=0,
+                 factory=int,
+                 invariant=lambda g: (g >= 0, 'gpus >= 0'))
+    ports = field(type=PVector, initial=v(), factory=pvector)
 
     @property
     def task_id(self):

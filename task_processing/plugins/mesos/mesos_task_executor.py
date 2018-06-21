@@ -1,23 +1,24 @@
 from typing import List
 from typing import Tuple
 
+from task_processing.plugins.mesos.config import MesosTaskConfig
 from task_processing.plugins.mesos.constraints import attributes_match_constraints
+from task_processing.plugins.mesos.mesos_executor import ConfigType
 from task_processing.plugins.mesos.mesos_executor import MesosExecutor
 from task_processing.plugins.mesos.mesos_executor import MesosExecutorCallbacks
 from task_processing.plugins.mesos.resource_helpers import allocate_task_resources
 from task_processing.plugins.mesos.resource_helpers import ResourceSet
 from task_processing.plugins.mesos.resource_helpers import task_fits
-from task_processing.plugins.mesos.task_config import MesosTaskConfig
-from task_processing.plugins.mesos.translator import make_mesos_task_info
+from task_processing.plugins.mesos.translator import make_mesos_task_operation
 from task_processing.plugins.mesos.translator import mesos_update_to_event
 
 
 def get_tasks_for_offer(
-    task_configs: List[MesosTaskConfig],
+    task_configs: List[ConfigType],
     offer_resources: ResourceSet,
     offer_attributes: dict,
     role: str,
-) -> Tuple[List[MesosTaskConfig], List[MesosTaskConfig]]:
+) -> Tuple[List[ConfigType], List[ConfigType]]:
 
     tasks_to_launch, tasks_to_defer = [], []
 
@@ -44,7 +45,7 @@ class MesosTaskExecutor(MesosExecutor):
             MesosExecutorCallbacks(
                 get_tasks_for_offer,
                 mesos_update_to_event,
-                make_mesos_task_info,
+                make_mesos_task_operation,
             ),
             *args,
             **kwargs,
