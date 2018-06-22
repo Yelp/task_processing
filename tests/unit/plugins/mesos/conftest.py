@@ -1,4 +1,5 @@
 import threading
+import uuid
 
 import addict
 import mock
@@ -6,13 +7,14 @@ import pytest
 from pyrsistent import m
 from pyrsistent import v
 
+from task_processing.plugins.mesos.config import MesosPodConfig
 from task_processing.plugins.mesos.config import MesosTaskConfig
 
 
 @pytest.fixture
 def fake_task():
     return MesosTaskConfig(
-        name='fake_name',
+        name='fake_task',
         cpus=10.0,
         mem=1024.0,
         disk=1000.0,
@@ -20,6 +22,26 @@ def fake_task():
         ports=v(m(begin=31200, end=31200)),
         image='fake_image',
         cmd='echo "fake"'
+    )
+
+
+@pytest.fixture
+def fake_pod(fake_task):
+    fake_task_1 = fake_task.set(
+        uuid=uuid.uuid4(),
+        gpus=0,
+        cni_network='fake_cni',
+        containerizer='MESOS',
+    )
+    fake_task_2 = fake_task_1.set(uuid=uuid.uuid4(), ports=v(m(begin=31201, end=31201)))
+    fake_task_3 = fake_task_1.set(uuid=uuid.uuid4(), ports=v(m(begin=31202, end=31202)))
+    return MesosPodConfig(
+        name='fake_pod',
+        cpus=1.0,
+        mem=32.0,
+        disk=20.0,
+        gpus=0,
+        tasks=v(fake_task_1, fake_task_2, fake_task_3),
     )
 
 

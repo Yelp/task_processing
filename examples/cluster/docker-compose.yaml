@@ -7,7 +7,7 @@ services:
       ZK_CONFIG: tickTime=2000,initLimit=10,syncLimit=5,maxClientCnxns=128,forceSync=no,clientPort=2181
       ZK_ID: 1
   mesosmaster:
-    image: mesosphere/mesos:1.3.0
+    image: mesosphere/mesos:1.5.0
     ports:
       - 5050
       - 5054
@@ -17,7 +17,7 @@ services:
     volumes:
       - ./mesos-secrets:/etc/mesos-secrets
   mesosagent:
-    image: mesosphere/mesos:1.3.0
+    image: mesosphere/mesos:1.5.0
     expose:
       - 5051
     volumes:

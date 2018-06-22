@@ -148,6 +148,13 @@ class MesosPodConfig(PRecord):
                  invariant=lambda g: (g >= 0, 'gpus >= 0'))
     ports = field(type=PVector, initial=v(), factory=pvector)
 
+    offer_timeout = field(
+        type=float,
+        initial=60.0,
+        factory=float,
+        invariant=lambda t: (t > 0, 'timeout > 0')
+    )
+
     @property
     def task_id(self):
         return "{}.{}".format(self.name, self.uuid)

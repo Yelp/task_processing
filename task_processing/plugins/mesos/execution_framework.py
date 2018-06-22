@@ -305,7 +305,7 @@ class ExecutionFramework(Scheduler):
                 [task.task_id for task in tasks_to_launch]
             )
             log.warning(
-                f'Failed to launch following tasks {tasks}.'
+                f'Failed to launch following tasks {tasks}.  '
                 'Thus, moving them to UNKNOWN state.')
             task_launch_failed = True
             get_metric(metrics.TASK_LAUNCH_FAILED_COUNT).count(1)

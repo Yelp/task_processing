@@ -63,6 +63,7 @@ def _make_mesos_executor_info(
         executor_id=f'executor-{pod_config.task_id}',
         framework_id=framework_id,
         resources=_make_mesos_resources(pod_config, role),
+        container=addict.Dict(type='MESOS')
     )
 
 
@@ -70,7 +71,7 @@ def _make_mesos_resources(
     task_config: Union[MesosTaskConfig, MesosPodConfig],
     role: str,
 ) -> List[addict.Dict]:
-    return [
+    resource_list = [
         addict.Dict(
             name='cpus',
             type='SCALAR',
@@ -95,13 +96,15 @@ def _make_mesos_resources(
             role=role,
             scalar=addict.Dict(value=task_config.gpus)
         ),
-        addict.Dict(
+    ]
+    if task_config.ports:
+        resource_list.append(addict.Dict(
             name='ports',
             type='RANGES',
             role=role,
             ranges=addict.Dict(range=thaw(task_config.ports)),
-        ),
-    ]
+        ))
+    return resource_list
 
 
 def _make_mesos_task_info(

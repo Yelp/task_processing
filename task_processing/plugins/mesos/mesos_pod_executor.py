@@ -38,7 +38,7 @@ def get_pods_for_offer(
                 break
 
         if prepared_tasks:
-            prepared_pod_config = pod_config.set('tasks', prepared_tasks)
+            prepared_pod_config = pod_config.set(tasks=prepared_tasks)
             pods_to_launch.append(prepared_pod_config)
 
     return pods_to_launch, pods_to_defer
