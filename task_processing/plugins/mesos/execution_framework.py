@@ -530,10 +530,7 @@ class ExecutionFramework(Scheduler):
         task_id = update.task_id.value
         task_state = str(update.state)
 
-        log.info("Task update {update} received for task {task}".format(
-            update=task_state,
-            task=task_id
-        ))
+        log.info(f'Task update {task_state} received for task {task_id} at time {update.timestamp}')
 
         if task_id not in self.task_metadata:
             # We assume that a terminal status update has been
