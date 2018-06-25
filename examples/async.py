@@ -50,7 +50,7 @@ def main():
         task_config = TaskConfig(image='busybox', cmd='/bin/true')
         runner.run(task_config)
 
-    for _ in range(5):
+    for _ in range(tasks_to_launch):
         print('terminated {} tasks'.format(counter.terminated))
         if counter.terminated >= tasks_to_launch:
             break
