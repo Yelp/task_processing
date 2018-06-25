@@ -300,11 +300,11 @@ class ExecutionFramework(Scheduler):
                 log.error('No driver present, could not launch tasks')
                 return
             self.driver.acceptOffers(offer.id, mesos_protobuf_operations)
-        except (socket.timeout, Exception):
+        except Exception:
             tasks = ', '.join(
                 [task.task_id for task in tasks_to_launch]
             )
-            log.warning(
+            log.exception(
                 f'Failed to launch following tasks {tasks}.  '
                 'Thus, moving them to UNKNOWN state.')
             task_launch_failed = True
@@ -527,6 +527,7 @@ class ExecutionFramework(Scheduler):
                     self.launch_tasks_for_offer(offer, tasks_to_launch)
                 else:
                     log.error('No driver present, could not launch tasks')
+                    return
 
         if len(declined_offer_ids) > 0:
             driver.declineOffer(declined_offer_ids, self.offer_decline_filter)

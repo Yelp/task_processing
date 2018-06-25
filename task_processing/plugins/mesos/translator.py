@@ -39,9 +39,9 @@ def _make_mesos_container_info(task_config: MesosTaskConfig) -> addict.Dict:
             force_pull_image=(not task_config.use_cached_image),
         )
     elif container_info.type == 'MESOS':
-        container_info.network_infos = addict.Dict(port_mappings=port_mappings)
-        if task_config.cni_network:
-            container_info.network_infos.name = task_config.cni_network
+        # container_info.network_infos = addict.Dict(port_mappings=port_mappings, protocol='IPv4')
+        # if task_config.cni_network:
+        #     container_info.network_infos.name = task_config.cni_network
         # For this to work, image_providers needs to be set to 'docker' on mesos agents (as opposed
         # to 'appc' or 'oci'; we're still running docker images, we're just using the UCR to do it).
         if 'image' in task_config:
@@ -58,12 +58,17 @@ def _make_mesos_executor_info(
     framework_id: str,
     role: str,
 ) -> addict.Dict:
+    port_mappings = [addict.Dict(host_port=32000, container_port=8888)]
     return addict.Dict(
         type='DEFAULT',
-        executor_id=f'executor-{pod_config.task_id}',
-        framework_id=framework_id,
+        executor_id=addict.Dict(value=f'executor-{pod_config.task_id}'),
+        framework_id=addict.Dict(value=framework_id),
         resources=_make_mesos_resources(pod_config, role),
-        container=addict.Dict(type='MESOS')
+        container=addict.Dict(
+            type='MESOS',
+            network_infos=addict.Dict(port_mappings=port_mappings,
+                                      protocol='IPv4', name='yelp-compose'),
+        ),
     )
 
 
@@ -153,7 +158,7 @@ def make_mesos_pod_operation(
         type='LAUNCH_GROUP',
         launch_group=addict.Dict(
             executor=_make_mesos_executor_info(pod_config, framework_id, role),
-            task_group=task_infos,
+            task_group=addict.Dict(tasks=task_infos),
         )
     )
 

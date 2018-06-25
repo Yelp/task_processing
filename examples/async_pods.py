@@ -48,7 +48,8 @@ def main():
     )
 
     tasks_to_launch = 5
-    tasks = [MesosTaskConfig(image='busybox', cmd='/bin/true') for i in range(tasks_to_launch)]
+    tasks = [MesosTaskConfig(image='busybox', cmd='hostname', containerizer='MESOS',
+                             cni_network='yelp-compose') for i in range(tasks_to_launch)]
     pod_config = MesosPodConfig(tasks=tasks)
     runner.run(pod_config)
 
