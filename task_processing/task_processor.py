@@ -9,8 +9,6 @@ from pyrsistent import PRecord
 
 from task_processing.interfaces import TaskExecutor
 
-FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
-logging.basicConfig(format=FORMAT)
 log = logging.getLogger(__name__)
 
 
