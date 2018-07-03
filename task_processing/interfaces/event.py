@@ -38,7 +38,7 @@ class Event(PRecord):
     # use time.time() to generate
     timestamp = field(type=float)
     # reference to platform-specific event object
-    raw = field()
+    raw = field(initial=m())
     # free-form dictionary for stack-specific data
     extensions = field(type=PMap, initial=m(), factory=pmap)
     # is this the last event for a task?

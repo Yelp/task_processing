@@ -103,7 +103,8 @@ def test_make_mesos_task_info(
                 name='ports',
                 type='RANGES',
                 role='fake_role',
-                ranges=addict.Dict(range=[addict.Dict(begin=31200, end=31200)]),
+                ranges=addict.Dict(
+                    range=[addict.Dict(begin=31200, end=31200)]),
             ),
         ],
         command=addict.Dict(

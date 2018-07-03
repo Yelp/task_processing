@@ -16,7 +16,8 @@ def make_mesos_container_info(task_config: MesosTaskConfig) -> addict.Dict:
         type=task_config.containerizer,
         volumes=thaw(task_config.volumes),
     )
-    port_mappings = [addict.Dict(host_port=task_config.ports[0].begin, container_port=8888)]
+    port_mappings = [addict.Dict(
+        host_port=task_config.ports[0].begin, container_port=8888)]
     if container_info.type == 'DOCKER':
         container_info.docker = addict.Dict(
             image=task_config.image,
@@ -28,7 +29,8 @@ def make_mesos_container_info(task_config: MesosTaskConfig) -> addict.Dict:
     elif container_info.type == 'MESOS':
         container_info.network_infos = addict.Dict(port_mappings=port_mappings)
         # For this to work, image_providers needs to be set to 'docker' on mesos agents (as opposed
-        # to 'appc' or 'oci'; we're still running docker images, we're just using the UCR to do it).
+        # to 'appc' or 'oci'; we're still running docker images, we're just
+        # using the UCR to do it).
         if 'image' in task_config:
             container_info.mesos.image = addict.Dict(
                 type='DOCKER',  # not 'APPC' or 'OCI'
@@ -79,9 +81,11 @@ def make_mesos_resources(
 def make_mesos_command_info(task_config: MesosTaskConfig) -> addict.Dict:
     return addict.Dict(
         value=task_config.cmd,
-        uris=[addict.Dict(value=uri, extract=False) for uri in task_config.uris],
+        uris=[addict.Dict(value=uri, extract=False)
+              for uri in task_config.uris],
         environment=addict.Dict(
-            variables=[addict.Dict(name=k, value=v) for k, v in task_config.environment.items()],
+            variables=[addict.Dict(name=k, value=v)
+                       for k, v in task_config.environment.items()],
         )
     )
 
@@ -132,7 +136,8 @@ MESOS_STATUS_MAP = {
     'TASK_GONE':
     addict.Dict(platform_type='gone', terminal=True, success=False),
     'TASK_GONE_BY_OPERATOR':
-    addict.Dict(platform_type='gone_by_operator', terminal=True, success=False),
+    addict.Dict(platform_type='gone_by_operator',
+                terminal=True, success=False),
     'TASK_UNKNOWN':
     addict.Dict(platform_type='unknown', terminal=False)
 }

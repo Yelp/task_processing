@@ -3,7 +3,7 @@ import socket
 import threading
 import time
 from queue import Queue
-from typing import Optional
+from typing import Optional  # noqa, flake8 issue
 from typing import TYPE_CHECKING
 
 from addict import Dict
@@ -161,7 +161,8 @@ class ExecutionFramework(Scheduler):
                                     ))
                         # Re-enqueue task
                         self.enqueue_task(md.task_config)
-                        get_metric(metrics.TASK_FAILED_TO_LAUNCH_COUNT).count(1)
+                        get_metric(
+                            metrics.TASK_FAILED_TO_LAUNCH_COUNT).count(1)
                         continue
 
                     if md.task_state == 'TASK_STAGING':
@@ -281,7 +282,8 @@ class ExecutionFramework(Scheduler):
     def launch_tasks_for_offer(self, offer, tasks_to_launch) -> None:
         task_launch_failed = False
         mesos_protobuf_tasks = [
-            self.callbacks.make_mesos_protobuf(task_config, offer.agent_id.value, self.role)
+            self.callbacks.make_mesos_protobuf(
+                task_config, offer.agent_id.value, self.role)
             for task_config in tasks_to_launch
         ]
         try:
@@ -492,7 +494,8 @@ class ExecutionFramework(Scheduler):
                     attribute.name: attribute.text.value
                     for attribute in offer.attributes
                 }
-                log.info(f'Received offer {offer.id.value} for role {self.role}: {offer_resources}')
+                log.info(
+                    f'Received offer {offer.id.value} for role {self.role}: {offer_resources}')
                 tasks_to_launch, tasks_to_defer = self.callbacks.get_tasks_for_offer(
                     task_configs,
                     offer_resources,

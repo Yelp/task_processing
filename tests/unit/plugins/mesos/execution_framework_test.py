@@ -74,7 +74,8 @@ def test_ef_kills_stuck_tasks(
     ef.kill_task = mock.Mock()
     ef.blacklist_slave = mock.Mock()
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
-    ef.callbacks = MesosExecutorCallbacks(mock.Mock(), mock.Mock(), mock.Mock())
+    ef.callbacks = MesosExecutorCallbacks(
+        mock.Mock(), mock.Mock(), mock.Mock())
 
     ef._background_check()
 
@@ -117,7 +118,8 @@ def test_reenqueue_tasks_stuck_in_unknown_state(
         ef.task_metadata[task_id].task_config
     )
     assert mock_get_metric.call_count == 1
-    assert mock_get_metric.call_args == mock.call(metrics.TASK_FAILED_TO_LAUNCH_COUNT)
+    assert mock_get_metric.call_args == mock.call(
+        metrics.TASK_FAILED_TO_LAUNCH_COUNT)
     assert mock_get_metric.return_value.count.call_count == 1
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
 
@@ -142,13 +144,15 @@ def test_offer_matches_pool_no_match(ef, fake_offer):
 
 
 def test_offer_matches_constraints_no_constraints(ef, fake_task, fake_offer):
-    attributes = {attribute.name: attribute.value for attribute in fake_offer.attributes}
+    attributes = {
+        attribute.name: attribute.value for attribute in fake_offer.attributes}
     match = attributes_match_constraints(attributes, fake_task.constraints)
     assert match
 
 
 def test_offer_matches_constraints_match(ef, fake_offer):
-    attributes = {attribute.name: attribute.text.value for attribute in fake_offer.attributes}
+    attributes = {
+        attribute.name: attribute.text.value for attribute in fake_offer.attributes}
     fake_task = MesosTaskConfig(
         image='fake_image',
         cmd='echo "fake"',
@@ -161,7 +165,8 @@ def test_offer_matches_constraints_match(ef, fake_offer):
 
 
 def test_offer_matches_constraints_no_match(ef, fake_offer):
-    attributes = {attribute.name: attribute.text.value for attribute in fake_offer.attributes}
+    attributes = {
+        attribute.name: attribute.text.value for attribute in fake_offer.attributes}
     fake_task = MesosTaskConfig(
         image='fake_image',
         cmd='echo "fake"',
@@ -209,7 +214,8 @@ def test_blacklist_slave(
 
     assert agent_id in ef.blacklisted_slaves
     assert mock_get_metric.call_count == 1
-    assert mock_get_metric.call_args == mock.call(metrics.BLACKLISTED_AGENTS_COUNT)
+    assert mock_get_metric.call_args == mock.call(
+        metrics.BLACKLISTED_AGENTS_COUNT)
     assert mock_get_metric.return_value.count.call_count == 1
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
 
@@ -336,7 +342,8 @@ def test_resource_offers_launch(
         task_state_history=m(fake_state=time.time(), TASK_INITED=time.time())
     )
     fake_task_2 = mock.Mock()
-    ef.callbacks.get_tasks_for_offer = mock.Mock(return_value=([fake_task], [fake_task_2]))
+    ef.callbacks.get_tasks_for_offer = mock.Mock(
+        return_value=([fake_task], [fake_task_2]))
 
     ef.task_queue.put(fake_task)
     ef.task_queue.put(fake_task_2)
@@ -377,7 +384,8 @@ def test_resource_offers_launch_tasks_failed(
         task_state='fake_state',
         task_state_history=m(fake_state=time.time(), TASK_INITED=time.time())
     )
-    ef.callbacks.get_tasks_for_offer = mock.Mock(return_value=([fake_task], []))
+    ef.callbacks.get_tasks_for_offer = mock.Mock(
+        return_value=([fake_task], []))
     ef.task_queue.put(fake_task)
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef.resourceOffers(ef.driver, [fake_offer])
@@ -465,7 +473,8 @@ def test_resource_offers_unmet_reqs(
     mock_driver,
     mock_get_metric
 ):
-    ef.callbacks.get_tasks_for_offer = mock.Mock(return_value=([], [fake_task]))
+    ef.callbacks.get_tasks_for_offer = mock.Mock(
+        return_value=([], [fake_task]))
 
     ef.task_queue.put(fake_task)
     ef.resourceOffers(mock_driver, [fake_offer])
