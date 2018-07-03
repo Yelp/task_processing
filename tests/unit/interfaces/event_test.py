@@ -22,7 +22,7 @@ def test_event_creation():
 
 
 def test_event_creation_default(event):
-    assert event.raw == pmap({})
+    assert event.raw == {}
     assert event.extensions == pmap({})
 
 
