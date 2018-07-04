@@ -1,5 +1,6 @@
 import pytest
 from pyrsistent import InvariantException
+from pyrsistent import pmap
 from pyrsistent import PRecord
 from pyrsistent import PTypeError
 
@@ -18,6 +19,11 @@ def test_event_creation():
     assert e.raw == x
     assert e.terminal
     assert e.platform_type == 'killed'
+
+
+def test_event_creation_default(event):
+    assert event.raw == {}
+    assert event.extensions == pmap({})
 
 
 def test_event_is_immutable(event):

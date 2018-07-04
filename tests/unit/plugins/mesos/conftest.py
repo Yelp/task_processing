@@ -63,7 +63,8 @@ def fake_offer():
             addict.Dict(
                 role='fake_role',
                 name='ports',
-                ranges=addict.Dict(range=[addict.Dict(begin=31200, end=31500)]),
+                ranges=addict.Dict(
+                    range=[addict.Dict(begin=31200, end=31500)]),
                 type='RANGES',
             ),
         ],

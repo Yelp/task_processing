@@ -37,7 +37,8 @@ def test_allocate_task_resources(fake_task, offer_resources, available_ports):
     offer_resources = offer_resources.set('ports', available_ports)
     expected_port = available_ports[0].begin
     consumed, remaining = allocate_task_resources(fake_task, offer_resources)
-    assert consumed == fake_task.set(ports=v(m(begin=expected_port, end=expected_port)))
+    assert consumed == fake_task.set(
+        ports=v(m(begin=expected_port, end=expected_port)))
     assert remaining == {
         'cpus': 0,
         'mem': 0,

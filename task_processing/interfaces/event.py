@@ -1,13 +1,13 @@
 import json
 import uuid
 
+import addict
 from pyrsistent import field
 from pyrsistent import freeze
 from pyrsistent import m
 from pyrsistent import PMap
 from pyrsistent import pmap
 from pyrsistent import PRecord
-
 
 EVENT_KINDS = {'task', 'control'}
 EVENT_TASK_ATTRS = {'task_id', 'task_config'}
@@ -38,7 +38,7 @@ class Event(PRecord):
     # use time.time() to generate
     timestamp = field(type=float)
     # reference to platform-specific event object
-    raw = field()
+    raw = field(initial=addict.Dict())
     # free-form dictionary for stack-specific data
     extensions = field(type=PMap, initial=m(), factory=pmap)
     # is this the last event for a task?
