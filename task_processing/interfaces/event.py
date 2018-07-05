@@ -1,7 +1,6 @@
 import json
 import uuid
 
-import addict
 from pyrsistent import field
 from pyrsistent import freeze
 from pyrsistent import m
