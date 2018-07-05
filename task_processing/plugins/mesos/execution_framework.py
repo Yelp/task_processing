@@ -144,6 +144,7 @@ class ExecutionFramework(Scheduler):
                                     success=False,
                                     message='stop',
                                     task_config=md.task_config,
+                                    raw='Failed due to offer timeout',
                                 ))
                             get_metric(metrics.TASK_OFFER_TIMEOUT).count(1)
 
