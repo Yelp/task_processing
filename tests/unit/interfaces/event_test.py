@@ -9,7 +9,7 @@ from task_processing.interfaces.event import Event
 
 @pytest.fixture
 def event():
-    return Event(kind='task', task_id="123", task_config={})
+    return Event(kind='task', task_id="123", task_config={}, raw=None)
 
 
 def test_event_creation():
@@ -22,7 +22,6 @@ def test_event_creation():
 
 
 def test_event_creation_default(event):
-    assert event.raw == {}
     assert event.extensions == pmap({})
 
 
