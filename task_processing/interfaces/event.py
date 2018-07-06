@@ -1,7 +1,6 @@
 import json
 import uuid
 
-import addict
 from pyrsistent import field
 from pyrsistent import freeze
 from pyrsistent import m
@@ -14,21 +13,15 @@ EVENT_TASK_ATTRS = {'task_id', 'task_config'}
 
 
 class Event(PRecord):
-
-    @staticmethod
-    def validate_task_event(r):
-        if r.kind != 'task':
+    def __invariant__(self):
+        if self.kind != 'task':
             return True, 'Not a task event'
 
-        missing_attrs = EVENT_TASK_ATTRS - set(r.keys())
+        missing_attrs = EVENT_TASK_ATTRS - set(self.keys())
         if missing_attrs:
             return False, 'Missing task attributes: {}'.format(missing_attrs)
 
         return True, 'Task is valid'
-
-    def __invariant__(r): return (
-        Event.validate_task_event(r),
-    )
 
     kind = field(type=str,
                  mandatory=True,
@@ -38,7 +31,7 @@ class Event(PRecord):
     # use time.time() to generate
     timestamp = field(type=float)
     # reference to platform-specific event object
-    raw = field(initial=addict.Dict())
+    raw = field(mandatory=True)
     # free-form dictionary for stack-specific data
     extensions = field(type=PMap, initial=m(), factory=pmap)
     # is this the last event for a task?

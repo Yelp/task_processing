@@ -112,25 +112,20 @@ class ExecutionFramework(Scheduler):
 
             time_now = time.time()
             with self._lock:
-                for task_id in self.task_metadata.keys():
-                    md = self.task_metadata[task_id]
-
+                for task_id, md in self.task_metadata.items():
                     if md.task_state == 'TASK_INITED':
                         # give up if the task hasn't launched after
                         # offer_timeout
-                        if time_now >= (
-                            md.task_state_history[md.task_state] +
-                            md.task_config.offer_timeout
-                        ):
-                            log.warning((
-                                'Task {id} has been waiting for offers for '
-                                'longer than configured timeout '
-                                '{offer_timeout}. Giving up and removing the '
+                        inited_at = md.task_state_history['TASK_INITED']
+                        offer_timeout = md.task_config.offer_timeout
+                        expires_at = inited_at + offer_timeout
+                        if time_now >= expires_at:
+                            log.warning(
+                                f'Task {task_id} has been waiting for offers '
+                                'for longer than configured timeout '
+                                f'{offer_timeout}. Giving up and removing the '
                                 'task from the task queue.'
-                            ).format(
-                                id=task_id,
-                                offer_timeout=md.task_config.offer_timeout
-                            ))
+                            )
                             # killing the task will also dequeue
                             self.kill_task(task_id)
                             self.task_metadata = self.task_metadata.discard(
@@ -140,11 +135,13 @@ class ExecutionFramework(Scheduler):
                                 task_event(
                                     task_id=task_id,
                                     terminal=True,
-                                    timestamp=time.time(),
+                                    timestamp=time_now,
                                     success=False,
                                     message='stop',
                                     task_config=md.task_config,
-                                ))
+                                    raw='Failed due to offer timeout',
+                                )
+                            )
                             get_metric(metrics.TASK_OFFER_TIMEOUT).count(1)
 
                     # Task is not eligible for killing or reenqueuing

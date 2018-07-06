@@ -68,7 +68,8 @@ events = st.builds(
             ),
             max_size=5,
         )
-    )
+    ),
+    raw=st.sampled_from([None]),
 )
 
 
