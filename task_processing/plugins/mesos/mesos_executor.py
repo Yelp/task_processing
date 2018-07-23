@@ -14,9 +14,6 @@ from task_processing.plugins.mesos.execution_framework import ExecutionFramework
 from task_processing.plugins.mesos.resource_helpers import ResourceSet
 from task_processing.plugins.mesos.task_config import MesosTaskConfig
 
-FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
-logging.basicConfig(format=FORMAT)
-
 
 class MesosExecutorCallbacks(NamedTuple):
     get_tasks_for_offer: Callable[
