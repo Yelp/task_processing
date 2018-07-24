@@ -28,8 +28,6 @@ if TYPE_CHECKING:
     from .mesos_executor import MesosExecutorCallbacks  # noqa
 
 
-FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
-logging.basicConfig(format=FORMAT)
 log = logging.getLogger(__name__)
 
 

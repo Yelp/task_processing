@@ -9,8 +9,6 @@ from pyrsistent import PRecord
 
 from task_processing.interfaces import TaskExecutor
 
-FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
-logging.basicConfig(format=FORMAT)
 log = logging.getLogger(__name__)
 
 
@@ -121,8 +119,7 @@ class TaskProcessor:
         if provider in self.registry.task_executors:
             return self.registry.task_executors[provider]
         elif provider in self.registry.deprecated_task_executors:
-            log.warning(
-                f'{provider} is a deprecated executor and will be removed in the future')
+            log.warning(f'{provider} is a deprecated executor and will be removed in the future')
             return self.registry.deprecated_task_executors[provider]
         else:
             raise ValueError(
