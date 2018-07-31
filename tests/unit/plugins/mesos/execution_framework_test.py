@@ -179,7 +179,7 @@ def test_offer_matches_constraints_no_match(ef, fake_offer):
 
 
 def test_kill_task(ef, mock_driver):
-    ef.driver = mock_driver
+    ef._driver = mock_driver
 
     ef.kill_task('fake_task_id')
 
@@ -240,13 +240,13 @@ def test_enqueue_task(
     mock_get_metric
 ):
     ef.are_offers_suppressed = True
-    ef.driver = mock_driver
+    ef._driver = mock_driver
 
     ef.enqueue_task(fake_task)
 
     assert ef.task_metadata[fake_task.task_id].task_state == 'TASK_INITED'
     assert not ef.task_queue.empty()
-    assert ef.driver.reviveOffers.call_count == 1
+    assert mock_driver.reviveOffers.call_count == 1
     assert not ef.are_offers_suppressed
     assert mock_get_metric.call_count == 1
     assert mock_get_metric.call_args == mock.call(metrics.TASK_ENQUEUED_COUNT)
@@ -312,7 +312,7 @@ def test_registered(ef, mock_driver):
         'fake_master_info'
     )
 
-    assert ef.driver == mock_driver
+    assert ef._driver == mock_driver
 
 
 def test_reregistered(ef, mock_driver):
@@ -514,6 +514,7 @@ def test_status_update_record_only(
 ):
     update, task_id, task_metadata = status_update_test_prep('fake_state1')
     ef.translator = mock.Mock()
+    ef._driver = mock_driver
 
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef.statusUpdate(mock_driver, update)
@@ -532,6 +533,7 @@ def test_status_update_finished(
     # finished task does same thing as other states
     update, task_id, task_metadata = status_update_test_prep('TASK_FINISHED')
     ef.translator = mock.Mock()
+    ef._driver = mock_driver
 
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef.statusUpdate(mock_driver, update)
@@ -552,6 +554,7 @@ def test_ignore_status_update(
 ):
     update, task_id, task_metadata = status_update_test_prep('TASK_FINISHED')
     ef.translator = mock.Mock()
+    ef._driver = mock_driver
 
     ef.statusUpdate(mock_driver, update)
 
@@ -574,6 +577,7 @@ def test_task_lost_due_to_invalid_offers(
         task_id,
         task_metadata
     )
+    ef._driver = mock_driver
 
     ef.statusUpdate(mock_driver, update)
 

@@ -73,7 +73,7 @@ class ExecutionFramework(Scheduler):
 
         self.task_queue: Queue = Queue()
         self.event_queue: Queue = Queue()
-        self.driver: Optional[Scheduler] = None
+        self._driver: Optional[Scheduler] = None
         self.are_offers_suppressed = False
         self.suppress_after = int(time.time()) + suppress_delay
         self.decline_after = time.time() + initial_decline_delay
@@ -102,6 +102,17 @@ class ExecutionFramework(Scheduler):
             target=self._background_check, args=())
         task_kill_thread.daemon = True
         task_kill_thread.start()
+
+    def call_driver(self, method, *args, **kwargs):
+        if not self._driver:
+            log.error('{} failed: No driver'.format(method))
+            return False
+
+        try:
+            return getattr(self._driver, method)(*args, **kwargs)
+        except (socket.timeout, Exception) as e:
+            log.warning('{} failed: {}'.format(method, str(e)))
+            return False
 
     def _background_check(self):
         while True:
@@ -188,11 +199,7 @@ class ExecutionFramework(Scheduler):
         ))
 
         if len(tasks_to_reconcile) > 0:
-            try:
-                self.driver.reconcileTasks(tasks_to_reconcile)
-            except (socket.timeout, Exception) as e:
-                log.warning(
-                    'Failed to reconcile task status: {}'.format(str(e)))
+            self.call_driver('reconcileTasks', tasks_to_reconcile)
 
         self._reconcile_tasks_at += self._task_reconciliation_delay
 
@@ -223,7 +230,10 @@ class ExecutionFramework(Scheduler):
                 self.task_queue.put(t)
 
         if flag is False:
-            self.driver.killTask(Dict(value=task_id))
+            if self.call_driver('killTask', Dict(value=task_id)) is False:
+                return False
+
+        return True
 
     def blacklist_slave(self, agent_id, timeout):
         with self._lock:
@@ -268,9 +278,9 @@ class ExecutionFramework(Scheduler):
             self.task_queue.put(task_config)
 
             if self.are_offers_suppressed:
-                self.driver.reviveOffers()
-                self.are_offers_suppressed = False
-                log.info('Reviving offers because we have tasks to run.')
+                if self.call_driver('reviveOffers') is not False:
+                    self.are_offers_suppressed = False
+                    log.info('Reviving offers because we have tasks to run.')
 
         get_metric(metrics.TASK_ENQUEUED_COUNT).count(1)
 
@@ -281,13 +291,7 @@ class ExecutionFramework(Scheduler):
                 task_config, offer.agent_id.value, self.role)
             for task_config in tasks_to_launch
         ]
-        try:
-            if self.driver:
-                self.driver.launchTasks(offer.id, mesos_protobuf_tasks)
-            else:
-                log.error('No driver present, could not launch tasks')
-                return
-        except (socket.timeout, Exception):
+        if self.call_driver('launchTasks', offer.id, mesos_protobuf_tasks) is False:
             tasks = ', '.join(
                 [task.task_id for task in tasks_to_launch]
             )
@@ -376,8 +380,8 @@ class ExecutionFramework(Scheduler):
         log.warning("Slave lost: {id}".format(id=str(slaveId)))
 
     def registered(self, driver, frameworkId, masterInfo):
-        if self.driver is None:
-            self.driver = driver
+        if self._driver is None:
+            self._driver = driver
         log.info("Registered with framework ID {id} and role {role}".format(
             id=frameworkId.value,
             role=self.role
@@ -390,8 +394,8 @@ class ExecutionFramework(Scheduler):
         ))
 
     def resourceOffers(self, driver, offers) -> None:
-        if self.driver is None:
-            self.driver = driver
+        if self._driver is None:
+            self._driver = driver
 
         current_offer_time = time.time()
         if self._last_offer_time is not None:
@@ -416,18 +420,15 @@ class ExecutionFramework(Scheduler):
         with self._lock:
             if self.task_queue.empty():
                 if not self.are_offers_suppressed:
-                    driver.suppressOffers()
-                    self.are_offers_suppressed = True
-                    log.info("Suppressing offers, no more tasks to run.")
+                    if self.call_driver('suppressOffers') is not False:
+                        self.are_offers_suppressed = True
+                        log.info("Suppressing offers, no more tasks to run.")
 
                 for offer in offers:
                     declined['no tasks'].append(offer.id.value)
                     declined_offer_ids.append(offer.id)
 
-                driver.declineOffer(
-                    declined_offer_ids,
-                    self.offer_decline_filter
-                )
+                self.call_driver('declineOffer', declined_offer_ids, self.offer_decline_filter)
                 log.info("Offers declined because of no tasks: {}".format(
                     ','.join(declined['no tasks'])
                 ))
@@ -510,13 +511,10 @@ class ExecutionFramework(Scheduler):
                 accepted.append('offer: {} agent: {} tasks: {}'.format(
                     offer.id.value, offer.agent_id.value, len(tasks_to_launch)))
 
-                if self.driver:
-                    self.launch_tasks_for_offer(offer, tasks_to_launch)
-                else:
-                    log.error('No driver present, could not launch tasks')
+                self.launch_tasks_for_offer(offer, tasks_to_launch)
 
         if len(declined_offer_ids) > 0:
-            driver.declineOffer(declined_offer_ids, self.offer_decline_filter)
+            self.call_driver('declineOffer', declined_offer_ids, self.offer_decline_filter)
         for reason, items in declined.items():
             if items:
                 log.info("Offers declined because of {}: {}".format(
@@ -538,7 +536,7 @@ class ExecutionFramework(Scheduler):
             # received for this task already.
             log.info('Ignoring this status update because a terminal status '
                      'update has been received for this task already.')
-            driver.acknowledgeStatusUpdate(update)
+            self.call_driver('acknowledgeStatusUpdate', update)
             return
 
         md = self.task_metadata[task_id]
@@ -558,7 +556,7 @@ class ExecutionFramework(Scheduler):
             # Re-enqueue task
             self.enqueue_task(md.task_config)
             get_metric(metrics.TASK_LOST_DUE_TO_INVALID_OFFER_COUNT).count(1)
-            driver.acknowledgeStatusUpdate(update)
+            self.call_driver('acknowledgeStatusUpdate', update)
             return
 
         # Record state changes, send a new event and emit metrics only if the
@@ -585,4 +583,4 @@ class ExecutionFramework(Scheduler):
 
         # We have to do this because we are not using implicit
         # acknowledgements.
-        driver.acknowledgeStatusUpdate(update)
+        self.call_driver('acknowledgeStatusUpdate', update)
