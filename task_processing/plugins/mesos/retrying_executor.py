@@ -117,7 +117,7 @@ class RetryingExecutor(TaskExecutor):
                 task_id,
                 -1
             )
-        self.executor.kill(task_id)
+        return self.executor.kill(task_id)
 
     def stop(self):
         self.executor.stop()

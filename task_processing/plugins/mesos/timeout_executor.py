@@ -95,11 +95,12 @@ class TimeoutExecutor(TaskExecutor):
         with self.tasks_lock:
             for idx, entry in enumerate(self.running_tasks):
                 if task_id == entry.task_id:
-                    self.running_tasks.pop(idx)
-                    self.killed_tasks.append(task_id)
                     log.info('Killing task {}: requested'.format(task_id))
-                    self.downstream_executor.kill(task_id)
-                    return
+                    result = self.downstream_executor.kill(task_id)
+                    if result is not False:
+                        self.running_tasks.pop(idx)
+                        self.killed_tasks.append(task_id)
+                    return result
 
     def stop(self):
         self.downstream_executor.stop()
