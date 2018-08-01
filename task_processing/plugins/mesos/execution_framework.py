@@ -97,6 +97,8 @@ class ExecutionFramework(Scheduler):
             'TASK_OFFER_TIMEOUT': metrics.TASK_OFFER_TIMEOUT,
         }
 
+        self.driver_error = object()
+
         self.stopping = False
         task_kill_thread = threading.Thread(
             target=self._background_check, args=())
@@ -106,13 +108,13 @@ class ExecutionFramework(Scheduler):
     def call_driver(self, method, *args, **kwargs):
         if not self._driver:
             log.error('{} failed: No driver'.format(method))
-            return False
+            return self.driver_error
 
         try:
             return getattr(self._driver, method)(*args, **kwargs)
         except (socket.timeout, Exception) as e:
             log.warning('{} failed: {}'.format(method, str(e)))
-            return False
+            return self.driver_error
 
     def _background_check(self):
         while True:
@@ -230,7 +232,7 @@ class ExecutionFramework(Scheduler):
                 self.task_queue.put(t)
 
         if flag is False:
-            if self.call_driver('killTask', Dict(value=task_id)) is False:
+            if self.call_driver('killTask', Dict(value=task_id)) is self.driver_error:
                 return False
 
         return True
@@ -278,7 +280,7 @@ class ExecutionFramework(Scheduler):
             self.task_queue.put(task_config)
 
             if self.are_offers_suppressed:
-                if self.call_driver('reviveOffers') is not False:
+                if self.call_driver('reviveOffers') is not self.driver_error:
                     self.are_offers_suppressed = False
                     log.info('Reviving offers because we have tasks to run.')
 
@@ -291,7 +293,7 @@ class ExecutionFramework(Scheduler):
                 task_config, offer.agent_id.value, self.role)
             for task_config in tasks_to_launch
         ]
-        if self.call_driver('launchTasks', offer.id, mesos_protobuf_tasks) is False:
+        if self.call_driver('launchTasks', offer.id, mesos_protobuf_tasks) is self.driver_error:
             tasks = ', '.join(
                 [task.task_id for task in tasks_to_launch]
             )
@@ -420,7 +422,7 @@ class ExecutionFramework(Scheduler):
         with self._lock:
             if self.task_queue.empty():
                 if not self.are_offers_suppressed:
-                    if self.call_driver('suppressOffers') is not False:
+                    if self.call_driver('suppressOffers') is not self.driver_error:
                         self.are_offers_suppressed = True
                         log.info("Suppressing offers, no more tasks to run.")
 
