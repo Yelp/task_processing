@@ -122,8 +122,12 @@ class ExecutionFramework(Scheduler):
                 return
 
             time_now = time.time()
+            tasks_to_reconcile = []
             with self._lock:
                 for task_id, md in self.task_metadata.items():
+                    if md.task_state != 'TASK_INITED':
+                        tasks_to_reconcile.append(task_id)
+
                     if md.task_state == 'TASK_INITED':
                         # give up if the task hasn't launched after
                         # offer_timeout
@@ -186,9 +190,7 @@ class ExecutionFramework(Scheduler):
 
             self._reconcile_tasks(
                 [Dict({'task_id': Dict({'value': task_id})}) for
-                    task_id in self.task_metadata
-                 if self.task_metadata[task_id].task_state is not
-                 'TASK_INITED']
+                    task_id in tasks_to_reconcile]
             )
             time.sleep(10)
 
