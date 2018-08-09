@@ -423,16 +423,17 @@ class ExecutionFramework(Scheduler):
 
         with self._lock:
             if self.task_queue.empty():
-                if not self.are_offers_suppressed:
-                    if self.call_driver('suppressOffers') is not self.driver_error:
-                        self.are_offers_suppressed = True
-                        log.info("Suppressing offers, no more tasks to run.")
+                # Always suppress offers when there is nothing to run
+                if self.call_driver('suppressOffers') is not self.driver_error:
+                    self.are_offers_suppressed = True
+                    log.info("Suppressing offers, no more tasks to run.")
 
                 for offer in offers:
                     declined['no tasks'].append(offer.id.value)
                     declined_offer_ids.append(offer.id)
 
-                self.call_driver('declineOffer', declined_offer_ids, self.offer_decline_filter)
+                self.call_driver(
+                    'declineOffer', declined_offer_ids, self.offer_decline_filter)
                 log.info("Offers declined because of no tasks: {}".format(
                     ','.join(declined['no tasks'])
                 ))
@@ -518,7 +519,8 @@ class ExecutionFramework(Scheduler):
                 self.launch_tasks_for_offer(offer, tasks_to_launch)
 
         if len(declined_offer_ids) > 0:
-            self.call_driver('declineOffer', declined_offer_ids, self.offer_decline_filter)
+            self.call_driver('declineOffer', declined_offer_ids,
+                             self.offer_decline_filter)
         for reason, items in declined.items():
             if items:
                 log.info("Offers declined because of {}: {}".format(
