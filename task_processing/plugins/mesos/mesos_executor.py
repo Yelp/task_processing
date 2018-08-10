@@ -42,6 +42,8 @@ class MesosExecutor(TaskExecutor):
         initial_decline_delay=1.0,
         framework_name='taskproc-default',
         framework_staging_timeout=240,
+        framework_id=None,
+        failover=False,
     ) -> None:
         """
         Constructs the instance of a task execution, encapsulating all state
@@ -52,6 +54,7 @@ class MesosExecutor(TaskExecutor):
 
         self.logger = logging.getLogger(__name__)
         self.role = role
+        self.failover = failover
 
         self.execution_framework = ExecutionFramework(
             role=role,
@@ -59,7 +62,8 @@ class MesosExecutor(TaskExecutor):
             name=framework_name,
             callbacks=callbacks,
             task_staging_timeout_s=framework_staging_timeout,
-            initial_decline_delay=initial_decline_delay
+            initial_decline_delay=initial_decline_delay,
+            framework_id=framework_id,
         )
 
         # TODO: Get mesos master ips from smartstack
@@ -71,6 +75,7 @@ class MesosExecutor(TaskExecutor):
             implicit_acknowledgements=False,
             principal=principal,
             secret=secret,
+            failover=failover,
         )
 
         # start driver thread immediately
@@ -87,7 +92,7 @@ class MesosExecutor(TaskExecutor):
 
     def stop(self):
         self.execution_framework.stop()
-        self.driver.stop()
+        self.driver.stop(failover=self.failover)
         self.driver.join()
 
     def get_event_queue(self):

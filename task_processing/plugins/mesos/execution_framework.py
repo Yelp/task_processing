@@ -53,6 +53,8 @@ class ExecutionFramework(Scheduler):
         suppress_delay=10,
         initial_decline_delay=1,
         task_reconciliation_delay=300,
+        framework_id=None,
+        failover_timeout=604800,  # 1 week
     ) -> None:
         self.name = name
         # wait this long for a task to launch.
@@ -68,8 +70,11 @@ class ExecutionFramework(Scheduler):
             user='root',
             name=self.name,
             checkpoint=True,
-            role=self.role
+            role=self.role,
+            failover_timeout=failover_timeout,
         )
+        if framework_id:
+            self.framework_info['id'] = {'value': framework_id}
 
         self.task_queue: Queue = Queue()
         self.event_queue: Queue = Queue()
@@ -386,6 +391,14 @@ class ExecutionFramework(Scheduler):
     def registered(self, driver, frameworkId, masterInfo):
         if self._driver is None:
             self._driver = driver
+        event = control_event(
+            raw={
+                'master_info': masterInfo,
+                'framework_id': frameworkId,
+            },
+            message='registered',
+        )
+        self.event_queue.put(event)
         log.info("Registered with framework ID {id} and role {role}".format(
             id=frameworkId.value,
             role=self.role
