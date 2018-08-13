@@ -54,4 +54,4 @@ def test_event_optional_attributes(event):
     assert event.message is None
     assert event.terminal is False
     assert event.timestamp == 0.0
-    assert event.task_id is None
+    assert event.task_id is "123"
