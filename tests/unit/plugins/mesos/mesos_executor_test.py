@@ -39,6 +39,7 @@ def test_creates_execution_framework_and_driver(
         pool=None,
         role="role",
         callbacks=mock_callbacks,
+        framework_id=None,
     )
 
     assert mesos_executor.driver is mesos_driver.return_value
@@ -50,6 +51,7 @@ def test_creates_execution_framework_and_driver(
         implicit_acknowledgements=False,
         principal='taskproc',
         secret=None,
+        failover=False,
     )
 
     assert mock_Thread.call_args == mock.call(

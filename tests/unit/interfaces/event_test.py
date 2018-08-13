@@ -9,12 +9,12 @@ from task_processing.interfaces.event import Event
 
 @pytest.fixture
 def event():
-    return Event(kind='task', task_id="123", task_config={}, raw=None)
+    return Event(kind='task', task_id="123")
 
 
 def test_event_creation():
     x = object()
-    e = Event(kind='task', task_id="123", task_config={},
+    e = Event(kind='task', task_id="123",
               raw=x, terminal=True, platform_type='killed')
     assert e.raw == x
     assert e.terminal
@@ -47,3 +47,11 @@ def test_event_type_checks(event):
 
     with pytest.raises(PTypeError) as e:
         event.set(task_id=123)
+
+
+def test_event_optional_attributes(event):
+    assert event.platform_type is None
+    assert event.message is None
+    assert event.terminal is False
+    assert event.timestamp == 0.0
+    assert event.task_id is "123"
