@@ -29,29 +29,31 @@ class Event(PRecord):
                                       'kind not in {}'.format(EVENT_KINDS)))
     # we store timestamps as seconds since epoch.
     # use time.time() to generate
-    timestamp = field(type=float)
+    timestamp = field(type=float, initial=0.0)
     # reference to platform-specific event object
-    raw = field(mandatory=True)
+    raw = field(mandatory=True, initial=None)
     # free-form dictionary for stack-specific data
     extensions = field(type=PMap, initial=m(), factory=pmap)
     # is this the last event for a task?
-    terminal = field(type=bool)
+    terminal = field(type=bool, initial=False)
 
     # task-specific fields
     # task_id this event pertains to
-    task_id = field(type=str)
+    task_id = field(type=(str, type(None)), initial=None)
     # task config dict that sourced the task this event refers to
     task_config = field(
         invariant=lambda x: (isinstance(x, PMap),
                              'task_config must inherit from PMap'),
-        factory=lambda x: pmap(x) if not isinstance(x, PMap) else x)
+        factory=lambda x: pmap(x) if not isinstance(x, PMap) else x,
+        initial=m(),
+    )
     # the task finished with exit code 0
     success = field(type=(bool, type(None)), initial=None)
     # platform-specific event type
-    platform_type = field(type=str)
+    platform_type = field(type=(str, type(None)), initial=None)
 
     # control events
-    message = field(type=str)
+    message = field(type=(str, type(None)), initial=None)
 
 
 def task_event(**kwargs):
