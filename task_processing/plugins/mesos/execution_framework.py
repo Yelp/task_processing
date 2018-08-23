@@ -199,6 +199,22 @@ class ExecutionFramework(Scheduler):
             )
             time.sleep(10)
 
+    def recover_task(self, task_config):
+        task_id = task_config.task_id
+        log.info(f'Tracking {task_id} in metadata for reconciliation')
+        with self._lock:
+            self.task_metadata = self.task_metadata.set(
+                task_id,
+                TaskMetadata(
+                    task_config=task_config,
+                    task_state='TASK_RECONCILING',
+                    task_state_history=m(TASK_RECONCILING=time.time()),
+                ),
+            )
+        self._reconcile_tasks([
+            Dict({'task_id': Dict({'value': task_id})})
+        ])
+
     def _reconcile_tasks(self, tasks_to_reconcile):
         if time.time() < self._reconcile_tasks_at:
             return

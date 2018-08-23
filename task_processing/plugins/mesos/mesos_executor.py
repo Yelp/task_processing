@@ -87,6 +87,9 @@ class MesosExecutor(TaskExecutor):
     def run(self, task_config):
         self.execution_framework.enqueue_task(task_config)
 
+    def check(self, task_config):
+        self.execution_framework.recover_task(task_config)
+
     def kill(self, task_id):
         return self.execution_framework.kill_task(task_id)
 

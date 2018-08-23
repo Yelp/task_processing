@@ -15,5 +15,9 @@ class Runner(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
+    def check(self, task_config):
+        pass
+
+    @abc.abstractmethod
     def kill(self, task_id):
         pass

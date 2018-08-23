@@ -20,5 +20,8 @@ class Promise(Runner):
     def kill(self, task_id):
         self._runner.kill(task_id)
 
+    def check(self, task_config):
+        self._runner.check(task_config)
+
     def stop(self):
         self._runner.stop()

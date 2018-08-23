@@ -91,6 +91,9 @@ class TimeoutExecutor(TaskExecutor):
 
         self.downstream_executor.run(task_config)
 
+    def check(self, task_config):
+        self.downstream_executor.check(task_config)
+
     def kill(self, task_id):
         with self.tasks_lock:
             for idx, entry in enumerate(self.running_tasks):

@@ -35,6 +35,14 @@ class TaskExecutor(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
+    def check(self, task_config):
+        """Get a status update for a task
+
+        :param task_config: The task that you want to check
+        """
+        pass
+
+    @abc.abstractmethod
     def kill(self, task_id):
         """Kill the specified task
 
