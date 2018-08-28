@@ -15,7 +15,7 @@ class Runner(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def check(self, task_config):
+    def reconcile(self, task_config):
         pass
 
     @abc.abstractmethod

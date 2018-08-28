@@ -39,8 +39,8 @@ class Async(Runner):
     def kill(self, task_id):
         self.executor.kill(task_id)
 
-    def check(self, task_config):
-        self.executor.check(task_config)
+    def reconcile(self, task_config):
+        self.executor.reconcile(task_config)
 
     def callback_loop(self):
         event_queue = self.executor.get_event_queue()
