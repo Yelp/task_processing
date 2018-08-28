@@ -8,6 +8,9 @@ class DummyTaskExecutor(TaskExecutor):
     def run(self, task_config):
         pass
 
+    def reconcile(self, task_config):
+        pass
+
     def kill(self, task_id):
         pass
 
@@ -20,6 +23,9 @@ class DummyTaskExecutor(TaskExecutor):
 
 class DummyTaskExecutor2(TaskExecutor):
     def run(self, task_config):
+        pass
+
+    def reconcile(self, task_config):
         pass
 
     def kill(self, task_id):

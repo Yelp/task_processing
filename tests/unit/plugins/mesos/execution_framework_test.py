@@ -313,6 +313,7 @@ def test_registered(ef, mock_driver):
     )
 
     assert ef._driver == mock_driver
+    assert ef.event_queue.qsize() == 1
 
 
 def test_reregistered(ef, mock_driver):
@@ -616,3 +617,39 @@ def test_background_thread_removes_offer_timeout(
     assert event.terminal is True
     assert event.success is False
     assert event.task_id == task_id
+
+
+def test_reconcile_task_unknown(
+    ef,
+    mock_driver,
+    fake_task,
+):
+    ef._driver = mock_driver
+    ef._reconcile_tasks_at = 0
+    assert fake_task.task_id not in ef.task_metadata
+
+    ef.reconcile_task(fake_task)
+    assert fake_task.task_id in ef.task_metadata
+    assert mock_driver.reconcileTasks.call_count == 1
+
+
+def test_reconcile_task_existing(
+    ef,
+    mock_driver,
+    fake_task,
+):
+    ef._driver = mock_driver
+    ef._reconcile_tasks_at = 0
+    ef.task_metadata = ef.task_metadata.set(
+        fake_task.task_id,
+        TaskMetadata(
+            task_config=fake_task,
+            task_state='TASK_INITED',
+            task_state_history=m(TASK_INITED=time.time()),
+        ),
+    )
+
+    ef.reconcile_task(fake_task)
+    task_metadata = ef.task_metadata[fake_task.task_id]
+    assert len(task_metadata.task_state_history) == 2
+    assert mock_driver.reconcileTasks.call_count == 1
