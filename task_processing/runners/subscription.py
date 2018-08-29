@@ -34,6 +34,9 @@ class Subscription(Runner):
     def kill(self, task_id):
         self.executor.kill(task_id)
 
+    def reconcile(self, task_config):
+        self.executor.reconcile(task_config)
+
     def stop(self):
         self.executor.stop()
         self.stopping = True

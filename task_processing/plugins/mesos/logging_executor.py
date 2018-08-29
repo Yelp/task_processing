@@ -229,5 +229,8 @@ class MesosLoggingExecutor(TaskExecutor):
     def get_event_queue(self):
         return self.dest_queue
 
+    def reconcile(self, task_config):
+        self.downstream_executor.reconcile(task_config)
+
     def kill(self, task_id):
         return self.downstream_executor.kill(task_id)

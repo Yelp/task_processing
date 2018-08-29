@@ -110,6 +110,9 @@ class RetryingExecutor(TaskExecutor):
                 )
         self.executor.run(self._task_config_with_retry(task_config))
 
+    def reconcile(self, task_config):
+        self.executor.reconcile(task_config)
+
     def kill(self, task_id):
         # retries = -1 so that manually killed tasks can be distinguished
         with self.task_retries_lock:
