@@ -122,3 +122,10 @@ class MesosTaskConfig(PRecord):
     @property
     def task_id(self):
         return "{}.{}".format(self.name, self.uuid)
+
+    def set_task_id(self, task_id):
+        try:
+            name, uuid = task_id.rsplit('.', maxsplit=1)
+        except ValueError:
+            raise ValueError(f'Invalid format for task_id {task_id}')
+        return self.set(name=name, uuid=uuid)

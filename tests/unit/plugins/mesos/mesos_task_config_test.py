@@ -25,3 +25,10 @@ def test_mesos_task_config_factories():
     except InvariantException as e:
         print(e)
         assert True
+
+
+def test_mesos_task_config_set_task_id():
+    m = MesosTaskConfig(cmd='/bin/true', image='fake')
+    new_task_id = 'new' + m.task_id
+    result = m.set_task_id(new_task_id)
+    assert result.task_id == new_task_id
