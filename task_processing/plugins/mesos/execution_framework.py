@@ -416,8 +416,7 @@ class ExecutionFramework(Scheduler):
         log.warning("Slave lost: {id}".format(id=str(slaveId)))
 
     def registered(self, driver, frameworkId, masterInfo):
-        if self._driver is None:
-            self._driver = driver
+        self._driver = driver
         event = control_event(
             raw={
                 'master_info': masterInfo,
@@ -432,16 +431,14 @@ class ExecutionFramework(Scheduler):
         ))
 
     def reregistered(self, driver, masterInfo):
-        if self._driver is None:
-            self._driver = driver
+        self._driver = driver
         log.warning("Re-registered to {master} with role {role}".format(
             master=masterInfo,
             role=self.role
         ))
 
     def resourceOffers(self, driver, offers) -> None:
-        if self._driver is None:
-            self._driver = driver
+        self._driver = driver
 
         current_offer_time = time.time()
         if self._last_offer_time is not None:
@@ -571,8 +568,7 @@ class ExecutionFramework(Scheduler):
             log.info("Offers accepted: {}".format(', '.join(accepted)))
 
     def statusUpdate(self, driver, update) -> None:
-        if self._driver is None:
-            self._driver = driver
+        self._driver = driver
 
         task_id = update.task_id.value
         task_state = str(update.state)
