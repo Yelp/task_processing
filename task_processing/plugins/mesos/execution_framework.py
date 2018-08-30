@@ -432,6 +432,8 @@ class ExecutionFramework(Scheduler):
         ))
 
     def reregistered(self, driver, masterInfo):
+        if self._driver is None:
+            self._driver = driver
         log.warning("Re-registered to {master} with role {role}".format(
             master=masterInfo,
             role=self.role
@@ -569,6 +571,9 @@ class ExecutionFramework(Scheduler):
             log.info("Offers accepted: {}".format(', '.join(accepted)))
 
     def statusUpdate(self, driver, update) -> None:
+        if self._driver is None:
+            self._driver = driver
+
         task_id = update.task_id.value
         task_state = str(update.state)
 
