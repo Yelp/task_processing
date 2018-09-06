@@ -18,7 +18,7 @@ class Promise(Runner):
         return self._futures_executor.submit(self._runner.run, task_config)
 
     def kill(self, task_id):
-        self._runner.kill(task_id)
+        return self._runner.kill(task_id)
 
     def reconcile(self, task_config):
         self._runner.reconcile(task_config)
