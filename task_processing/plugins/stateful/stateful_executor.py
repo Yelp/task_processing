@@ -27,7 +27,7 @@ class StatefulTaskExecutor(TaskExecutor):
         self.downstream_executor.run(task_config)
 
     def reconcile(self, task_config):
-        self.downstream_executor.run(task_config)
+        self.downstream_executor.reconcile(task_config)
 
     def kill(self, task_id):
         return self.downstream_executor.kill(task_id)
