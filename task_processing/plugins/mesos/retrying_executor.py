@@ -116,7 +116,7 @@ class RetryingExecutor(TaskExecutor):
     def kill(self, task_id):
         # retries = -1 so that manually killed tasks can be distinguished
         with self.task_retries_lock:
-            self.tasks_retries = self.task_retries.set(
+            self.task_retries = self.task_retries.set(
                 task_id,
                 -1
             )

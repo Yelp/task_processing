@@ -37,7 +37,7 @@ class Async(Runner):
         return self.executor.run(task_config)
 
     def kill(self, task_id):
-        self.executor.kill(task_id)
+        return self.executor.kill(task_id)
 
     def reconcile(self, task_config):
         self.executor.reconcile(task_config)

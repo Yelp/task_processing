@@ -1,4 +1,3 @@
-import threading
 from queue import Queue
 
 import mock
@@ -12,14 +11,20 @@ from task_processing.plugins.mesos.task_config import MesosTaskConfig
 
 @pytest.fixture
 def mock_Thread():
-    with mock.patch.object(threading, 'Thread') as mock_Thread:
-        yield mock_Thread
+    with mock.patch('task_processing.plugins.mesos.retrying_executor.Thread'):
+        yield
 
 
 @pytest.fixture
-def mock_retrying_executor(mock_Thread):
+def mock_downstream():
+    return mock.Mock()
+
+
+@pytest.fixture
+def mock_retrying_executor(mock_Thread, mock_downstream):
     return RetryingExecutor(
-        downstream_executor=mock.Mock(),
+        downstream_executor=mock_downstream,
+        retries=2,
     )
 
 
@@ -215,3 +220,43 @@ def test_retry_loop_filters_out_non_task(mock_retrying_executor):
     mock_retrying_executor.retry_loop()
 
     assert mock_retrying_executor.dest_queue.qsize() == 1
+
+
+def test_run(mock_retrying_executor, mock_downstream):
+    mock_config = _get_mock_task_config()
+    mock_retrying_executor.run(mock_config)
+    assert mock_downstream.run.call_count == 1
+
+    assert mock_retrying_executor.task_retries[mock_config.task_id] == 5
+
+    # Config should be the same, except with retry number appended
+    config_with_retry = mock_downstream.run.call_args[0][0]
+    assert 'retry5' in config_with_retry.task_id
+    assert config_with_retry.cmd == mock_config.cmd
+    assert config_with_retry.image == mock_config.image
+
+
+def test_run_default_retries(mock_retrying_executor, mock_downstream):
+    mock_config = MesosTaskConfig(image='fake_image', cmd='some command')
+    mock_retrying_executor.run(mock_config)
+    assert mock_downstream.run.call_count == 1
+
+    assert mock_retrying_executor.task_retries[mock_config.task_id] == 2
+
+
+def test_kill(mock_retrying_executor, mock_downstream):
+    result = mock_retrying_executor.kill("task")
+    assert result == mock_downstream.kill.return_value
+    assert mock_downstream.kill.call_args == mock.call("task")
+    assert mock_retrying_executor.task_retries["task"] == -1
+
+
+def test_reconcile(mock_retrying_executor, mock_downstream):
+    mock_retrying_executor.reconcile("task")
+    assert mock_downstream.reconcile.call_args == mock.call("task")
+
+
+def test_stop(mock_retrying_executor, mock_downstream):
+    mock_retrying_executor.stop()
+    assert mock_downstream.stop.call_args == mock.call()
+    assert mock_retrying_executor.stopping

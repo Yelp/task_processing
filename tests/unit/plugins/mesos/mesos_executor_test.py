@@ -77,3 +77,16 @@ def test_event_queue(mocker, mesos_executor):
     q = mocker.Mock()
     mesos_executor.execution_framework.event_queue = q
     assert mesos_executor.get_event_queue() is q
+
+
+def test_kill_returns(mesos_executor):
+    result = mesos_executor.kill("task")
+    assert result == mesos_executor.execution_framework.kill_task.return_value
+    assert mesos_executor.execution_framework.kill_task.call_args ==\
+        mock.call("task")
+
+
+def test_reconcile(mesos_executor):
+    mesos_executor.reconcile("task")
+    assert mesos_executor.execution_framework.reconcile_task.call_args ==\
+        mock.call("task")
