@@ -1,5 +1,3 @@
-import threading
-
 import mock
 import pytest
 
@@ -9,8 +7,8 @@ from task_processing.plugins.mesos.task_config import MesosTaskConfig
 
 @pytest.fixture
 def mock_Thread():
-    with mock.patch.object(threading, 'Thread') as mock_Thread:
-        yield mock_Thread
+    with mock.patch('task_processing.plugins.mesos.logging_executor.Thread'):
+        yield
 
 
 @pytest.fixture

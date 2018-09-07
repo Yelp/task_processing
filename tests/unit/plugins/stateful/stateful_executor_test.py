@@ -1,15 +1,7 @@
-import threading
-
 import mock
 import pytest
 
 from task_processing.plugins.stateful.stateful_executor import StatefulTaskExecutor
-
-
-@pytest.fixture
-def mock_Thread():
-    with mock.patch.object(threading, 'Thread') as mock_Thread:
-        yield mock_Thread
 
 
 @pytest.fixture

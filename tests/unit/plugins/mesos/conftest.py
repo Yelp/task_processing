@@ -1,5 +1,3 @@
-import threading
-
 import addict
 import mock
 import pytest
@@ -79,12 +77,6 @@ def fake_offer():
             ),
         ]
     )
-
-
-@pytest.fixture
-def mock_Thread():
-    with mock.patch.object(threading, 'Thread') as mock_Thread:
-        yield mock_Thread
 
 
 @pytest.fixture

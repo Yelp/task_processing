@@ -1,5 +1,4 @@
 import socket
-import threading
 import time
 from queue import Queue
 
@@ -14,12 +13,6 @@ from task_processing.plugins.mesos.execution_framework import ExecutionFramework
 from task_processing.plugins.mesos.execution_framework import TaskMetadata
 from task_processing.plugins.mesos.mesos_executor import MesosExecutorCallbacks
 from task_processing.plugins.mesos.task_config import MesosTaskConfig
-
-
-@pytest.fixture
-def mock_Thread():
-    with mock.patch.object(threading, 'Thread') as mock_Thread:
-        yield mock_Thread
 
 
 @pytest.fixture
