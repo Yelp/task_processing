@@ -154,8 +154,20 @@ class RetryingExecutor(TaskExecutor):
         # This is to extract retry attempt from retry_suffix
         # eg: if retry_suffix= 'retry2', then attempt==2
         attempt = int(retry_suffix[5:])
+
+        # This is to reregister a task with the retry executor in the event
+        # of reconciliation and attempts were lost
+        with self.task_retries_lock:
+            if original_task_id not in self.task_retries:
+                self.task_retries = self.task_retries.set(
+                    original_task_id,
+                    attempt,
+                )
+                return True
+
         if attempt == self.task_retries[original_task_id]:
             return True
+
         return False
 
     def _task_or_executor_retries(self, task_config):

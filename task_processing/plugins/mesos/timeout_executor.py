@@ -37,16 +37,29 @@ class TimeoutExecutor(TaskExecutor):
                 e = self.src_queue.get()
                 self.dest_queue.put(e)
 
-                if not (e.kind == 'task' and e.terminal):
+                if not e.kind == 'task':
                     continue
-                # Update running and killed tasks
-                with self.tasks_lock:
-                    for idx, entry in enumerate(self.running_tasks):
-                        if e.task_id == entry.task_id:
-                            self.running_tasks.pop(idx)
-                            break
-                    if e.task_id in self.killed_tasks:
-                        self.killed_tasks.remove(e.task_id)
+                elif not e.terminal:
+                    with self.tasks_lock:
+                        if e.task_id not in [entry.task_id for entry in self.running_tasks]:
+                            # No record of e's task_id in self.running_tasks,
+                            # so we need to add it back in. We lack access to
+                            # the original time the task was started, so to set
+                            # a deadline, we use e's timestamp as a baseline.
+                            new_entry = TaskEntry(
+                                task_id=e.task_id,
+                                deadline=e.task_config.timeout + e.timestamp,
+                            )
+                            self._insert_new_running_task_entry(new_entry)
+                else:
+                    # Update running and killed tasks
+                    with self.tasks_lock:
+                        for idx, entry in enumerate(self.running_tasks):
+                            if e.task_id == entry.task_id:
+                                self.running_tasks.pop(idx)
+                                break
+                        if e.task_id in self.killed_tasks:
+                            self.killed_tasks.remove(e.task_id)
 
             # Check timeouts
             current_time = time.time()
@@ -83,11 +96,7 @@ class TimeoutExecutor(TaskExecutor):
             deadline=task_config.timeout + time.time()
         )
         with self.tasks_lock:
-            for idx, entry in enumerate(self.running_tasks):
-                if new_entry.deadline <= entry.deadline:
-                    self.running_tasks.insert(idx, new_entry)
-                    return
-            self.running_tasks.append(new_entry)
+            self._insert_new_running_task_entry(new_entry)
 
         self.downstream_executor.run(task_config)
 
@@ -112,3 +121,11 @@ class TimeoutExecutor(TaskExecutor):
 
     def get_event_queue(self):
         return self.dest_queue
+
+    def _insert_new_running_task_entry(self, new_entry):
+        # Insertion sort for task entries in self.running_tasks
+        for idx, entry in enumerate(self.running_tasks):
+            if new_entry.deadline <= entry.deadline:
+                self.running_tasks.insert(idx, new_entry)
+                return
+        self.running_tasks.append(new_entry)
