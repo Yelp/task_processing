@@ -90,7 +90,8 @@ class TimeoutExecutor(TaskExecutor):
     def run(self, task_config):
         # Tasks are dynamically added and removed from running_tasks and
         # and killed_tasks. It's preferable for the client or execution
-        # framework to check for duplicated tasks.
+        # framework to check for duplicated tasks. The duplicate task check does
+        # NOT happen here.
         new_entry = TaskEntry(
             task_id=task_config.task_id,
             deadline=task_config.timeout + time.time()

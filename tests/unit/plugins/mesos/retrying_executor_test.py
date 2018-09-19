@@ -59,9 +59,8 @@ def mock_event(mock_task_config, is_terminal=False):
         raw='raw_event'
     )
 
+
 # task_retry ###################################################################
-
-
 def test_task_retry(mock_retrying_executor, mock_event):
     mock_retrying_executor.task_retries = mock_retrying_executor.\
         task_retries.set(mock_event.task_id, 3)
@@ -84,9 +83,8 @@ def test_task_retry_retries_exhausted(mock_retrying_executor, mock_event):
     assert mock_retrying_executor.run.call_count == 0
     assert not retry_attempted
 
+
 # retry_loop ###################################################################
-
-
 def test_retry_loop_retries_task(mock_retrying_executor, mock_event):
     mock_event = mock_event.set('terminal', True)
     mock_retrying_executor.stopping = True
@@ -95,7 +93,6 @@ def test_retry_loop_retries_task(mock_retrying_executor, mock_event):
         return_value=mock_event)
     mock_retrying_executor.retry = mock.Mock(return_value=True)
     mock_retrying_executor.retry_pred = mock.Mock(return_value=True)
-    mock_retrying_executor.src_queue = Queue()
     mock_retrying_executor.src_queue.put(mock_event)
     mock_retrying_executor.task_retries = mock_retrying_executor.\
         task_retries.set(mock_event.task_id, 1)
@@ -139,14 +136,11 @@ def test_retry_loop_filters_out_non_task(mock_retrying_executor):
     mock_retrying_executor.stopping = True
     mock_retrying_executor._is_current_attempt = mock.Mock(return_value=True)
     mock_retrying_executor.event_with_retries = mock.Mock()
-    mock_retrying_executor.retry = mock.Mock()
-    mock_retrying_executor.src_queue = Queue()
     mock_retrying_executor.src_queue.put(mock_event)
 
     mock_retrying_executor.retry_loop()
 
     assert mock_retrying_executor.dest_queue.qsize() == 1
-    assert mock_retrying_executor.retry.call_count == 0
 
 
 # If retrying_executor receives an event about an attempt for a task the
@@ -162,7 +156,6 @@ def test_retry_loop_recover_attempt(mock_retrying_executor, mock_event):
     mock_retrying_executor.stopping = True
     mock_retrying_executor.retry = mock.Mock(return_value=True)
     mock_retrying_executor.retry_pred = mock.Mock(return_value=True)
-    mock_retrying_executor.src_queue = Queue()
     mock_retrying_executor.src_queue.put(modified_mock_event)
 
     mock_retrying_executor.retry_loop()

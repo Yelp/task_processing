@@ -74,15 +74,12 @@ def test_timeout_loop_nontask(
     mock_event = mock_event.set('kind', 'control')
     mock_entry = TaskEntry('different_id', deadline=1234)
     mock_timeout_executor.stopping = True
-    mock_timeout_executor.src_queue = Queue()
     mock_timeout_executor.src_queue.put(mock_event)
     mock_timeout_executor.running_tasks.append(mock_entry)
-    mock_timeout_executor.downstream_executor.kill = mock.Mock()
     time.time = mock.Mock(return_value=0)
 
     mock_timeout_executor.timeout_loop()
 
-    assert mock_timeout_executor.downstream_executor.kill.call_count == 0
     assert len(mock_timeout_executor.running_tasks) == 1
 
 
@@ -92,7 +89,6 @@ def test_timeout_loop_terminal_task_timed_out(
     mock_entry,
 ):
     mock_timeout_executor.stopping = True
-    mock_timeout_executor.src_queue = Queue()
     mock_timeout_executor.src_queue.put(mock_event)
     mock_timeout_executor.running_tasks.append(mock_entry)
     mock_timeout_executor.killed_tasks.append(mock_entry.task_id)
@@ -112,7 +108,6 @@ def test_timeout_loop_existing_nonterminal_task(
 ):
     mock_event = mock_event.set('terminal', False)
     mock_timeout_executor.stopping = True
-    mock_timeout_executor.src_queue = Queue()
     mock_timeout_executor.src_queue.put(mock_event)
     mock_timeout_executor.running_tasks.append(mock_entry)
     mock_timeout_executor.downstream_executor.kill = mock.Mock()
@@ -133,7 +128,6 @@ def test_timeout_loop_nonexistent_nonterminal_task(
 ):
     mock_event = mock_event.set('terminal', False)
     mock_timeout_executor.stopping = True
-    mock_timeout_executor.src_queue = Queue()
     mock_timeout_executor.src_queue.put(mock_event)
     mock_timeout_executor.downstream_executor.kill = mock.Mock()
     time.time = mock.Mock(return_value=10000)
