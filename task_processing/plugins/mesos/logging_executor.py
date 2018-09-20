@@ -172,7 +172,8 @@ class MesosLoggingExecutor(TaskExecutor):
 
                 if e.kind == 'task' and e.platform_type == 'running':
                     if e.task_id not in self.staging_tasks:
-                        log.info(f"Task {e.task_id} already running, not fetching logs")
+                        log.info(
+                            f"Task {e.task_id} already running, not fetching logs")
                         continue
 
                     url = self.staging_tasks[e.task_id]
