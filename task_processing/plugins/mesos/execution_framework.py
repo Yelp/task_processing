@@ -342,7 +342,13 @@ class ExecutionFramework(Scheduler):
         current_task_state = 'UNKNOWN' if task_launch_failed else 'TASK_STAGING'
 
         for task in tasks_to_launch:
-            md = self.task_metadata[task.task_id]
+            md = self.task_metadata.get(task.task_id)
+            if not md:
+                log.warning(
+                    f'trying to launch task {task.task_id}, but it is not in task metadata.'
+                    'current keys in task_metadata: {self.task_metadata.keys()}'
+                )
+                continue
             self.task_metadata = self.task_metadata.set(
                 task.task_id,
                 md.set(
