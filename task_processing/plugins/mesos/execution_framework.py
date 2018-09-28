@@ -346,7 +346,7 @@ class ExecutionFramework(Scheduler):
             if not md:
                 log.warning(
                     f'trying to launch task {task.task_id}, but it is not in task metadata.'
-                    'current keys in task_metadata: {self.task_metadata.keys()}'
+                    f'current keys in task_metadata: {self.task_metadata.keys()}'
                 )
                 continue
             self.task_metadata = self.task_metadata.set(
