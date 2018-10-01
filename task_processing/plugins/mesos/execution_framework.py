@@ -122,6 +122,95 @@ class ExecutionFramework(Scheduler):
             log.warning('{} failed: {}'.format(method, str(e)))
             return self.driver_error
 
+    def _background_check_task(self, time_now, tasks_to_reconcile, task_id, md):
+        if md.task_state != 'TASK_INITED':
+            tasks_to_reconcile.append(task_id)
+
+        if md.task_state == 'TASK_INITED':
+            # give up if the task hasn't launched after
+            # offer_timeout
+            inited_at = md.task_state_history['TASK_INITED']
+            offer_timeout = md.task_config.offer_timeout
+            expires_at = inited_at + offer_timeout
+            if time_now >= expires_at:
+                log.warning(
+                    f'Task {task_id} has been waiting for offers '
+                    'for longer than configured timeout '
+                    f'{offer_timeout}. Giving up and removing the '
+                    'task from the task queue.'
+                )
+                # killing the task will also remove them from the queue
+                self.kill_task(task_id)
+                # we are not expecting mesos to send terminal update
+                # for this task, so cleaning it up manually
+                self.task_metadata = self.task_metadata.discard(
+                    task_id
+                )
+                self.event_queue.put(
+                    task_event(
+                        task_id=task_id,
+                        terminal=True,
+                        timestamp=time_now,
+                        success=False,
+                        message='stop',
+                        task_config=md.task_config,
+                        raw='Failed due to offer timeout',
+                    )
+                )
+                get_metric(metrics.TASK_OFFER_TIMEOUT).count(1)
+
+        # Task is not eligible for killing or reenqueuing
+        in_current_state_since = md.task_state_history[md.task_state]
+        if time_now < in_current_state_since + self.task_staging_timeout_s:
+            return
+
+        if md.task_state == 'UNKNOWN':
+            log.warning(
+                f'Re-enqueuing task {task_id} in unknown state for '
+                f'longer than {self.task_staging_timeout_s}'
+            )
+            # Re-enqueue task
+            self.enqueue_task(md.task_config)
+            get_metric(
+                metrics.TASK_FAILED_TO_LAUNCH_COUNT).count(1)
+        elif md.task_state == 'TASK_STAGING':
+            log.warning(f'Killing stuck task {task_id}')
+            self.kill_task(task_id)
+            self.task_metadata = self.task_metadata.set(
+                task_id,
+                md.set(
+                    task_state='TASK_STUCK',
+                    task_state_history=md.task_state_history.set(
+                        'TASK_STUCK', time_now),
+                )
+            )
+            self.blacklist_slave(
+                agent_id=self.task_metadata[task_id].agent_id,
+                timeout=self.slave_blacklist_timeout_s,
+            )
+            get_metric(metrics.TASK_STUCK_COUNT).count(1)
+        elif md.task_state == 'TASK_STUCK':
+            killed_at = md.task_state_history['TASK_STUCK']
+            if time_now > killed_at + 3600:
+                log.warning(
+                    f'Task {task_id} waiting for terminal state '
+                    'for an hour, discarding from metadata'
+                )
+                self.task_metadata.discard(task_id)
+                self.event_queue.put(
+                    task_event(
+                        task_id=task_id,
+                        terminal=True,
+                        timestamp=time_now,
+                        success=False,
+                        message='stop',
+                        task_config=md.task_config,
+                        raw='Stuck and timed out',
+                    )
+                )
+            else:
+                log.warning(f'Task {task_id} waiting for terminal state')
+
     def _background_check(self):
         while True:
             if self.stopping:
@@ -131,101 +220,18 @@ class ExecutionFramework(Scheduler):
             tasks_to_reconcile = []
             with self._lock:
                 for task_id, md in self.task_metadata.items():
-                    if md.task_state != 'TASK_INITED':
-                        tasks_to_reconcile.append(task_id)
-
-                    if md.task_state == 'TASK_INITED':
-                        # give up if the task hasn't launched after
-                        # offer_timeout
-                        inited_at = md.task_state_history['TASK_INITED']
-                        offer_timeout = md.task_config.offer_timeout
-                        expires_at = inited_at + offer_timeout
-                        if time_now >= expires_at:
-                            log.warning(
-                                f'Task {task_id} has been waiting for offers '
-                                'for longer than configured timeout '
-                                f'{offer_timeout}. Giving up and removing the '
-                                'task from the task queue.'
-                            )
-                            # killing the task will also remove them from the queue
-                            self.kill_task(task_id)
-                            # we are not expecting mesos to send terminal update
-                            # for this task, so cleaning it up manually
-                            self.task_metadata = self.task_metadata.discard(
-                                task_id
-                            )
-                            self.event_queue.put(
-                                task_event(
-                                    task_id=task_id,
-                                    terminal=True,
-                                    timestamp=time_now,
-                                    success=False,
-                                    message='stop',
-                                    task_config=md.task_config,
-                                    raw='Failed due to offer timeout',
-                                )
-                            )
-                            get_metric(metrics.TASK_OFFER_TIMEOUT).count(1)
-
-                    # Task is not eligible for killing or reenqueuing
-                    if time_now < (md.task_state_history[md.task_state] +
-                                   self.task_staging_timeout_s):
-                        continue
-
-                    if md.task_state == 'UNKNOWN':
-                        log.warning(
-                            f'Re-enqueuing task {task_id} in unknown state for '
-                            f'longer than {self.task_staging_timeout_s}'
-                        )
-                        # Re-enqueue task
-                        self.enqueue_task(md.task_config)
-                        get_metric(
-                            metrics.TASK_FAILED_TO_LAUNCH_COUNT).count(1)
-                        continue
-
-                    if md.task_state == 'TASK_STAGING':
-                        log.warning(f'Killing stuck task {task_id}')
-                        self.kill_task(task_id)
-                        self.task_metadata = self.task_metadata.set(
-                            task_id,
-                            md.set(
-                                task_state='TASK_STUCK',
-                                task_state_history=md.task_state_history.set(
-                                    'TASK_STUCK', time.time()),
-                            )
-                        )
-                        self.blacklist_slave(
-                            agent_id=self.task_metadata[task_id].agent_id,
-                            timeout=self.slave_blacklist_timeout_s,
-                        )
-                        get_metric(metrics.TASK_STUCK_COUNT).count(1)
-
-                    if md.task_state == 'TASK_STUCK':
-                        killed_at = md.task_state_history['TASK_STUCK']
-                        if time.time() - killed_at > 3600:
-                            log.warning(
-                                f'Task {task_id} waiting for terminal state '
-                                'for an hour, discarding from metadata'
-                            )
-                            self.task_metadata.discard(task_id)
-                            self.event_queue.put(
-                                task_event(
-                                    task_id=task_id,
-                                    terminal=True,
-                                    timestamp=time_now,
-                                    success=False,
-                                    message='stop',
-                                    task_config=md.task_config,
-                                    raw='Stuck and timed out',
-                                )
-                            )
-                        else:
-                            log.warning(f'Task {task_id} waiting for terminal state')
+                    self._background_check_task(
+                        time_now,
+                        tasks_to_reconcile,
+                        task_id,
+                        md,
+                    )
 
             self._reconcile_tasks(
                 [Dict({'task_id': Dict({'value': task_id})}) for
                     task_id in tasks_to_reconcile]
             )
+            log.info(f'background check done in {time.time() - time_now}s')
             time.sleep(10)
 
     def reconcile_task(self, task_config):
