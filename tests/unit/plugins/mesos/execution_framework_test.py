@@ -612,6 +612,15 @@ def test_background_thread_removes_offer_timeout(
     assert event.task_id == task_id
 
 
+def test_launch_tasks_for_offer_task_missing(
+    ef,
+    fake_task,
+    fake_offer
+):
+    tasks_to_launch = [fake_task]
+    ef.launch_tasks_for_offer(fake_offer, tasks_to_launch)
+
+
 def test_reconcile_task_unknown(
     ef,
     mock_driver,
