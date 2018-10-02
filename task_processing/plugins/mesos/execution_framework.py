@@ -202,10 +202,16 @@ class ExecutionFramework(Scheduler):
 
                     if md.task_state == 'TASK_STUCK':
                         t = time.time()
-                        # account for time we spent in this loop
-                        time_delta = t - time_now + 10
+                        # 10s since last iteration + time we spent in current one
+                        time_delta = 10 + t - time_now
+                        # seconds since task was put in TASK_STUCK state
                         time_stuck = t - md.task_state_history['TASK_STUCK']
+                        # seconds since `time_stuck` crossed another hour
+                        # boundary
                         hour_rolled = time_stuck % 3600
+
+                        # if `time_stuck` crossed hour boundary since last
+                        # background check - lets re-send kill request
                         if hour_rolled < time_delta:
                             hours_stuck = time_stuck // 3600
                             log.warning(
