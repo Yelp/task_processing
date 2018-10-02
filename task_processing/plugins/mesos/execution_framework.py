@@ -201,26 +201,18 @@ class ExecutionFramework(Scheduler):
                         get_metric(metrics.TASK_STUCK_COUNT).count(1)
 
                     if md.task_state == 'TASK_STUCK':
-                        killed_at = md.task_state_history['TASK_STUCK']
-                        if time.time() - killed_at > 3600:
+                        t = time.time()
+                        # account for time we spent in this loop
+                        time_delta = t - time_now + 10
+                        time_stuck = t - md.task_state_history['TASK_STUCK']
+                        hour_rolled = time_stuck % 3600
+                        if hour_rolled < time_delta:
+                            hours_stuck = time_stuck // 3600
                             log.warning(
-                                f'Task {task_id} waiting for terminal state '
-                                'for an hour, discarding from metadata'
+                                f'Task {task_id} is stuck, waiting for terminal '
+                                f'state for {hours_stuck}h, sending another kill'
                             )
-                            self.task_metadata.discard(task_id)
-                            self.event_queue.put(
-                                task_event(
-                                    task_id=task_id,
-                                    terminal=True,
-                                    timestamp=time_now,
-                                    success=False,
-                                    message='stop',
-                                    task_config=md.task_config,
-                                    raw='Stuck and timed out',
-                                )
-                            )
-                        else:
-                            log.warning(f'Task {task_id} waiting for terminal state')
+                            self.kill_task(task_id)
 
             self._reconcile_tasks(
                 [Dict({'task_id': Dict({'value': task_id})}) for
