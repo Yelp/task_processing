@@ -16,3 +16,5 @@ TASK_STUCK_COUNT = 'taskproc.mesos.task_stuck_count'
 
 OFFER_DELAY_TIMER = 'taskproc.mesos.offer_delay'
 BLACKLISTED_AGENTS_COUNT = 'taskproc.mesos.blacklisted_agents_count'
+
+BGCHECK_TIME_TIMER = 'taskproc.mesos.bgcheck_time'

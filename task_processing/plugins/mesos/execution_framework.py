@@ -231,7 +231,9 @@ class ExecutionFramework(Scheduler):
                 [Dict({'task_id': Dict({'value': task_id})}) for
                     task_id in tasks_to_reconcile]
             )
-            log.info(f'background check done in {time.time() - time_now}s')
+            elapsed = time.time() - time_now
+            log.info(f'background check done in {elapsed}s')
+            get_metric(metrics.BGCHECK_TIME_TIMER).record(elapsed)
             time.sleep(10)
 
     def reconcile_task(self, task_config):
