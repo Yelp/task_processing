@@ -113,13 +113,13 @@ class ExecutionFramework(Scheduler):
 
     def call_driver(self, method, *args, **kwargs):
         if not self._driver:
-            log.error('{} failed: No driver'.format(method))
+            log.error(f'{method} failed: No driver')
             return self.driver_error
 
         try:
             return getattr(self._driver, method)(*args, **kwargs)
         except (socket.timeout, Exception) as e:
-            log.warning('{} failed: {}'.format(method, str(e)))
+            log.warning(f'{method} failed: {str(e)}')
             return self.driver_error
 
     def _background_check_task(self, time_now, tasks_to_reconcile, task_id, md):
@@ -265,9 +265,7 @@ class ExecutionFramework(Scheduler):
         if time.time() < self._reconcile_tasks_at:
             return
 
-        log.info('Reconciling following tasks {tasks}'.format(
-            tasks=tasks_to_reconcile
-        ))
+        log.info(f'Reconciling following tasks {tasks_to_reconcile}')
 
         if len(tasks_to_reconcile) > 0:
             self.call_driver('reconcileTasks', tasks_to_reconcile)
@@ -310,12 +308,10 @@ class ExecutionFramework(Scheduler):
         with self._lock:
             # A new entry is appended even if the agent is being blacklisted.
             # This is equivalent to restarting the blacklist timer.
-            log.info('Blacklisting slave: {id} for {secs} seconds.'.format(
-                id=agent_id,
-                secs=timeout
-            ))
+            log.info(f'Blacklisting slave: {agent_id} for {timeout} seconds.')
             self.blacklisted_slaves = self.blacklisted_slaves.append(agent_id)
             get_metric(metrics.BLACKLISTED_AGENTS_COUNT).count(1)
+
         unblacklist_thread = threading.Thread(
             target=self.unblacklist_slave,
             kwargs={'timeout': timeout, 'agent_id': agent_id},
@@ -326,11 +322,10 @@ class ExecutionFramework(Scheduler):
     def unblacklist_slave(self, agent_id, timeout):
         time.sleep(timeout)
         log.info(
-            'Unblacklisting slave: {id}'.format(id=agent_id)
+            f'Unblacklisting slave: {agent_id}'
         )
         with self._lock:
-            self.blacklisted_slaves = \
-                self.blacklisted_slaves.remove(agent_id)
+            self.blacklisted_slaves = self.blacklisted_slaves.remove(agent_id)
 
     def enqueue_task(self, task_config):
         with self._lock:
@@ -366,6 +361,7 @@ class ExecutionFramework(Scheduler):
             return False
 
         launched = True
+        launch_time = time.time()
         if self.call_driver('launchTasks', offer.id, mesos_protobuf_tasks) is self.driver_error:
             tasks = ', '.join(task.task_id for task in tasks_to_launch)
             log.warning(f'Failed to launch: {tasks}, moving them to UNKNOWN state')
@@ -389,13 +385,13 @@ class ExecutionFramework(Scheduler):
                 md.set(
                     task_state=current_task_state,
                     task_state_history=md.task_state_history.set(
-                        current_task_state, time.time()),
+                        current_task_state, launch_time),
                     agent_id=str(offer.agent_id.value),
                 )
             )
 
             get_metric(metrics.TASK_QUEUED_TIME_TIMER).record(
-                time.time() - md.task_state_history['TASK_INITED']
+                launch_time - md.task_state_history['TASK_INITED']
             )
 
             # Emit the staging event for successful launches
@@ -433,7 +429,10 @@ class ExecutionFramework(Scheduler):
         for cnt in counters:
             create_counter(cnt, default_dimensions)
 
-        timers = [metrics.OFFER_DELAY_TIMER, metrics.TASK_QUEUED_TIME_TIMER]
+        timers = [
+            metrics.OFFER_DELAY_TIMER, metrics.TASK_QUEUED_TIME_TIMER,
+            metrics.BGCHECK_TIME_TIMER
+        ]
         for tmr in timers:
             create_timer(tmr, default_dimensions)
 
@@ -442,7 +441,7 @@ class ExecutionFramework(Scheduler):
     ####################################################################
     def offerRescinded(self, driver, offerId):
         # TODO(sagarp): Executor should be able to deal with this.
-        log.warning('Offer {offer} rescinded'.format(offer=offerId))
+        log.warning(f'Offer {offerId} rescinded')
 
     def error(self, driver, message):
         event = control_event(raw=message)
@@ -456,7 +455,7 @@ class ExecutionFramework(Scheduler):
         self.event_queue.put(event)
 
     def slaveLost(self, drive, slaveId):
-        log.warning("Slave lost: {id}".format(id=str(slaveId)))
+        log.warning(f"Slave lost: {str(slaveId)}")
 
     def registered(self, driver, frameworkId, masterInfo):
         self._driver = driver
@@ -468,17 +467,13 @@ class ExecutionFramework(Scheduler):
             message='registered',
         )
         self.event_queue.put(event)
-        log.info("Registered with framework ID {id} and role {role}".format(
-            id=frameworkId.value,
-            role=self.role
-        ))
+        log.info(
+            f"Registered with framework ID {frameworkId.value} and role {self.role}"
+        )
 
     def reregistered(self, driver, masterInfo):
         self._driver = driver
-        log.warning("Re-registered to {master} with role {role}".format(
-            master=masterInfo,
-            role=self.role
-        ))
+        log.warning(f"Re-registered to {masterInfo} with role {self.role}")
 
     def resourceOffers(self, driver, offers) -> None:
         self._driver = driver
@@ -509,11 +504,8 @@ class ExecutionFramework(Scheduler):
                     declined['no tasks'].append(offer.id.value)
                     declined_offer_ids.append(offer.id)
 
-                self.call_driver(
-                    'declineOffer', declined_offer_ids, self.offer_decline_filter)
-                log.info("Offers declined because of no tasks: {}".format(
-                    ','.join(declined['no tasks'])
-                ))
+                self.call_driver('declineOffer', declined_offer_ids, self.offer_decline_filter)
+                log.info(f"Offers declined because of no tasks: {','.join(declined['no tasks'])}")
                 return
 
         with_maintenance_window = [
@@ -540,21 +532,18 @@ class ExecutionFramework(Scheduler):
         for offer in without_maintenance_window:
             with self._lock:
                 if offer.agent_id.value in self.blacklisted_slaves:
-                    declined['blacklisted'].append('offer {} agent {}'.format(
-                        offer.id.value, offer.agent_id.value
-                    ))
+                    declined['blacklisted'].append(
+                        f'offer {offer.id.value} agent {offer.agent_id.value}'
+                    )
                     declined_offer_ids.append(offer.id)
                     continue
 
             offer_pool_match, offer_pool = self.offer_matches_pool(offer)
             if not offer_pool_match:
                 log.info(
-                    "Declining offer {id}, required pool {sp} doesn't match "
-                    "offered pool {op}".format(
-                        id=offer.id.value,
-                        sp=self.pool,
-                        op=offer_pool
-                    ))
+                    f"Declining offer {offer.id.value}, required pool "
+                    f"{self.pool} doesn't match offered pool {offer_pool}"
+                )
                 declined['bad pool'].append(offer.id.value)
                 declined_offer_ids.append(offer.id)
                 continue
@@ -607,21 +596,22 @@ class ExecutionFramework(Scheduler):
                 if len(tasks_to_launch) == 0:
                     declined['nothing to launch'].append(offer.id.value)
                     declined_offer_ids.append(offer.id)
-                    continue
-
-                if not self.launch_tasks_for_offer(offer, tasks_to_launch):
+                elif not self.launch_tasks_for_offer(offer, tasks_to_launch):
                     declined['launch failed'].append(offer.id.value)
                     declined_offer_ids.append(offer.id)
-
-                accepted.append('offer: {} agent: {} tasks: {}'.format(
-                    offer.id.value, offer.agent_id.value, len(tasks_to_launch)))
+                else:
+                    accepted.append(
+                        f'offer: {offer.id.value} '
+                        f'agent: {offer.agent_id.value} '
+                        f'tasks: {len(tasks_to_launch)}'
+                    )
 
         if len(declined_offer_ids) > 0:
             self.call_driver(
                 'declineOffer', declined_offer_ids, self.offer_decline_filter
             )
         for reason, items in declined.items():
-            log.info(f"Offers declined because of {reason}: {', '.join(items)}")
+            log.info(f"Offers declined because {reason}: {', '.join(items)}")
         if accepted:
             log.info(f"Offers accepted: {', '.join(accepted)}")
 
@@ -630,11 +620,7 @@ class ExecutionFramework(Scheduler):
 
         task_id = update.task_id.value
         task_state = str(update.state)
-
-        log.info("Task update {update} received for task {task}".format(
-            update=task_state,
-            task=task_id
-        ))
+        log.info(f"Task update {task_state} received for task {task_id}")
 
         if task_id not in self.task_metadata:
             # We assume that a terminal status update has been
@@ -657,7 +643,7 @@ class ExecutionFramework(Scheduler):
             # application.
             log.warning('Received TASK_LOST from mesos master because we '
                         'attempted to accept an invalid offer. Going to '
-                        're-enqueue this task {id}'.format(id=task_id))
+                        f're-enqueue this task {task_id}')
             # Re-enqueue task
             self.enqueue_task(md.task_config)
             get_metric(metrics.TASK_LOST_DUE_TO_INVALID_OFFER_COUNT).count(1)
