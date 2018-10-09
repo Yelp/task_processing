@@ -79,8 +79,11 @@ def test_ef_kills_stuck_tasks(
         agent_id='fake_agent_id',
         timeout=900
     )
-    assert mock_get_metric.call_count == 1
-    assert mock_get_metric.call_args == mock.call(metrics.TASK_STUCK_COUNT)
+    assert mock_get_metric.call_count == 2
+    assert mock_get_metric.call_args_list == [
+        mock.call(metrics.TASK_STUCK_COUNT),
+        mock.call(metrics.BGCHECK_TIME_TIMER),
+    ]
     assert mock_get_metric.return_value.count.call_count == 1
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
 
@@ -110,9 +113,11 @@ def test_reenqueue_tasks_stuck_in_unknown_state(
     assert ef.enqueue_task.call_args == mock.call(
         ef.task_metadata[task_id].task_config
     )
-    assert mock_get_metric.call_count == 1
-    assert mock_get_metric.call_args == mock.call(
-        metrics.TASK_FAILED_TO_LAUNCH_COUNT)
+    assert mock_get_metric.call_count == 2
+    assert mock_get_metric.call_args_list == [
+        mock.call(metrics.TASK_FAILED_TO_LAUNCH_COUNT),
+        mock.call(metrics.BGCHECK_TIME_TIMER),
+    ]
     assert mock_get_metric.return_value.count.call_count == 1
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
 
