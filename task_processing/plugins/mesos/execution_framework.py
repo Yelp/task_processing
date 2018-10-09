@@ -190,26 +190,24 @@ class ExecutionFramework(Scheduler):
             )
             get_metric(metrics.TASK_STUCK_COUNT).count(1)
         elif md.task_state == 'TASK_STUCK':
-            killed_at = md.task_state_history['TASK_STUCK']
-            if time_now > killed_at + 3600:
+            t = time.time()
+            # 10s since last iteration + time we spent in current one
+            time_delta = 10 + t - time_now
+            # seconds since task was put in TASK_STUCK state
+            time_stuck = t - md.task_state_history['TASK_STUCK']
+            # seconds since `time_stuck` crossed another hour
+            # boundary
+            hour_rolled = time_stuck % 3600
+
+            # if `time_stuck` crossed hour boundary since last
+            # background check - lets re-send kill request
+            if hour_rolled < time_delta:
+                hours_stuck = time_stuck // 3600
                 log.warning(
-                    f'Task {task_id} waiting for terminal state '
-                    'for an hour, discarding from metadata'
+                    f'Task {task_id} is stuck, waiting for terminal '
+                    f'state for {hours_stuck}h, sending another kill'
                 )
-                self.task_metadata.discard(task_id)
-                self.event_queue.put(
-                    task_event(
-                        task_id=task_id,
-                        terminal=True,
-                        timestamp=time_now,
-                        success=False,
-                        message='stop',
-                        task_config=md.task_config,
-                        raw='Stuck and timed out',
-                    )
-                )
-            else:
-                log.warning(f'Task {task_id} waiting for terminal state')
+                self.kill_task(task_id)
 
     def _background_check(self):
         while True:
