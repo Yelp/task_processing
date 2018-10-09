@@ -139,6 +139,8 @@ MESOS_STATUS_MAP = {
     addict.Dict(platform_type='gone_by_operator',
                 terminal=True, success=False),
     'TASK_UNKNOWN':
+    addict.Dict(platform_type='unknown', terminal=False),
+    'TASK_STUCK':
     addict.Dict(platform_type='unknown', terminal=False)
 }
 
