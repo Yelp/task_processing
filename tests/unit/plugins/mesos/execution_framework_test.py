@@ -292,7 +292,8 @@ def test_initialize_metrics(ef):
 
         timers = [
             metrics.TASK_QUEUED_TIME_TIMER,
-            metrics.OFFER_DELAY_TIMER
+            metrics.OFFER_DELAY_TIMER,
+            metrics.BGCHECK_TIME_TIMER,
         ]
         assert mock_create_timer.call_count == len(timers)
         for tmr in timers:
