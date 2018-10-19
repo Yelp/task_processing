@@ -32,7 +32,7 @@ setup(
     ],
     extras_require={
         # We can add the Mesos specific dependencies here
-        'mesos_executor': ['addict', 'pymesos', 'requests'],
+        'mesos_executor': ['addict', 'pymesos>=0.2.14', 'requests'],
         'metrics': ['yelp-meteorite'],
         'persistence': ['boto3'],
     }
