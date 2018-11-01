@@ -572,7 +572,7 @@ class ExecutionFramework(Scheduler):
 
                 for task in tasks_to_defer:
                     self.task_queue.put(task)
-                    get_metric(metrics.TASK_INSUFFICIENT_OFFER_COUNT).count(1)
+                get_metric(metrics.TASK_INSUFFICIENT_OFFER_COUNT).count(len(tasks_to_defer))
 
                 if len(tasks_to_launch) == 0:
                     declined['bad resources'].append(offer.id.value)

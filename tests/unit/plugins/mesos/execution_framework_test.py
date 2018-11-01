@@ -394,7 +394,7 @@ def test_resource_offers_launch_tasks_failed(
     assert not ef.are_offers_suppressed
     assert mock_driver.declineOffer.call_count == 1
     assert mock_driver.launchTasks.call_count == 1
-    assert mock_get_metric.call_count == 2
+    assert mock_get_metric.call_count == 3
     assert ef.task_metadata[task_id].task_state == 'UNKNOWN'
 
 
