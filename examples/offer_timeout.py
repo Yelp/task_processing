@@ -4,8 +4,8 @@ import time
 
 from common import parse_args
 
-from task_processing.runners.async import Async
-from task_processing.runners.async import EventHandler
+from task_processing.runners.async_runner import Async
+from task_processing.runners.async_runner import EventHandler
 from task_processing.task_processor import TaskProcessor
 
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'

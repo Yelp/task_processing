@@ -60,7 +60,7 @@ def mock_event(mock_task_config, is_terminal=False):
     )
 
 
-# task_retry ###################################################################
+# task_retry #############################################################
 def test_task_retry(mock_retrying_executor, mock_event):
     mock_retrying_executor.task_retries = mock_retrying_executor.\
         task_retries.set(mock_event.task_id, 3)
@@ -84,7 +84,7 @@ def test_task_retry_retries_exhausted(mock_retrying_executor, mock_event):
     assert not retry_attempted
 
 
-# retry_loop ###################################################################
+# retry_loop #############################################################
 def test_retry_loop_retries_task(mock_retrying_executor, mock_event):
     mock_event = mock_event.set('terminal', True)
     mock_retrying_executor.stopping = True
@@ -165,7 +165,7 @@ def test_retry_loop_recover_attempt(mock_retrying_executor, mock_event):
     assert mock_retrying_executor.task_retries[original_task_id] == 6
 
 
-# run ##########################################################################
+# run ####################################################################
 def test_run(mock_retrying_executor, mock_downstream, mock_task_config):
     mock_retrying_executor.run(mock_task_config)
 
@@ -187,14 +187,14 @@ def test_run_default_retries(mock_retrying_executor, mock_downstream):
     assert mock_retrying_executor.task_retries[mock_config.task_id] == 2
 
 
-# reconcile ####################################################################
+# reconcile ##############################################################
 def test_reconcile(mock_retrying_executor, mock_downstream):
     mock_retrying_executor.reconcile("task")
 
     assert mock_downstream.reconcile.call_args == mock.call("task")
 
 
-# kill #########################################################################
+# kill ###################################################################
 def test_kill(mock_retrying_executor, mock_downstream):
     result = mock_retrying_executor.kill("task")
 
@@ -203,7 +203,7 @@ def test_kill(mock_retrying_executor, mock_downstream):
     assert mock_retrying_executor.task_retries["task"] == -1
 
 
-# stop #########################################################################
+# stop ###################################################################
 def test_stop(mock_retrying_executor, mock_downstream):
     mock_retrying_executor.stop()
 
@@ -211,7 +211,7 @@ def test_stop(mock_retrying_executor, mock_downstream):
     assert mock_retrying_executor.stopping is True
 
 
-# _task_config_with_retry ######################################################
+# _task_config_with_retry ################################################
 def test_task_config_with_retry(mock_retrying_executor, mock_task_config):
     mock_retrying_executor.task_retries = mock_retrying_executor.\
         task_retries.set(mock_task_config.task_id, 2)
@@ -223,7 +223,7 @@ def test_task_config_with_retry(mock_retrying_executor, mock_task_config):
     assert ret_value.task_id == mock_task_config.task_id + '-retry2'
 
 
-# _restore_task_id #############################################################
+# _restore_task_id #######################################################
 def test_restore_task_id(mock_retrying_executor, mock_event):
     original_task_id = mock_event.task_id
     mock_retrying_executor.task_retries = mock_retrying_executor.\
@@ -245,7 +245,7 @@ def test_restore_task_id(mock_retrying_executor, mock_event):
     assert mock_event.task_id == ret_value.task_id
 
 
-# _is_current_attempt ##########################################################
+# _is_current_attempt ####################################################
 def test_is_current_attempt(
     mock_retrying_executor,
     mock_event,
