@@ -1,11 +1,10 @@
+repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks.git
-    sha: v0.7.1
+    rev: v2.0.0
     hooks:
     -   id: trailing-whitespace
         language_version: python3.6
     -   id: end-of-file-fixer
-        language_version: python3.6
-    -   id: autopep8-wrapper
         language_version: python3.6
     -   id: check-json
         files: \.(jshintrc|json)$
@@ -29,7 +28,7 @@
         language_version: python3.6
         args: [--remove]
 -   repo: https://github.com/asottile/reorder_python_imports.git
-    sha: v0.3.1
+    rev: v1.3.3
     hooks:
     -   id: reorder-python-imports
         language_version: python3.6
@@ -38,3 +37,8 @@
             --remove-import, 'from __future__ import print_function',
             --remove-import, 'from __future__ import unicode_literals',
         ]
+-   repo: https://github.com/pre-commit/mirrors-autopep8
+    rev: v1.4.2
+    hooks:
+    -   id: autopep8
+        language_version: python3.6

@@ -66,7 +66,7 @@ def mock_event(mock_task_config):
     )
 
 
-# timeout_loop #################################################################
+# timeout_loop ###########################################################
 def test_timeout_loop_nontask(
     mock_timeout_executor,
     mock_event,
@@ -140,7 +140,7 @@ def test_timeout_loop_nonexistent_nonterminal_task(
     assert len(mock_timeout_executor.killed_tasks) == 1
 
 
-# run ##########################################################################
+# run ####################################################################
 def test_run(mock_timeout_executor, mock_downstream):
     mock_config = MesosTaskConfig(image='fake', cmd='cat', timeout=60)
     mock_timeout_executor.run(mock_config)
@@ -149,13 +149,13 @@ def test_run(mock_timeout_executor, mock_downstream):
     assert len(mock_timeout_executor.running_tasks) == 1
 
 
-# reconcile ####################################################################
+# reconcile ##############################################################
 def test_reconcile(mock_timeout_executor, mock_downstream):
     mock_timeout_executor.reconcile("task")
     assert mock_downstream.reconcile.call_args == mock.call("task")
 
 
-# kill #########################################################################
+# kill ###################################################################
 def test_kill_existing_task(mock_timeout_executor, mock_downstream):
     mock_timeout_executor.running_tasks = [TaskEntry("task", 10)]
     mock_timeout_executor.downstream_executor.kill = mock.Mock(
@@ -169,14 +169,14 @@ def test_kill_existing_task(mock_timeout_executor, mock_downstream):
     assert len(mock_timeout_executor.killed_tasks) == 1
 
 
-# stop #########################################################################
+# stop ###################################################################
 def test_stop(mock_timeout_executor, mock_downstream):
     mock_timeout_executor.stop()
     assert mock_downstream.stop.call_args == mock.call()
     assert mock_timeout_executor.stopping
 
 
-# _insert_new_running_task_entry ###############################################
+# _insert_new_running_task_entry #########################################
 def test_insert_new_running_task_entry_enumerate(mock_timeout_executor):
     mock_entry_one = TaskEntry('fake_entry_one', 1)
     mock_entry_two = TaskEntry('fake_entry_two', 2)

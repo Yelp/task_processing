@@ -364,7 +364,8 @@ class ExecutionFramework(Scheduler):
         launch_time = time.time()
         if self.call_driver('launchTasks', offer.id, mesos_protobuf_tasks) is self.driver_error:
             tasks = ', '.join(task.task_id for task in tasks_to_launch)
-            log.warning(f'Failed to launch: {tasks}, moving them to UNKNOWN state')
+            log.warning(
+                f'Failed to launch: {tasks}, moving them to UNKNOWN state')
             get_metric(metrics.TASK_LAUNCH_FAILED_COUNT).count(1)
             launched = False
 
@@ -504,8 +505,10 @@ class ExecutionFramework(Scheduler):
                     declined['no tasks'].append(offer.id.value)
                     declined_offer_ids.append(offer.id)
 
-                self.call_driver('declineOffer', declined_offer_ids, self.offer_decline_filter)
-                log.info(f"Offers declined because of no tasks: {','.join(declined['no tasks'])}")
+                self.call_driver(
+                    'declineOffer', declined_offer_ids, self.offer_decline_filter)
+                log.info(
+                    f"Offers declined because of no tasks: {','.join(declined['no tasks'])}")
                 return
 
         with_maintenance_window = [
@@ -585,7 +588,8 @@ class ExecutionFramework(Scheduler):
                     if task_config.task_id not in self.task_metadata
                 )
                 if ignored_tasks:
-                    log.warning(f'ignoring tasks not in metadata: {ignored_tasks}')
+                    log.warning(
+                        f'ignoring tasks not in metadata: {ignored_tasks}')
 
                 tasks_to_launch = [
                     task_config

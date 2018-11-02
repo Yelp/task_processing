@@ -1,7 +1,7 @@
 import mock
 import pytest
 
-from task_processing.runners.async import Async
+from task_processing.runners.async_runner import Async
 
 
 @pytest.fixture

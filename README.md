@@ -24,19 +24,19 @@ Other examples available include:
 + async.py
 Example of the [async](#async) task runner.
 
-+ dynamo_persistence.py  
++ dynamo_persistence.py
 Example that shows how task events may be persisted to [DynamoDB](https://aws.amazon.com/dynamodb) using the `stateful` plugin.
 
-+ file_persistence.py  
++ file_persistence.py
 Example that shows how task events may be persisted to disk using the `stateful` plugin.
 
-+ promise.py  
++ promise.py
 Example that shows how the [promise/future](#Promise/Future) task runner (not yet implemented) may be used.
 
-+ subscription.py  
++ subscription.py
 Example of the [subscription](#subscription) task runner.
 
-+ sync.py  
++ sync.py
 Brief example using the [sync](#sync) task runner.
 
 + timeout.py
