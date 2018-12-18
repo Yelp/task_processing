@@ -1,10 +1,11 @@
 import json
 import uuid
+from typing import Any
 
 from pyrsistent import field
 from pyrsistent import freeze
 from pyrsistent import m
-from pyrsistent import PMap
+from pyrsistent import PMap  # type: ignore
 from pyrsistent import pmap
 from pyrsistent import PRecord
 
@@ -31,7 +32,7 @@ class Event(PRecord):
     # use time.time() to generate
     timestamp = field(type=float, initial=0.0)
     # reference to platform-specific event object
-    raw = field(mandatory=True, initial=None)
+    raw: Any = field(mandatory=True, initial=None)
     # free-form dictionary for stack-specific data
     extensions = field(type=PMap, initial=m(), factory=pmap)
     # is this the last event for a task?

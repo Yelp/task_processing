@@ -11,9 +11,10 @@ from addict import Dict
 from pymesos.interface import Scheduler
 from pyrsistent import field
 from pyrsistent import m
-from pyrsistent import PMap
+from pyrsistent import PMap  # type: ignore
 from pyrsistent import pmap
 from pyrsistent import PRecord
+from pyrsistent import PVector  # type: ignore
 from pyrsistent import v
 
 from task_processing.interfaces.event import control_event
@@ -89,8 +90,8 @@ class ExecutionFramework(Scheduler):
 
         self.offer_decline_filter = Dict(refuse_seconds=self.offer_backoff)
         self._lock = threading.RLock()
-        self.blacklisted_slaves = v()
-        self.task_metadata = m()
+        self.blacklisted_slaves: PVector = v()
+        self.task_metadata: PMap = m()
 
         self._initialize_metrics()
         self._last_offer_time: Optional[float] = None

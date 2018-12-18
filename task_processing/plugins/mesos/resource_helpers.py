@@ -5,7 +5,7 @@ from pyrsistent import field
 from pyrsistent import m
 from pyrsistent import pmap
 from pyrsistent import PRecord
-from pyrsistent import PVector
+from pyrsistent import PVector  # type: ignore
 from pyrsistent import pvector
 from pyrsistent import v
 

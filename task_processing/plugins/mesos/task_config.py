@@ -2,13 +2,13 @@ import uuid
 
 from pyrsistent import field
 from pyrsistent import m
-from pyrsistent import PMap
+from pyrsistent import PMap  # type: ignore
 from pyrsistent import pmap
-from pyrsistent import PRecord
-from pyrsistent import PVector
+from pyrsistent import PVector  # type: ignore
 from pyrsistent import pvector
 from pyrsistent import v
 
+from task_processing.interfaces.task_executor import DefaultTaskConfigInterface
 from task_processing.plugins.mesos.constraints import Constraint
 from task_processing.plugins.mesos.constraints import \
     valid_constraint_operator_name
@@ -42,7 +42,7 @@ def _valid_constraints(constraints):
         return (True, None)
 
 
-class MesosTaskConfig(PRecord):
+class MesosTaskConfig(DefaultTaskConfigInterface):
     def __invariant__(conf):
         return (
             (
