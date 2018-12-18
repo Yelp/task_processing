@@ -6,7 +6,7 @@ from pyrsistent import PRecord
 
 
 class DefaultTaskConfigInterface(PRecord):
-    task_id = field(type=uuid.UUID, initial=uuid.uuid4)
+    uuid = field(type=uuid.UUID, initial=uuid.uuid4)
     name = field(type=str, initial='default')
 
 

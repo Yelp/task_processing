@@ -77,7 +77,6 @@ events = st.builds(
 @given(x=events)
 def test_event_to_item_timestamp(x, persister):
     res = persister._event_to_item(x)['M']
-    print(res)
     assert 'N' in res['timestamp'].keys()
     assert 'BOOL' in res['success'].keys()
     assert 'BOOL' in res['terminal'].keys()

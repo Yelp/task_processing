@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 import requests
 from pyrsistent import field
 from pyrsistent import m
-from pyrsistent import PMap
+from pyrsistent import PMap  # type: ignore
 from pyrsistent import pmap
 from pyrsistent import PRecord
 from pyrsistent import v

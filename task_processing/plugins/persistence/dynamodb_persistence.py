@@ -28,6 +28,8 @@ class DynamoDBPersister(Persister):
         return [self.item_to_event(item) for item in res['Items']]
 
     def write(self, event):
+        if event.kind == 'control':
+            return None
         return self.ddb_client.put_item(
             TableName=self.table_name,
             Item=self._event_to_item(event)['M']
