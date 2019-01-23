@@ -5,7 +5,7 @@ from pyrsistent import field
 from pyrsistent import m
 from pyrsistent import pmap
 from pyrsistent import PRecord
-from pyrsistent import PVector  # type: ignore
+from pyrsistent import PVector
 from pyrsistent import pvector
 from pyrsistent import v
 
@@ -25,7 +25,7 @@ class ResourceSet(PRecord):
     mem = NUMERIC_RESOURCE
     disk = NUMERIC_RESOURCE
     gpus = NUMERIC_RESOURCE
-    ports = field(type=PVector, initial=v(), factory=pvector)
+    ports: PVector = field(type=PVector, initial=v(), factory=pvector)
 
 
 def get_offer_resources(offer: addict.Dict, role: str) -> ResourceSet:

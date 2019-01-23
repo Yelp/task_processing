@@ -11,10 +11,10 @@ from addict import Dict
 from pymesos.interface import Scheduler
 from pyrsistent import field
 from pyrsistent import m
-from pyrsistent import PMap  # type: ignore
+from pyrsistent import PMap
 from pyrsistent import pmap
 from pyrsistent import PRecord
-from pyrsistent import PVector  # type: ignore
+from pyrsistent import PVector
 from pyrsistent import v
 
 from task_processing.interfaces.event import control_event
