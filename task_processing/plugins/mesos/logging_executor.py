@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 import requests
 from pyrsistent import field
 from pyrsistent import m
-from pyrsistent import PMap  # type: ignore
+from pyrsistent import PMap
 from pyrsistent import pmap
 from pyrsistent import PRecord
 from pyrsistent import v
@@ -36,7 +36,7 @@ class LogMetadata(PRecord):
 
 
 def standard_handler(task_id, message, stream):
-    print(message, file=sys.stderr if stream is 'stderr' else sys.stdout)
+    print(message, file=sys.stderr if stream == 'stderr' else sys.stdout)
 
 
 class MesosLoggingExecutor(TaskExecutor):
