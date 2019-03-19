@@ -1,11 +1,13 @@
 from typing import Tuple
+from typing import TYPE_CHECKING
 
 import addict
 from pyrsistent import field
 from pyrsistent import m
+from pyrsistent import PMap
 from pyrsistent import pmap
 from pyrsistent import PRecord
-from pyrsistent import PVector  # type: ignore
+from pyrsistent import PVector
 from pyrsistent import pvector
 from pyrsistent import v
 
@@ -25,7 +27,9 @@ class ResourceSet(PRecord):
     mem = NUMERIC_RESOURCE
     disk = NUMERIC_RESOURCE
     gpus = NUMERIC_RESOURCE
-    ports = field(type=PVector, initial=v(), factory=pvector)
+    ports = field(type=(PVector[PMap] if TYPE_CHECKING else PVector),
+                  initial=v(),
+                  factory=pvector)
 
 
 def get_offer_resources(offer: addict.Dict, role: str) -> ResourceSet:
@@ -65,8 +69,8 @@ def allocate_task_resources(
             continue
         offer_resources = offer_resources.set(res, val - task_config[res])
 
-    port = offer_resources.ports[0].begin
-    if offer_resources.ports[0].begin == offer_resources.ports[0].end:
+    port = offer_resources.ports[0]['begin']
+    if offer_resources.ports[0]['begin'] == offer_resources.ports[0]['end']:
         avail_ports = offer_resources.ports[1:]
     else:
         new_port_range = offer_resources.ports[0].set('begin', port + 1)

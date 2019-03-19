@@ -5,7 +5,7 @@ from typing import Any
 from pyrsistent import field
 from pyrsistent import freeze
 from pyrsistent import m
-from pyrsistent import PMap  # type: ignore
+from pyrsistent import PMap
 from pyrsistent import pmap
 from pyrsistent import PRecord
 

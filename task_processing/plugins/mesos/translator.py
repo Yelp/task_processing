@@ -17,7 +17,7 @@ def make_mesos_container_info(task_config: MesosTaskConfig) -> addict.Dict:
         volumes=thaw(task_config.volumes),
     )
     port_mappings = [addict.Dict(
-        host_port=task_config.ports[0].begin, container_port=8888)]
+        host_port=task_config.ports[0]['begin'], container_port=8888)]
     if container_info.type == 'DOCKER':
         container_info.docker = addict.Dict(
             image=task_config.image,

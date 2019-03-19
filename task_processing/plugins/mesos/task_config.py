@@ -1,10 +1,12 @@
 import uuid
+from typing import Sequence
+from typing import TYPE_CHECKING
 
 from pyrsistent import field
 from pyrsistent import m
-from pyrsistent import PMap  # type: ignore
+from pyrsistent import PMap
 from pyrsistent import pmap
-from pyrsistent import PVector  # type: ignore
+from pyrsistent import PVector
 from pyrsistent import pvector
 from pyrsistent import v
 
@@ -92,7 +94,9 @@ class MesosTaskConfig(DefaultTaskConfigInterface):
                     initial=v(),
                     factory=pvector,
                     invariant=valid_volumes)
-    ports = field(type=PVector, initial=v(), factory=pvector)
+    ports = field(type=(PVector[PMap] if TYPE_CHECKING else PVector),
+                  initial=v(),
+                  factory=pvector)
     cap_add = field(type=PVector, initial=v(), factory=pvector)
     ulimit = field(type=PVector, initial=v(), factory=pvector)
     uris = field(type=PVector, initial=v(), factory=pvector)
@@ -111,7 +115,7 @@ class MesosTaskConfig(DefaultTaskConfigInterface):
         invariant=lambda t: (t > 0, 'timeout > 0')
     )
     constraints = field(
-        type=PVector,
+        type=(Sequence[Constraint] if TYPE_CHECKING else PVector),
         initial=v(),
         factory=lambda c: pvector((Constraint(attribute=v[0], operator=v[1],
                                               value=v[2]) for v in c)),
