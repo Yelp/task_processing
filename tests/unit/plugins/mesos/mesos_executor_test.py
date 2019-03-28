@@ -55,7 +55,7 @@ def test_creates_execution_framework_and_driver(
     )
 
     assert mock_Thread.call_args == mock.call(
-        target=mesos_executor.driver.run,
+        target=mesos_executor._run_driver,
         args=()
     )
 

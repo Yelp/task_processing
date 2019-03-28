@@ -79,10 +79,16 @@ class MesosExecutor(TaskExecutor):
         )
 
         # start driver thread immediately
+        self.stopping = False
         self.driver_thread = threading.Thread(
-            target=self.driver.run, args=())
+            target=self._run_driver, args=())
         self.driver_thread.daemon = True
         self.driver_thread.start()
+
+    def _run_driver(self):
+        while not self.stopping:
+            self.driver.run()
+            self.logger.warning('Driver stopped, starting again')
 
     def run(self, task_config):
         self.execution_framework.enqueue_task(task_config)
@@ -94,6 +100,7 @@ class MesosExecutor(TaskExecutor):
         return self.execution_framework.kill_task(task_id)
 
     def stop(self):
+        self.stopping = True
         self.execution_framework.stop()
         self.driver.stop(failover=self.failover)
         self.driver.join()
