@@ -165,9 +165,16 @@ class MesosLoggingExecutor(TaskExecutor):
 
                 # Record the base log url
                 if e.kind == 'task' and e.platform_type == 'staging':
-                    url = e.raw.offer.url.scheme + '://' + \
-                        e.raw.offer.url.address.ip + ':' + \
-                        str(e.raw.offer.url.address.port)
+                    try:
+                        url = e.raw.offer.url.scheme + '://' + \
+                            e.raw.offer.url.address.ip + ':' + \
+                            str(e.raw.offer.url.address.port)
+                    except Exception as exc:
+                        log.error(
+                            f"Error decoding the url for this offer: {e.raw.offer.url}. "
+                            f"Setting to None. Exception: {exc}"
+                        )
+                        url = None
                     self.staging_tasks = self.staging_tasks.set(e.task_id, url)
 
                 if e.kind == 'task' and e.platform_type == 'running':
