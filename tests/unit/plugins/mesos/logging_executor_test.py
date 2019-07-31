@@ -81,6 +81,30 @@ def test_event_loop_stores_staging_event(mock_logging_executor, source_queue):
     assert task_data == 'http://1.2.3.4:5051'
 
 
+def test_event_loop_stores_staging_event_with_bogus_url(mock_logging_executor, source_queue):
+    raw = Dict({
+        'offer': {
+            'url': {
+                'scheme': None,
+                'address': {},
+            },
+        },
+    })
+    mock_event = mock.Mock(
+        kind='task',
+        platform_type='staging',
+        task_id='my_task',
+        raw=raw,
+    )
+
+    mock_logging_executor.stopping = True
+    source_queue.put(mock_event)
+
+    mock_logging_executor.event_loop()
+    task_data = mock_logging_executor.staging_tasks['my_task']
+    assert task_data is None
+
+
 def test_event_loop_continues_after_unknown_task(mock_logging_executor, source_queue):
     unknown_event = mock.Mock(
         kind='task',
