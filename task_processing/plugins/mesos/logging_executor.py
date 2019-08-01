@@ -81,6 +81,9 @@ class MesosLoggingExecutor(TaskExecutor):
 
     def set_task_log_path(self, task_id):
         log_md = self.running_tasks[task_id]
+        if log_md.log_url is None:
+            log.error(f"No log_url available for {task_id}")
+            return
         try:
             response = requests.get(log_md.log_url + '/files/debug').json()
         except Exception as e:
@@ -165,16 +168,9 @@ class MesosLoggingExecutor(TaskExecutor):
 
                 # Record the base log url
                 if e.kind == 'task' and e.platform_type == 'staging':
-                    try:
-                        url = e.raw.offer.url.scheme + '://' + \
-                            e.raw.offer.url.address.ip + ':' + \
-                            str(e.raw.offer.url.address.port)
-                    except Exception as exc:
-                        log.error(
-                            f"Error decoding the url for this offer: {e.raw.offer.url}. "
-                            f"Setting to None. Exception: {exc}"
-                        )
-                        url = None
+                    if e.task_id in self.staging_tasks:
+                        continue
+                    url = extract_url_from_offer(e.raw.offer)
                     self.staging_tasks = self.staging_tasks.set(e.task_id, url)
 
                 if e.kind == 'task' and e.platform_type == 'running':
@@ -246,3 +242,17 @@ class MesosLoggingExecutor(TaskExecutor):
 
     def kill(self, task_id):
         return self.downstream_executor.kill(task_id)
+
+
+def extract_url_from_offer(offer):
+    try:
+        url = offer.url.scheme + '://' + \
+            offer.url.address.ip + ':' + \
+            str(offer.url.address.port)
+    except Exception as exc:
+        log.error(
+            f"Error decoding the url for this offer: {offer.url}. "
+            f"Setting to None. Exception: {exc}"
+        )
+        url = None
+    return url
