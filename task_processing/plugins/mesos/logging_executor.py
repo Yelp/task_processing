@@ -23,6 +23,7 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 # Read task log in 4K chunks
 TASK_LOG_CHUNK_LEN = 4096
 DEFAULT_FORMAT = '{task_id}[{container_id}@{agent}]: {line}'
+LOG_REQUEST_TIMEOUT = 5  # seconds
 
 
 class LogMetadata(PRecord):
@@ -85,7 +86,10 @@ class MesosLoggingExecutor(TaskExecutor):
             log.error(f"No log_url available for {task_id}")
             return
         try:
-            response = requests.get(log_md.log_url + '/files/debug').json()
+            response = requests.get(
+                log_md.log_url + '/files/debug',
+                timeout=LOG_REQUEST_TIMEOUT,
+            ).json()
         except Exception as e:
             log.error("Failed to fetch files {error}".format(error=e))
             return
@@ -127,7 +131,9 @@ class MesosLoggingExecutor(TaskExecutor):
                 try:
                     response = requests.get(
                         log_md.log_url + '/files/read',
-                        params=payload).json()
+                        params=payload,
+                        timeout=LOG_REQUEST_TIMEOUT,
+                    ).json()
 
                     log_length = len(response['data'])
                     for line in response['data'].splitlines():
