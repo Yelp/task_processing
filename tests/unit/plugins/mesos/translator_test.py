@@ -110,7 +110,7 @@ def test_make_mesos_task_info(
         command=addict.Dict(
             value='echo "fake"',
             uris=[],
-            environment=addict.Dict(variables=[])
+            environment=addict.Dict(variables=[{'name': 'MESOS_TASK_ID', 'value': mock.ANY}])
         ),
         container=container,
     )
