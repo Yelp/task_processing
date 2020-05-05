@@ -192,6 +192,16 @@ def test_constraints_LIKE_not_match(fake_dict):
             ),
         ],
     )
+    assert not attributes_match_constraints(
+        fake_dict,
+        [
+            Constraint(
+                attribute='region',
+                operator='LIKE',
+                value='fake_region'
+            )
+        ]
+    )
 
 
 def test_constraints_UNLIKE_match(fake_dict):

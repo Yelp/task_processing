@@ -13,7 +13,7 @@ def notequals_op(expected_value, actual_value):
 
 
 def like_op(re_pattern, actual_value):
-    return re.match(re_pattern, actual_value)
+    return re.fullmatch(re_pattern, actual_value)
 
 
 def unlike_op(re_pattern, actual_value):
