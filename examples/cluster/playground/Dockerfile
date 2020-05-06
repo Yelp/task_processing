@@ -9,7 +9,7 @@ RUN apt-get update -q && \
         openssh-server docker.io curl vim jq libsvn-dev \
     && apt-get clean
 
-RUN add-apt-repository ppa:jonathonf/python-3.6
+RUN add-apt-repository ppa:deadsnakes
 RUN apt-get update -q && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3.6 python3.6-dev python3.6-venv
 RUN wget https://bootstrap.pypa.io/get-pip.py
