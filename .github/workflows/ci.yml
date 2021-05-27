@@ -1,7 +1,7 @@
 ---
 name: CI
 
-# Controls when the action will run. 
+# Controls when the action will run.
 on: [push, release]
 jobs:
   tox:
@@ -11,12 +11,8 @@ jobs:
       matrix:
         make_target: [test, tox_integration, tox_docs]
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
           python-version: 3.6
-      - name: Run make targets
       - run: make ${{ matrix.make_target }}
-          
-
