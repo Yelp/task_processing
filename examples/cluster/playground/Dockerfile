@@ -29,7 +29,7 @@ RUN pip3 install --upgrade pip==10.0.1
 RUN pip3 install --upgrade virtualenv==15.1.0
 
 ADD . /src
-ENV PYTHONPATH=/src CRYPTOGRAPHY_DONT_BUILD_RUST=1
+ENV PYTHONPATH=/src
 WORKDIR /src
 
 RUN pip3 install cryptography==2.7
