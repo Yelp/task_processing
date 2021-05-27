@@ -32,6 +32,8 @@ ADD . /src
 ENV PYTHONPATH=/src
 WORKDIR /src
 
+# temporarily downpin cryptography until we can make it grab the correct pre-built wheel in itests
+RUN pip3 install cryptography==2.7
 RUN python3 setup.py install
 RUN pip3 install -r requirements-dev.txt
 RUN pip3 install pymesos
