@@ -1,7 +1,3 @@
-.PHONY: all test dev_env docs venv pypi
-
-TOX=".tox/dev/bin/tox"
-
 ifeq ($(findstring .yelpcorp.com, $(shell hostname -f)), .yelpcorp.com)
 	BUILD_ENV?=YELP
 	export PIP_INDEX_URL?=https://pypi.yelpcorp.com/simple
@@ -12,25 +8,20 @@ endif
 venv:
 	tox -e venv
 
-test: dev_env
-	${TOX}
+test:
+	tox
 
-dev_env:
-	mkdir -p .tox
-	test -f .tox/dev/bin/activate || virtualenv -p python3.6 .tox/dev
-	.tox/dev/bin/pip install -U tox
+tox_%:
+	tox -e $*
 
-tox_%: dev_env
-	${TOX} -e $*
+itest:
+	tox -e integration
 
-itest_trusty: dev_env
-	${TOX} -e integration
+docs:
+	tox -e docs
 
-docs: dev_env
-	${TOX} -e docs
-
-pypi: dev_env
-	${TOX} -e pypi
+pypi:
+	tox -e pypi
 
 clean:
 	rm -rf docs/build
