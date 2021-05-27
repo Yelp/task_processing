@@ -1,5 +1,4 @@
 # Task Processing
-[![Build Status](https://travis-ci.org/Yelp/task_processing.svg?branch=master)](https://travis-ci.org/Yelp/task_processing)
 
 Interfaces and shared infrastructure for generic task processing (also known as `taskproc`) at Yelp.
 
