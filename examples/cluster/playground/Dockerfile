@@ -32,6 +32,7 @@ ADD . /src
 ENV PYTHONPATH=/src CRYPTOGRAPHY_DONT_BUILD_RUST=1
 WORKDIR /src
 
+RUN pip3 install cryptography==2.7
 RUN python3 setup.py install
 RUN pip3 install -r requirements-dev.txt
 RUN pip3 install pymesos
