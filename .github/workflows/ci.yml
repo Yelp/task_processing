@@ -1,0 +1,20 @@
+---
+name: CI
+
+# Controls when the action will run.
+on: [push, release]
+jobs:
+  tox:
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        make_target: [test, tox_integration, tox_docs]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.6
+      # GHA won't setup tox for us and we use tox-pip-extensions for venv-update
+      - run: pip install tox==3.2 tox-pip-extensions==1.3.0
+      - run: make ${{ matrix.make_target }}
