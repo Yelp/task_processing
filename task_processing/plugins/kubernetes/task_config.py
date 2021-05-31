@@ -1,37 +1,17 @@
-import uuid
-from typing import Sequence
-from typing import TYPE_CHECKING
+import re
 
 from pyrsistent import field
-from pyrsistent import m
 from pyrsistent import PMap
-from pyrsistent import pmap
 from pyrsistent import PVector
-from pyrsistent import pvector
-from pyrsistent import v
 
 from task_processing.interfaces.task_executor import DefaultTaskConfigInterface
 
-VOLUME_KEYS = set(['mode', 'container_path', 'host_path'])
-
-def valid_volumes(volumes):
-    for vol in volumes:
-        if set(vol.keys()) != VOLUME_KEYS:
-            return (
-                False,
-                'Invalid volume format, must only contain following keys: '
-                '{}, was: {}'.format(VOLUME_KEYS, vol.keys())
-            )
-    return (True, None)
 
 class KubernetesTaskConfig(DefaultTaskConfigInterface):
-    uuid = field(type=(str, uuid.UUID), initial=uuid.uuid4)
-    node_name = field(type=str)
-    node_selector = field(type=(str,str))
+    node_selector = field(type=PMap)
     containers = field(type=PVector)
-    restart_policy = field(type=str)
-    # ToDO IAM stuff
-    service_account_name = field(type=str)
+    # Hardcoded for the time being
+    restart_policy = "Never"
     # By default, the retrying executor retries 3 times. This task option
     # overrides the executor setting.
     retries = field(type=int,
@@ -41,12 +21,23 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
     volumes = field(type=PVector,)
 
     @property
-    def task_id(self):
-        return "{}.{}".format(self.name, self.uuid)
+    def pod_name(self) -> str:
+        return self.name
 
-    def set_task_id(self, task_id):
+    def set_pod_name(self, pod_name: str):
         try:
-            name, uuid = task_id.rsplit('.', maxsplit=1)
+            name, uuid = pod_name.rsplit('.', maxsplit=1)
         except ValueError:
-            raise ValueError(f'Invalid format for task_id {task_id}')
+            raise ValueError(f'Invalid format for pod_name {pod_name}')
+
+        if len(pod_name) > 253:
+            print(
+                f'Invalid format for pod_name {pod_name}.',
+                f'Pod_name must have up to 253 characters only.')
+            return False
+
+        regex_passed = re.match('[a-z0-9]([.-a-z0-9]*[a-z0-9])?', pod_name)
+        if not regex_passed:
+            print(f'Invalid format for pod_name {pod_name}.')
+
         return self.set(name=name, uuid=uuid)
