@@ -18,7 +18,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
                     factory=int,
                     mandatory=False,
                     invariant=lambda r: (r >= 0, 'retries >= 0'))
-    volumes = field(type=PVector,)
+    volumes = field(type=PVector)
 
     @property
     def pod_name(self) -> str:
