@@ -30,7 +30,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
             (
                 re.match(VALID_POD_NAME_REGEX, conf.pod_name),
                 (
-                    f'Must comply with Kubernetes pod naming standards.'
+                    'Must comply with Kubernetes pod naming standards.'
                 )
             )
         )
