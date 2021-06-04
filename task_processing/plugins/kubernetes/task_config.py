@@ -15,7 +15,7 @@ REGEX_MATCH = '[a-z0-9]([.-a-z0-9]*[a-z0-9])?'
 
 class KubernetesTaskConfig(DefaultTaskConfigInterface):
     def __invariant__(conf):
-        return(
+        return (
             (
                 len(conf.pod_name) > MAX_POD_NAME_LENGTH,
                 (
@@ -31,6 +31,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
                 )
             )
         )
+        
     node_selector = field(type=PMap)
     containers = field(type=PVector)
     # Hardcoded for the time being
