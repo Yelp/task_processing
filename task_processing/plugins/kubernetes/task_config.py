@@ -20,7 +20,7 @@ def _generate_pod_suffix() -> str:
 
 class KubernetesTaskConfig(DefaultTaskConfigInterface):
     def __invariant__(conf):
-        return(
+        return (
             (
                 len(conf.pod_name) < MAX_POD_NAME_LENGTH,
                 (
