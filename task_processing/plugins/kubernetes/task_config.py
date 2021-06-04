@@ -1,5 +1,6 @@
 import re
 import secrets
+import string
 
 from pyrsistent import field
 from pyrsistent import PMap
@@ -7,10 +8,14 @@ from pyrsistent import PVector
 
 from task_processing.interfaces.task_executor import DefaultTaskConfigInterface
 
-BASE_58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
-UUID_BYTES = 6
+POD_SUFFIX_ALPHABET = string.ascii_lowercase + string.digits
+POD_SUFFIX_LENGTH = 6
 MAX_POD_NAME_LENGTH = 253
-REGEX_MATCH = '[a-z0-9]([.-a-z0-9]*[a-z0-9])?'
+VALID_POD_NAME_REGEX = '[a-z0-9]([.-a-z0-9]*[a-z0-9])?'
+
+
+def _generate_pod_suffix() -> str:
+    return ''.join(secrets.choice(POD_SUFFIX_ALPHABET) for i in range(POD_SUFFIX_LENGTH))
 
 
 class KubernetesTaskConfig(DefaultTaskConfigInterface):
@@ -24,13 +29,15 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
                 )
             ),
             (
-                re.match(REGEX_MATCH, conf.pod_name),
+                re.match(VALID_POD_NAME_REGEX, conf.pod_name),
                 (
                     f'Invalid format for pod_name {conf.pod_name}. ',
                     f'Must comply with Kubernetes pod naming standards.'
                 )
             )
         )
+
+    uuid = field(type=str, initial=_generate_pod_suffix)
     node_selector = field(type=PMap)
     containers = field(type=PVector)
     # Hardcoded for the time being
@@ -49,8 +56,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
 
     def set_pod_name(self, pod_name: str):
         try:
-            name, = pod_name.rsplit('.', maxsplit=1)
-            uuid = ''.join(secrets.choice(BASE_58) for i in range(UUID_BYTES))
+            name, uuid = pod_name.rsplit('.', maxsplit=1)
         except ValueError:
             raise ValueError(f'Invalid format for pod_name {pod_name}')
 
