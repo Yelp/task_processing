@@ -22,22 +22,21 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
     def __invariant__(conf):
         return(
             (
-                len(conf.pod_name) > MAX_POD_NAME_LENGTH,
+                len(conf.pod_name) < MAX_POD_NAME_LENGTH,
                 (
-                    f'Invalid format for pod_name {conf.pod_name}. ',
-                    f'Pod name must have up to {MAX_POD_NAME_LENGTH}.'
+                    f'Pod name must have up to {MAX_POD_NAME_LENGTH} characters.'
                 )
             ),
             (
                 re.match(VALID_POD_NAME_REGEX, conf.pod_name),
                 (
-                    f'Invalid format for pod_name {conf.pod_name}. ',
                     f'Must comply with Kubernetes pod naming standards.'
                 )
             )
         )
 
     uuid = field(type=str, initial=_generate_pod_suffix)
+    name = field(type=str, initial="default")
     node_selector = field(type=PMap)
     containers = field(type=PVector)
     # Hardcoded for the time being
