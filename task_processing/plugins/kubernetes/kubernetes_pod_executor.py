@@ -1,27 +1,21 @@
 from task_processing.interfaces import TaskExecutor
-from task_processing.task_processor import TaskProcessor
+from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 
 
 class KubernetesPodExecutor(TaskExecutor):
-    # super().load_plugin(provider_module='task_processing.plugins.kubernetes')
-    # executor = super().registry.register_task_executor(TaskExecutor)
-
-    tp = TaskProcessor()
-    tp.load_plugin(provider_module='task_processing.plugins.kubernetes')
-    # Implementing this after TaskProc-229 has been merged
-    # super().TASK_CONFIG_INTERFACE = KubernetesTaskConfigInterface
+    TASK_CONFIG_INTERFACE = KubernetesTaskConfig
 
     def run(self, task_config):
-        return super().run(task_config)
+        pass
 
     def reconcile(self, task_config):
-        return super().reconcile(task_config)
+        pass
 
     def kill(self, task_id):
-        return super().kill(task_id)
+        pass
 
     def stop(self):
-        return super().stop()
+        pass
 
     def get_event_queue(self):
-        return super().get_event_queue()
+        pass
