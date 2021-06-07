@@ -6,4 +6,4 @@ TASK_PROCESSING_PLUGIN = 'kubernetes_plugin'
 
 def register_plugin(registry):
     return registry \
-        .register_task_executor('kubernetes_pod', KubernetesPodExecutor)
+        .register_task_executor('kubernetes', KubernetesPodExecutor)
