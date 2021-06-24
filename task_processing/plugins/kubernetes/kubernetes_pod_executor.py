@@ -9,6 +9,7 @@ from pyrsistent import pmap
 from pyrsistent import PRecord
 from pyrsistent import PVector
 from pyrsistent import pvector
+from pyrsistent import v
 from pyrsistent.typing import PMap
 from pyrsistent.typing import PVector as PVectorType
 
@@ -54,7 +55,7 @@ class KubernetesPodExecutor(TaskExecutor):
                 KubernetesTaskMetadata(
                     task_config=task_config,
                     task_state=KubernetesTaskState.TASK_PENDING,
-                    task_state_history=pvector(
+                    task_state_history=v(
                         (KubernetesTaskState.TASK_PENDING, int(time.time()))
                     ),
                 ),

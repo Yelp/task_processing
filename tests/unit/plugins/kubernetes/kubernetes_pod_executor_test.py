@@ -2,7 +2,7 @@ from unittest import mock
 
 import pytest
 from pyrsistent import pmap
-from pyrsistent import pvector
+from pyrsistent import v
 
 from task_processing.plugins.kubernetes.kubernetes_pod_executor import KubernetesPodExecutor
 from task_processing.plugins.kubernetes.kubernetes_pod_executor import KubernetesTaskMetadata
@@ -24,7 +24,7 @@ def test_run_updates_task_metadata(k8s_executor):
     assert k8s_executor.task_metadata == pmap(
         {
             task_config.pod_name: KubernetesTaskMetadata(
-                task_state_history=pvector((KubernetesTaskState.TASK_PENDING, mock.ANY)),
+                task_state_history=v((KubernetesTaskState.TASK_PENDING, mock.ANY)),
                 task_config=task_config,
                 node_name='',
                 task_state=KubernetesTaskState.TASK_PENDING,
