@@ -20,7 +20,7 @@ def k8s_executor():
         "task_processing.plugins.kubernetes.kube_client.kube_client",
         autospec=True
     ), mock.patch.dict(os.environ, {"KUBECONFIG": "/this/doesnt/exist.conf"}):
-        executor = KubernetesPodExecutor()
+        executor = KubernetesPodExecutor(namespace="task_processing_tests")
         yield executor
         executor.stop()
 
@@ -39,3 +39,21 @@ def test_run_updates_task_metadata(k8s_executor):
             ),
         },
     )
+
+
+def test_kill_removes_task_metadata(k8s_executor):
+    task_config = KubernetesTaskConfig(name="name", uuid="uuid")
+    k8s_executor.task_metadata = pmap(
+        {
+            task_config.pod_name: KubernetesTaskMetadata(
+                task_state_history=v((KubernetesTaskState.TASK_PENDING, 0)),
+                task_config=task_config,
+                node_name='',
+                task_state=KubernetesTaskState.TASK_PENDING,
+            ),
+        },
+    )
+
+    k8s_executor.kill(task_id=task_config.pod_name)
+
+    assert k8s_executor.task_metadata == pmap({})

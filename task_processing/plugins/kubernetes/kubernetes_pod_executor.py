@@ -4,6 +4,7 @@ from enum import auto
 from enum import unique
 from typing import Tuple
 
+from kubernetes.client import V1Status
 from pyrsistent import field
 from pyrsistent import pmap
 from pyrsistent import PRecord
@@ -41,8 +42,10 @@ class KubernetesTaskMetadata(PRecord):
 class KubernetesPodExecutor(TaskExecutor):
     TASK_CONFIG_INTERFACE = KubernetesTaskConfig
 
-    def __init__(self) -> None:
+    def __init__(self, namespace: str) -> None:
         self.kube_client = KubeClient()
+        self.namespace = namespace
+
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
         self._lock = threading.RLock()
 
@@ -67,7 +70,22 @@ class KubernetesPodExecutor(TaskExecutor):
         pass
 
     def kill(self, task_id: str) -> bool:
-        pass
+        """
+        Delete a Pod by name.
+
+        This function will have task_processing stop tracking the killed task/Pod and
+        will return True if the Pod was successfully killed (and False otherwise)
+        """
+        with self._lock:
+            self.task_metadata = self.task_metadata.discard(task_id)
+
+        status: V1Status = self.kube_client.core.delete_namespaced_pod(
+            name=task_id, namespace=self.namespace
+        )
+
+        # this is not ideal, but the k8s clientlib returns the status as a string that is
+        # either "Success" or "Failure"
+        return status.status == "Success"
 
     def stop(self) -> None:
         pass
