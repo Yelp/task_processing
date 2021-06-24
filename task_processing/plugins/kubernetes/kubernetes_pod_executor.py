@@ -81,6 +81,7 @@ class KubernetesPodExecutor(TaskExecutor):
         """
         # NOTE: we're purposely not removing this task from `task_metadata` as we want
         # to handle that with the Watch that we'll set to monitor each Pod for events.
+        # TODO(TASKPROC-242): actually handle termination events
         try:
             status: V1Status = self.kube_client.core.delete_namespaced_pod(
                 name=task_id,
