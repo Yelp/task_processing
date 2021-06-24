@@ -2,11 +2,15 @@ import threading
 import time
 from enum import auto
 from enum import unique
+from typing import Tuple
 
 from pyrsistent import field
 from pyrsistent import pmap
 from pyrsistent import PRecord
+from pyrsistent import PVector
+from pyrsistent import pvector
 from pyrsistent.typing import PMap
+from pyrsistent.typing import PVector as PVectorType
 
 from task_processing.interfaces import TaskExecutor
 from task_processing.plugins.kubernetes.kube_client import KubeClient
@@ -29,7 +33,8 @@ class KubernetesTaskMetadata(PRecord):
     # TODO(TASKPROC-241): add current task state and task state history as we did for mesos
     task_state: KubernetesTaskState = field(type=KubernetesTaskState, mandatory=True)
     # Map of state to when that state was entered (stored as a timestamp)
-    task_state_history: PMap[str, int] = field(factory=pmap, mandatory=True)
+    task_state_history: PVectorType[Tuple[KubernetesTaskState, int]] = field(
+        type=PVector, factory=pvector, mandatory=True)
 
 
 class KubernetesPodExecutor(TaskExecutor):
@@ -49,7 +54,9 @@ class KubernetesPodExecutor(TaskExecutor):
                 KubernetesTaskMetadata(
                     task_config=task_config,
                     task_state=KubernetesTaskState.TASK_PENDING,
-                    task_state_history={KubernetesTaskState.TASK_PENDING.value: int(time.time())},
+                    task_state_history=pvector(
+                        (KubernetesTaskState.TASK_PENDING, int(time.time()))
+                    ),
                 ),
             )
 
