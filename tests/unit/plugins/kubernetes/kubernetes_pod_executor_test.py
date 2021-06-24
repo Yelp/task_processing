@@ -1,3 +1,4 @@
+import os
 from unittest import mock
 
 import pytest
@@ -12,9 +13,16 @@ from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 
 @pytest.fixture
 def k8s_executor():
-    executor = KubernetesPodExecutor()
-    yield executor
-    executor.stop()
+    with mock.patch(
+        "task_processing.plugins.kubernetes.kube_client.kube_config.load_kube_config",
+        autospec=True
+    ), mock.patch(
+        "task_processing.plugins.kubernetes.kube_client.kube_client",
+        autospec=True
+    ), mock.patch.dict(os.environ, {"KUBECONFIG": "/this/doesnt/exist.conf"}):
+        executor = KubernetesPodExecutor()
+        yield executor
+        executor.stop()
 
 
 def test_run_updates_task_metadata(k8s_executor):
