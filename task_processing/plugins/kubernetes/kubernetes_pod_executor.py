@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 from enum import auto
@@ -18,6 +19,8 @@ from task_processing.interfaces import TaskExecutor
 from task_processing.plugins.kubernetes.kube_client import KubeClient
 from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 from task_processing.utils import AutoEnum
+
+logger = logging.getLogger(__name__)
 
 
 @unique
@@ -71,20 +74,31 @@ class KubernetesPodExecutor(TaskExecutor):
 
     def kill(self, task_id: str) -> bool:
         """
-        Delete a Pod by name.
+        Terminate a Pod by name.
 
-        This function will have task_processing stop tracking the killed task/Pod and
-        will return True if the Pod was successfully killed (and False otherwise)
+        This function will request that Kubernetes delete the named Pod and will return
+        True if the Pod termination request was succesfully emitted or False otherwise.
         """
-        with self._lock:
-            self.task_metadata = self.task_metadata.discard(task_id)
+        # NOTE: we're purposely not removing this task from `task_metadata` as we want
+        # to handle that with the Watch that we'll set to monitor each Pod for events.
+        try:
+            status: V1Status = self.kube_client.core.delete_namespaced_pod(
+                name=task_id,
+                namespace=self.namespace,
+                # attempt to delete immediately - Pods launched by task_processing
+                # shouldn't need time to clean-up/drain
+                grace_period_seconds=0,
+                # this is the default, but explcitly request background deletion of releated objects
+                # see: https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/
+                propagation_policy="Background"
+            )
+        except Exception:
+            logger.exception(f"Failed to request termination for Pod: {task_id}")
+            return False
 
-        status: V1Status = self.kube_client.core.delete_namespaced_pod(
-            name=task_id, namespace=self.namespace
-        )
-
-        # this is not ideal, but the k8s clientlib returns the status as a string that is
-        # either "Success" or "Failure"
+        # this is not ideal, but the k8s clientlib returns the status of the request as a string
+        # that is either "Success" or "Failure" - we could potentially use `code` instead
+        # but it's not exactly documented what HTTP return codes will be used
         return status.status == "Success"
 
     def stop(self) -> None:
