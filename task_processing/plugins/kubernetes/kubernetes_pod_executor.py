@@ -1,9 +1,13 @@
 from task_processing.interfaces import TaskExecutor
+from task_processing.plugins.kubernetes.kube_client import KubeClient
 from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 
 
 class KubernetesPodExecutor(TaskExecutor):
     TASK_CONFIG_INTERFACE = KubernetesTaskConfig
+
+    def __init__(self):
+        self.kube_client = KubeClient()
 
     def run(self, task_config):
         pass
