@@ -20,7 +20,7 @@ def k8s_executor():
         "task_processing.plugins.kubernetes.kube_client.kube_client",
         autospec=True
     ), mock.patch.dict(os.environ, {"KUBECONFIG": "/this/doesnt/exist.conf"}):
-        executor = KubernetesPodExecutor()
+        executor = KubernetesPodExecutor(namespace="task_processing_tests")
         yield executor
         executor.stop()
 
