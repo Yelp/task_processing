@@ -35,7 +35,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
             )
         )
 
-    uuid = field(type=str, initial=_generate_pod_suffix)
+    uuid = field(type=str, initial=_generate_pod_suffix)  # type: ignore
     name = field(type=str, initial="default")
     node_selector = field(type=PMap)
     containers = field(type=PVector)
@@ -51,7 +51,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
 
     @property
     def pod_name(self) -> str:
-        return f'{self.name}.{self.uuid}'
+        return f'{self.name}.{self.uuid}'  # type: ignore
 
     def set_pod_name(self, pod_name: str):
         try:
