@@ -89,7 +89,7 @@ def make_mesos_command_info(task_config: MesosTaskConfig) -> addict.Dict:
 
 def make_task_environment_variables(task_config: MesosTaskConfig) -> addict.Dict:
     env = dict(task_config.environment.items())
-    env['MESOS_TASK_ID'] = task_config.task_id
+    env['MESOS_TASK_ID'] = task_config.task_id  # type: ignore
     return addict.Dict(variables=[addict.Dict(name=k, value=v) for k, v in env.items()])
 
 

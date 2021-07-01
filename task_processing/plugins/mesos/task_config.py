@@ -57,7 +57,7 @@ class MesosTaskConfig(DefaultTaskConfigInterface):
             ),
         )
 
-    uuid = field(type=(str, uuid.UUID), initial=uuid.uuid4)
+    uuid = field(type=(str, uuid.UUID), initial=uuid.uuid4)  # type: ignore
     name = field(type=str, initial="default")
     # image is optional for the mesos containerizer
     image = field(type=str)
