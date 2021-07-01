@@ -30,6 +30,8 @@ class KubernetesPodExecutor(TaskExecutor):
         self.kube_client = KubeClient(kube_config_path=kube_config_path)
         self.namespace = namespace
 
+        self.stopping = False
+
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
         self.task_metadata_lock = threading.RLock()
 
@@ -64,35 +66,52 @@ class KubernetesPodExecutor(TaskExecutor):
     def _pod_event_watch_loop(self) -> None:
         # TODO(TASKPROC-243): we'll need to correctly handle resourceVersion expiration for the case
         # where the gap between task_proc shutting down and coming back up is long enough for data
-        # to have expired from etcd
-        for pod_event in self.watch.stream(
-            self.kube_client.core.list_namespaced_pod,
-            self.namespace
-        ):
-            self.pending_events.put(pod_event)
+        # to have expired from etcd as well as actually restarting from the last resourceVersion in
+        # case of an exception
+        while not self.stopping:
+            try:
+                for pod_event in self.watch.stream(
+                    self.kube_client.core.list_namespaced_pod,
+                    self.namespace
+                ):
+                    self.pending_events.put(pod_event)
+            except Exception:
+                logger.exception(
+                    "Exception encountered while watching Pod events - restarting watch!")
+
+    def _process_pod_event(self, event: PodEvent) -> None:
+        # XXX: ensure that anything here that updates self.task_metadata acquires a lock
+        if event["type"] == "ADDED":
+            pass
+        elif event["type"] == "DELETED":
+            pass
+        elif event["type"] == "MODIFIED":
+            pass
+        else:
+            logger.warning("Got unknown event with type: {event['type']}")
+
+        # TODO(TASKPROC-245): actually create real events to send to Tron by placing them in
+        # this plugin's event queue
 
     def _pending_event_processing_loop(self) -> None:
-        while True:
-            event = self.pending_events.get()  # blocks forever until an event is available
-            if event is Sentinel.POISON_PILL:
-                return
+        event = None
+        while not self.stopping or not self.pending_events.empty():
+            try:
+                event = self.pending_events.get()  # blocks forever until an event is available
 
-            # we need to narrow the types here since mypy isn't smart enough to see that the `is`
-            # check above means that we can no longer have anything but a PodEvent after it
-            assert not isinstance(event, Sentinel)
+                if event is Sentinel.POISON_PILL:
+                    return
+                # we need to narrow the types here since mypy isn't smart enough to see that the
+                # `is` check above means that we can no longer have anything but a PodEvent after it
+                assert not isinstance(event, Sentinel)
 
-            # XXX: ensure that anything here that updates self.task_metadata acquires a lock on it
-            if event["type"] == "ADDED":
-                pass
-            elif event["type"] == "DELETED":
-                pass
-            elif event["type"] == "MODIFIED":
-                pass
-            else:
-                logger.warning("Got unknown event with type: {event['type']}")
-
-            # TODO(TASKPROC-245): actually create real events to send to Tron by placing them in
-            # this plugin's event queue
+                self._process_pod_event(event)
+            except Exception:
+                logger.exception(
+                    f"Exception encountered proccessing Pod events - skipping event {event} and "
+                    "restarting processing!",
+                )
+            self.pending_events.task_done()
 
     def run(self, task_config: KubernetesTaskConfig) -> None:
         # we need to lock here since there will be other threads updating this metadata in response
@@ -149,6 +168,8 @@ class KubernetesPodExecutor(TaskExecutor):
         return status.status == "Success"
 
     def stop(self) -> None:
+        self.stopping = True
+
         # make sure that we've stopped watching for events before calling join() - otherwise,
         # join() will block until we hit the configured timeout (or forever with no timeout).
         self.watch.stop()
