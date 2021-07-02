@@ -1,4 +1,3 @@
-import enum
 from enum import auto
 from enum import unique
 from typing import Any
@@ -15,10 +14,6 @@ from typing_extensions import TypedDict
 
 from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 from task_processing.utils import AutoEnum
-
-
-class Sentinel(enum.Enum):
-    POISON_PILL = object()
 
 
 class PodEvent(TypedDict):
