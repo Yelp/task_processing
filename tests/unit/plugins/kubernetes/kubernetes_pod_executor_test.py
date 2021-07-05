@@ -24,7 +24,7 @@ def k8s_executor():
         "task_processing.plugins.kubernetes.kube_client.kube_client",
         autospec=True
     ), mock.patch.dict(os.environ, {"KUBECONFIG": "/this/doesnt/exist.conf"}):
-        executor = KubernetesPodExecutor()
+        executor = KubernetesPodExecutor(namespace="task_processing_tests")
         executor.api.create_namespaced_pod = mock.Mock()
         yield executor
         executor.stop()
@@ -66,7 +66,7 @@ def test_run(k8s_executor):
     fake_pod = V1Pod(
         metadata=V1ObjectMeta(
             name=task_config.pod_name,
-            namespace="tron"
+            namespace="task_processing_tests"
         ),
         spec=V1PodSpec(
             restart_policy=task_config.restart_policy,
@@ -76,5 +76,5 @@ def test_run(k8s_executor):
 
     assert k8s_executor.run(task_config) == task_config.pod_name
     assert k8s_executor.api.create_namespaced_pod.call_args_list == [
-        mock.call(body=fake_pod, namespace='tron')
+        mock.call(body=fake_pod, namespace='task_processing_tests')
     ]

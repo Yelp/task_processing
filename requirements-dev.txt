@@ -4,8 +4,10 @@ flake8
 # pin hypothesis since we don't want to switch to testing p37-only until we move tron to py37
 hypothesis==4.57.1
 mock
-mypy==0.560
+mypy
 pre-commit
 pytest
 pytest-cov
 pytest-mock
+types-pyyaml
+types-requests

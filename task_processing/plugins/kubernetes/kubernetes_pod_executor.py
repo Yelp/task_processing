@@ -5,11 +5,13 @@ from enum import auto
 from enum import unique
 from typing import Tuple
 
+
 from kubernetes.client import V1Container
 from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
 from kubernetes.client import V1PodSpec
 from kubernetes.client.apis import CoreV1Api
+from kubernetes.client import V1Status
 from pyrsistent import field
 from pyrsistent import pmap
 from pyrsistent import PRecord
@@ -50,9 +52,10 @@ class KubernetesTaskMetadata(PRecord):
 class KubernetesPodExecutor(TaskExecutor):
     TASK_CONFIG_INTERFACE = KubernetesTaskConfig
 
-    def __init__(self) -> None:
+    def __init__(self, namespace: str) -> None:
         self.kube_client = KubeClient()
-        ensure_namespace(self.kube_client, "tron")
+        self.namespace = namespace
+        ensure_namespace(self.kube_client, namespace)
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
         self.api = CoreV1Api()
         self._lock = threading.RLock()
@@ -96,7 +99,35 @@ class KubernetesPodExecutor(TaskExecutor):
         pass
 
     def kill(self, task_id: str) -> bool:
-        pass
+        """
+        Terminate a Pod by name.
+
+        This function will request that Kubernetes delete the named Pod and will return
+        True if the Pod termination request was succesfully emitted or False otherwise.
+        """
+        # NOTE: we're purposely not removing this task from `task_metadata` as we want
+        # to handle that with the Watch that we'll set to monitor each Pod for events.
+        # TODO(TASKPROC-242): actually handle termination events
+        logger.info(f"Attempting to terminate Pod: {task_id}")
+        try:
+            status: V1Status = self.kube_client.core.delete_namespaced_pod(
+                name=task_id,
+                namespace=self.namespace,
+                # attempt to delete immediately - Pods launched by task_processing
+                # shouldn't need time to clean-up/drain
+                grace_period_seconds=0,
+                # this is the default, but explcitly request background deletion of releated objects
+                # see: https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/
+                propagation_policy="Background"
+            )
+        except Exception:
+            logger.exception(f"Failed to request termination for Pod: {task_id}")
+            return False
+
+        # this is not ideal, but the k8s clientlib returns the status of the request as a string
+        # that is either "Success" or "Failure" - we could potentially use `code` instead
+        # but it's not exactly documented what HTTP return codes will be used
+        return status.status == "Success"
 
     def stop(self) -> None:
         pass
