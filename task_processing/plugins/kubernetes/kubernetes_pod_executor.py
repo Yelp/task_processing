@@ -5,13 +5,12 @@ from enum import auto
 from enum import unique
 from typing import Tuple
 
-
 from kubernetes.client import V1Container
 from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
 from kubernetes.client import V1PodSpec
-from kubernetes.client.apis import CoreV1Api
 from kubernetes.client import V1Status
+from kubernetes.client.apis import CoreV1Api
 from pyrsistent import field
 from pyrsistent import pmap
 from pyrsistent import PRecord
@@ -83,14 +82,14 @@ class KubernetesPodExecutor(TaskExecutor):
         pod = V1Pod(
             metadata=V1ObjectMeta(
                 name=task_config.pod_name,
-                namespace="tron"
+                namespace=self.namespace
             ),
             spec=V1PodSpec(
                 restart_policy=task_config.restart_policy,
                 containers=[container]
             ),
         )
-        self.api.create_namespaced_pod(namespace="tron", body=pod)
+        self.api.create_namespaced_pod(namespace=self.namespace, body=pod)
         logger.debug(f"Successfully launched pod {task_config.pod_name}")
 
         return task_config.pod_name
