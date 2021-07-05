@@ -37,8 +37,9 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
 
     uuid = field(type=str, initial=_generate_pod_suffix)
     name = field(type=str, initial="default")
+    image = field(type=str)
+    command = field(type=str)
     node_selector = field(type=PMap)
-    containers = field(type=PVector)
     # Hardcoded for the time being
     restart_policy = "Never"
     # By default, the retrying executor retries 3 times. This task option
