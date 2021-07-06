@@ -90,7 +90,7 @@ class KubernetesPodExecutor(TaskExecutor):
             ),
         )
         self.api.create_namespaced_pod(namespace=self.namespace, body=pod)
-        logger.debug(f"Successfully launched pod {task_config.pod_name}")
+        logger.debug(f"Successfully created pod {task_config.pod_name}")
 
         return task_config.pod_name
 
