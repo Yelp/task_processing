@@ -23,7 +23,6 @@ from pyrsistent.typing import PVector as PVectorType
 from task_processing.interfaces import TaskExecutor
 from task_processing.plugins.kubernetes.kube_client import KubeClient
 from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
-from task_processing.plugins.kubernetes.utils import ensure_namespace
 from task_processing.utils import AutoEnum
 
 logger = logging.getLogger(__name__)
@@ -54,7 +53,6 @@ class KubernetesPodExecutor(TaskExecutor):
     def __init__(self, namespace: str) -> None:
         self.kube_client = KubeClient()
         self.namespace = namespace
-        ensure_namespace(self.kube_client, namespace)
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
         self.api = CoreV1Api()
         self._lock = threading.RLock()
@@ -73,7 +71,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     ),
                 ),
             )
-        # TODO Add volume_devices and volume_mounts
+        # TODO (TASKPROC-238): Add volume, cpu, gpu, desk, mem, etc.
         container = V1Container(
             image=task_config.image,
             name=task_config.name,

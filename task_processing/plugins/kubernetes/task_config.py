@@ -48,6 +48,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
                     factory=int,
                     mandatory=False,
                     invariant=lambda r: (r >= 0, 'retries >= 0'))
+    # TODO (TASKPROC-238): Add volume, cpu, gpu, desk, mem, etc.
     volumes = field(type=PVector)
 
     @property
