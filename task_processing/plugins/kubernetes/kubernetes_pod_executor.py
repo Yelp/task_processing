@@ -174,8 +174,8 @@ class KubernetesPodExecutor(TaskExecutor):
 
         try:
             self.kube_client.core.create_namespaced_pod(namespace=self.namespace, body=pod)
-        except Exception as e:
-            logger.error(f"Failed to create pod {task_config.pod_name}: {e}")
+        except Exception:
+            logger.exception(f"Failed to create pod {task_config.pod_name}")
             return None
 
         logger.debug(f"Successfully created pod {task_config.pod_name}")
