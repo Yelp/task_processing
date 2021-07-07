@@ -37,7 +37,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
 
     uuid = field(type=str, initial=_generate_pod_suffix)  # type: ignore
     name = field(type=str, initial="default")
-    image = field(type=str)
+    image = field(type=str, mandatory=True)
     command = field(type=str,
                     mandatory=True,
                     invariant=lambda cmd: (cmd.strip() != '', 'empty command is not allowed'))

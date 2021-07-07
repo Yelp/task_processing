@@ -38,3 +38,14 @@ def test_kubernetes_task_config_enforces_kubernetes_name_requirements():
 
     with pytest.raises(InvariantException):
         task_config.set(name=f"INVALID{task_config.name}")
+
+
+def test_kubernetes_task_config_enforces_command_requirmenets():
+    task_config = KubernetesTaskConfig(
+        name="fake_task_name",
+        uuid="fake_id",
+        image="fake_docker_image",
+        command="fake_command"
+    )
+    with pytest.raises(InvariantException):
+        task_config.set(command="")
