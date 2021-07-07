@@ -5,11 +5,11 @@ import time
 from queue import Queue
 from typing import Optional
 
+from kubernetes import watch
 from kubernetes.client import V1Container
 from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
 from kubernetes.client import V1PodSpec
-from kubernetes import watch
 from kubernetes.client import V1Status
 from pyrsistent import pmap
 from pyrsistent import v

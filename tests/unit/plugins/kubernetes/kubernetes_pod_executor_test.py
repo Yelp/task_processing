@@ -93,11 +93,11 @@ def test_run_failed_exception(mock_logger, k8s_executor):
     k8s_executor.kube_client.core.create_namespaced_pod.side_effect = ApiException(
         status=403, reason="Fake unauthorized message")
     assert k8s_executor.run(task_config) is None
-    assert mock_logger.error.call_args(mock.call(
+    assert mock_logger.exception.call_args(mock.call(
         f"Failed to create pod {task_config.pod_name}:",
         f"{k8s_executor.kube_client.core.create_namespaced_pod.side_effect}"))
 
-    
+
 @pytest.mark.xfail(reason="_process_pod_event is still a stub function")
 def test_process_event_enqueues_task_processing_events(k8s_executor):
     event = PodEvent(
@@ -130,4 +130,3 @@ def test_pending_event_processing_loop_processes_remaining_events_after_stop(k8s
 
     mock_process_event.assert_called_once()
     assert k8s_executor.pending_events.qsize() == 0
-
