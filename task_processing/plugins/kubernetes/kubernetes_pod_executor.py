@@ -10,7 +10,6 @@ from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
 from kubernetes.client import V1PodSpec
 from kubernetes.client import V1Status
-from kubernetes.client.apis import CoreV1Api
 from pyrsistent import field
 from pyrsistent import pmap
 from pyrsistent import PRecord
@@ -54,7 +53,6 @@ class KubernetesPodExecutor(TaskExecutor):
         self.kube_client = KubeClient()
         self.namespace = namespace
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
-        self.api = CoreV1Api()
         self._lock = threading.RLock()
 
     def run(self, task_config: KubernetesTaskConfig) -> str:
@@ -87,7 +85,13 @@ class KubernetesPodExecutor(TaskExecutor):
                 containers=[container]
             ),
         )
-        self.api.create_namespaced_pod(namespace=self.namespace, body=pod)
+
+        try:
+            self.kube_client.core.create_namespaced_pod(namespace=self.namespace, body=pod)
+        except Exception as e:
+            logger.error(f"Failed to create pod {task_config.pod_name}: {e}")
+            return None
+
         logger.debug(f"Successfully created pod {task_config.pod_name}")
 
         return task_config.pod_name

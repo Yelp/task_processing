@@ -38,9 +38,9 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
     uuid = field(type=str, initial=_generate_pod_suffix)  # type: ignore
     name = field(type=str, initial="default")
     image = field(type=str)
-     command = field(type=str,
-                mandatory=True,
-                invariant=lambda cmd: (cmd.strip() != '', 'empty command is not allowed'))
+    command = field(type=str,
+                    mandatory=True,
+                    invariant=lambda cmd: (cmd.strip() != '', 'empty command is not allowed'))
     node_selector = field(type=PMap)
     # Hardcoded for the time being
     restart_policy = "Never"
