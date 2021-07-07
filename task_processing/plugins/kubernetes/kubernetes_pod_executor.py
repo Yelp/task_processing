@@ -141,7 +141,7 @@ class KubernetesPodExecutor(TaskExecutor):
 
         logger.debug("Exiting Pod event processing - stop requested.")
 
-    def run(self, task_config: KubernetesTaskConfig) -> str:
+    def run(self, task_config: KubernetesTaskConfig) -> Optional[str]:
         # we need to lock here since there will be other threads updating this metadata in response
         # to k8s events
         with self.task_metadata_lock:
