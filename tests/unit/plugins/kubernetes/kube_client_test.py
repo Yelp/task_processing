@@ -25,7 +25,7 @@ def test_KubeClient_kubeconfig_init():
         "task_processing.plugins.kubernetes.kube_client.kube_client",
         autospec=True
     ) as mock_kube_client:
-        client = KubeClient(kube_config_path="/some/kube/config.conf")
+        client = KubeClient(kubeconfig_path="/some/kube/config.conf")
 
         assert client.core == mock_kube_client.CoreV1Api()
 
@@ -53,7 +53,7 @@ def test_KubeClient_kubeconfig_init_overrides_env_var():
     ) as mock_kube_client, mock.patch.dict(os.environ, {"KUBECONFIG": "/another/kube/config.conf"}):
         mock_config_path = "/OVERRIDE.conf"
 
-        client = KubeClient(kube_config_path=mock_config_path)
+        client = KubeClient(kubeconfig_path=mock_config_path)
 
         assert client.core == mock_kube_client.CoreV1Api()
         mock_load_config.assert_called_once_with(config_file=mock_config_path, context=None)

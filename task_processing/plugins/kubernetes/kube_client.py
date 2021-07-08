@@ -6,16 +6,16 @@ from kubernetes import config as kube_config
 
 
 class KubeClient:
-    def __init__(self, kube_config_path: Optional[str] = None) -> None:
-        kube_config_path = kube_config_path or os.environ.get("KUBECONFIG")
-        if kube_config_path is None:
+    def __init__(self, kubeconfig_path: Optional[str] = None) -> None:
+        kubeconfig_path = kubeconfig_path or os.environ.get("KUBECONFIG")
+        if kubeconfig_path is None:
             raise ValueError(
                 "No kubeconfig specified: set a KUBECONFIG environment variable "
-                "or pass a value for `kube_config_path`!"
+                "or pass a value for `kubeconfig_path`!"
             )
 
         kube_config.load_kube_config(
-            config_file=kube_config_path,
+            config_file=kubeconfig_path,
             context=os.environ.get("KUBECONTEXT")
         )
 
