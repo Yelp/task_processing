@@ -25,8 +25,10 @@ setup(
     author='Task Processing',
     author_email='team-taskproc@yelp.com',
     description='Framework for task processing executors and configuration',
-    packages=find_packages(exclude=('tests')),
-    include_package_data=True,
+    packages=find_packages(exclude=('tests*', "examples*")),
+    package_data={
+        "task_processing": ["py.typed"]
+    },
     install_requires=[
         # used for immutable data structures
         'pyrsistent',
