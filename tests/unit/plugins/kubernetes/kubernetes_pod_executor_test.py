@@ -7,7 +7,6 @@ from kubernetes.client import V1Container
 from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
 from kubernetes.client import V1PodSpec
-from mock import patch
 from pyrsistent import pmap
 from pyrsistent import v
 
@@ -82,8 +81,7 @@ def test_run(k8s_executor):
     ]
 
 
-@patch("task_processing.plugins.kubernetes.kubernetes_pod_executor.logger", autospec=True)
-def test_run_failed_exception(mock_logger, k8s_executor):
+def test_run_failed_exception(k8s_executor):
     task_config = KubernetesTaskConfig(
         name="fake_task_name",
         uuid="fake_id",
@@ -93,9 +91,6 @@ def test_run_failed_exception(mock_logger, k8s_executor):
     k8s_executor.kube_client.core.create_namespaced_pod.side_effect = ApiException(
         status=403, reason="Fake unauthorized message")
     assert k8s_executor.run(task_config) is None
-    assert mock_logger.exception.call_args(mock.call(
-        f"Failed to create pod {task_config.pod_name}:",
-        f"{k8s_executor.kube_client.core.create_namespaced_pod.side_effect}"))
 
 
 @pytest.mark.xfail(reason="_process_pod_event is still a stub function")
