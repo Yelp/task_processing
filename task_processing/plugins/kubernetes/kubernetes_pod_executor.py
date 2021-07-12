@@ -2,6 +2,7 @@ import logging
 import queue
 import threading
 import time
+from http import HTTPStatus
 from queue import Queue
 from typing import Optional
 
@@ -11,6 +12,7 @@ from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
 from kubernetes.client import V1PodSpec
 from kubernetes.client import V1Status
+from kubernetes.client.exceptions import ApiException
 from pyrsistent import pmap
 from pyrsistent import v
 from pyrsistent.typing import PMap
@@ -73,6 +75,10 @@ class KubernetesPodExecutor(TaskExecutor):
         # where the gap between task_proc shutting down and coming back up is long enough for data
         # to have expired from etcd as well as actually restarting from the last resourceVersion in
         # case of an exception
+        # TODO: Do LIST + WATCH if we're not starting from a known/good resourceVersion to
+        # guarantee that we always get ordered events (starting from a resourceVersion of 0)
+        # has no such guarantees that the initial events will be ordered in any meaningful way
+        # see: https://github.com/kubernetes/kubernetes/issues/74022
         while not self.stopping:
             try:
                 for pod_event in self.watch.stream(
@@ -87,6 +93,18 @@ class KubernetesPodExecutor(TaskExecutor):
                         self.pending_events.put(pod_event)
                     else:
                         break
+            except ApiException as e:
+                if not self.stopping:
+                    if e.status == HTTPStatus.UNAUTHORIZED.value:
+                        logger.info(
+                            "Recieved UNAUTHORIZED response from apiserver - assuming certs have "
+                            "expired and reloading."
+                        )
+                        self.kube_client.reload_kubeconfig()
+                    else:
+                        logger.exception(
+                            "Unhandled API exception while watching Pod events - restarting watch!"
+                        )
             except Exception:
                 # we want to avoid a potentially misleading log message should we encounter
                 # an exception when we want to shutdown this thread since nothing of value
@@ -200,25 +218,44 @@ class KubernetesPodExecutor(TaskExecutor):
         # to handle that with the Watch that we'll set to monitor each Pod for events.
         # TODO(TASKPROC-242): actually handle termination events
         logger.info(f"Attempting to terminate Pod: {task_id}")
-        try:
-            status: V1Status = self.kube_client.core.delete_namespaced_pod(
-                name=task_id,
-                namespace=self.namespace,
-                # attempt to delete immediately - Pods launched by task_processing
-                # shouldn't need time to clean-up/drain
-                grace_period_seconds=0,
-                # this is the default, but explcitly request background deletion of releated objects
-                # see: https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/
-                propagation_policy="Background"
-            )
-        except Exception:
-            logger.exception(f"Failed to request termination for Pod: {task_id}")
-            return False
+        # only retry once, reloading multiple times isn't likely to do much
+        retries = 1
+        while retries >= 0:
+            try:
+                status: V1Status = self.kube_client.core.delete_namespaced_pod(
+                    name=task_id,
+                    namespace=self.namespace,
+                    # attempt to delete immediately - Pods launched by task_processing
+                    # shouldn't need time to clean-up/drain
+                    grace_period_seconds=0,
+                    # this is the default, but explcitly request background deletion of releated
+                    # objects. see:
+                    # https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/
+                    propagation_policy="Background"
+                )
+                # this is not ideal, but the k8s clientlib returns the status of the request as a
+                # string that is either "Success" or "Failure" - we could potentially use `code`
+                # instead but it's not exactly documented what HTTP return codes will be used
+                return status.status == "Success"
+            except ApiException as e:
+                if e.status == HTTPStatus.UNAUTHORIZED.value:
+                    logger.info(
+                        "Recieved UNAUTHORIZED response from apiserver - assuming certs have "
+                        "expired and reloading."
+                    )
+                    self.kube_client.reload_kubeconfig()
+                else:
+                    logger.exception(
+                        f"Failed to request termination for Pod {task_id} due to unhandled API "
+                        "exception, retrying."
+                    )
+                retries -= 1
+            except Exception:
+                logger.exception(f"Failed to request termination for Pod: {task_id}")
+                return False
 
-        # this is not ideal, but the k8s clientlib returns the status of the request as a string
-        # that is either "Success" or "Failure" - we could potentially use `code` instead
-        # but it's not exactly documented what HTTP return codes will be used
-        return status.status == "Success"
+        logger.info(f"Ran out of retries attempting to request termination of {task_id}")
+        return False
 
     def stop(self) -> None:
         logger.debug("Preparing to stop all KubernetesPodExecutor threads.")
