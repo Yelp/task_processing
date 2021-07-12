@@ -29,6 +29,10 @@ class PodEvent(TypedDict):
 @unique
 class KubernetesTaskState(AutoEnum):
     TASK_PENDING = auto()
+    TASK_RUNNING = auto()
+    TASK_FINISHED = auto()
+    TASK_FAILED = auto()
+    TASK_UNKNOWN = auto()
 
 
 class KubernetesTaskMetadata(PRecord):
@@ -38,8 +42,7 @@ class KubernetesTaskMetadata(PRecord):
     # the config used to launch this task/Pod
     task_config: KubernetesTaskConfig = field(type=KubernetesTaskConfig, mandatory=True)
 
-    # TODO(TASKPROC-241): add current task state and task state history as we did for mesos
     task_state: KubernetesTaskState = field(type=KubernetesTaskState, mandatory=True)
-    # Map of state to when that state was entered (stored as a timestamp)
-    task_state_history: PVectorType[Tuple[KubernetesTaskState, int]] = field(
+    # List of state to when that state was entered (stored as a timestamp)
+    task_state_history: PVectorType[Tuple[KubernetesTaskState, float]] = field(
         type=PVector, factory=pvector, mandatory=True)
