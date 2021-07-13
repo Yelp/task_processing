@@ -37,8 +37,11 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
 
     uuid = field(type=str, initial=_generate_pod_suffix)  # type: ignore
     name = field(type=str, initial="default")
+    image = field(type=str, mandatory=True)
+    command = field(type=str,
+                    mandatory=True,
+                    invariant=lambda cmd: (cmd.strip() != '', 'empty command is not allowed'))
     node_selector = field(type=PMap)
-    containers = field(type=PVector)
     # Hardcoded for the time being
     restart_policy = "Never"
     # By default, the retrying executor retries 3 times. This task option
@@ -47,6 +50,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
                     factory=int,
                     mandatory=False,
                     invariant=lambda r: (r >= 0, 'retries >= 0'))
+    # TODO (TASKPROC-238): Add volume, cpu, gpu, desk, mem, etc.
     volumes = field(type=PVector)
 
     @property

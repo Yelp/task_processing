@@ -6,6 +6,10 @@ from queue import Queue
 from typing import Optional
 
 from kubernetes import watch
+from kubernetes.client import V1Container
+from kubernetes.client import V1ObjectMeta
+from kubernetes.client import V1Pod
+from kubernetes.client import V1PodSpec
 from kubernetes.client import V1Status
 from pyrsistent import pmap
 from pyrsistent import v
@@ -32,9 +36,7 @@ class KubernetesPodExecutor(TaskExecutor):
     def __init__(self, namespace: str, kube_config_path: Optional[str] = None) -> None:
         self.kube_client = KubeClient(kube_config_path=kube_config_path)
         self.namespace = namespace
-
         self.stopping = False
-
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
         self.task_metadata_lock = threading.RLock()
 
@@ -139,7 +141,7 @@ class KubernetesPodExecutor(TaskExecutor):
 
         logger.debug("Exiting Pod event processing - stop requested.")
 
-    def run(self, task_config: KubernetesTaskConfig) -> None:
+    def run(self, task_config: KubernetesTaskConfig) -> Optional[str]:
         # we need to lock here since there will be other threads updating this metadata in response
         # to k8s events
         with self.task_metadata_lock:
@@ -153,8 +155,33 @@ class KubernetesPodExecutor(TaskExecutor):
                     ),
                 ),
             )
+        # TODO (TASKPROC-238): Add volume, cpu, gpu, desk, mem, etc.
+        container = V1Container(
+            image=task_config.image,
+            name=task_config.name,
+            command=["/bin/sh", "-c"],
+            args=[task_config.command],
+        )
+        pod = V1Pod(
+            metadata=V1ObjectMeta(
+                name=task_config.pod_name,
+                namespace=self.namespace
+            ),
+            spec=V1PodSpec(
+                restart_policy=task_config.restart_policy,
+                containers=[container]
+            ),
+        )
 
-        # TODO(TASKPROC-231): actually launch a Pod
+        try:
+            self.kube_client.core.create_namespaced_pod(namespace=self.namespace, body=pod)
+        except Exception:
+            logger.exception(f"Failed to create pod {task_config.pod_name}")
+            return None
+
+        logger.debug(f"Successfully created pod {task_config.pod_name}")
+
+        return task_config.pod_name
 
     def reconcile(self, task_config: KubernetesTaskConfig) -> None:
         # TASKPROC(244): we probably only want reconcile() to fill in the task_config
