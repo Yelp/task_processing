@@ -33,8 +33,8 @@ QUEUE_GET_TIMEOUT_S = 0.5
 class KubernetesPodExecutor(TaskExecutor):
     TASK_CONFIG_INTERFACE = KubernetesTaskConfig
 
-    def __init__(self, namespace: str, kube_config_path: Optional[str] = None) -> None:
-        self.kube_client = KubeClient(kube_config_path=kube_config_path)
+    def __init__(self, namespace: str, kubeconfig_path: Optional[str] = None) -> None:
+        self.kube_client = KubeClient(kubeconfig_path=kubeconfig_path)
         self.namespace = namespace
         self.stopping = False
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
