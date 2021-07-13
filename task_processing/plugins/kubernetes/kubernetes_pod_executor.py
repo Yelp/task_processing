@@ -2,7 +2,6 @@ import logging
 import queue
 import threading
 import time
-from http import HTTPStatus
 from queue import Queue
 from typing import Optional
 
@@ -11,7 +10,6 @@ from kubernetes.client import V1Container
 from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
 from kubernetes.client import V1PodSpec
-from kubernetes.client import V1Status
 from kubernetes.client.exceptions import ApiException
 from pyrsistent import pmap
 from pyrsistent import v
@@ -95,13 +93,7 @@ class KubernetesPodExecutor(TaskExecutor):
                         break
             except ApiException as e:
                 if not self.stopping:
-                    if e.status == HTTPStatus.UNAUTHORIZED.value:
-                        logger.info(
-                            "Recieved UNAUTHORIZED response from apiserver - assuming certs have "
-                            "expired and reloading."
-                        )
-                        self.kube_client.reload_kubeconfig()
-                    else:
+                    if not self.kube_client.maybe_reload_on_exception(exception=e):
                         logger.exception(
                             "Unhandled API exception while watching Pod events - restarting watch!"
                         )
@@ -191,15 +183,18 @@ class KubernetesPodExecutor(TaskExecutor):
             ),
         )
 
-        try:
-            self.kube_client.core.create_namespaced_pod(namespace=self.namespace, body=pod)
-        except Exception:
-            logger.exception(f"Failed to create pod {task_config.pod_name}")
-            return None
+        if self.kube_client.create_pod(
+            namespace=self.namespace,
+            pod=pod,
+        ):
+            return task_config.pod_name
 
-        logger.debug(f"Successfully created pod {task_config.pod_name}")
+        with self.task_metadata_lock:
+            # if we weren't able to create this pod, then we shouldn't keep it around in
+            # task_metadata
+            self.task_metadata = self.task_metadata.discard(task_config.pod_name)
 
-        return task_config.pod_name
+        return None
 
     def reconcile(self, task_config: KubernetesTaskConfig) -> None:
         # TASKPROC(244): we probably only want reconcile() to fill in the task_config
@@ -217,45 +212,10 @@ class KubernetesPodExecutor(TaskExecutor):
         # NOTE: we're purposely not removing this task from `task_metadata` as we want
         # to handle that with the Watch that we'll set to monitor each Pod for events.
         # TODO(TASKPROC-242): actually handle termination events
-        logger.info(f"Attempting to terminate Pod: {task_id}")
-        # only retry once, reloading multiple times isn't likely to do much
-        retries = 1
-        while retries >= 0:
-            try:
-                status: V1Status = self.kube_client.core.delete_namespaced_pod(
-                    name=task_id,
-                    namespace=self.namespace,
-                    # attempt to delete immediately - Pods launched by task_processing
-                    # shouldn't need time to clean-up/drain
-                    grace_period_seconds=0,
-                    # this is the default, but explcitly request background deletion of releated
-                    # objects. see:
-                    # https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/
-                    propagation_policy="Background"
-                )
-                # this is not ideal, but the k8s clientlib returns the status of the request as a
-                # string that is either "Success" or "Failure" - we could potentially use `code`
-                # instead but it's not exactly documented what HTTP return codes will be used
-                return status.status == "Success"
-            except ApiException as e:
-                if e.status == HTTPStatus.UNAUTHORIZED.value:
-                    logger.info(
-                        "Recieved UNAUTHORIZED response from apiserver - assuming certs have "
-                        "expired and reloading."
-                    )
-                    self.kube_client.reload_kubeconfig()
-                else:
-                    logger.exception(
-                        f"Failed to request termination for Pod {task_id} due to unhandled API "
-                        "exception, retrying."
-                    )
-                retries -= 1
-            except Exception:
-                logger.exception(f"Failed to request termination for Pod: {task_id}")
-                return False
-
-        logger.info(f"Ran out of retries attempting to request termination of {task_id}")
-        return False
+        return self.kube_client.terminate_pod(
+            namespace=self.namespace,
+            pod_name=task_id,
+        )
 
     def stop(self) -> None:
         logger.debug("Preparing to stop all KubernetesPodExecutor threads.")
