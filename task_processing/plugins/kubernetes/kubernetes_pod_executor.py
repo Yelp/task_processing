@@ -1,6 +1,5 @@
 import logging
 import queue
-import shlex
 import threading
 import time
 from queue import Queue
@@ -160,7 +159,8 @@ class KubernetesPodExecutor(TaskExecutor):
         container = V1Container(
             image=task_config.image,
             name=task_config.name,
-            command=shlex.split(task_config.command)
+            command=["/bin/sh"],
+            args=[task_config.command],
         )
         pod = V1Pod(
             metadata=V1ObjectMeta(

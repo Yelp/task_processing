@@ -62,7 +62,8 @@ def test_run(k8s_executor):
     fake_container = V1Container(
         image=task_config.image,
         name=task_config.name,
-        command=[task_config.command]
+        command=["/bin/sh"],
+        args=[task_config.command],
     )
     fake_pod = V1Pod(
         metadata=V1ObjectMeta(
