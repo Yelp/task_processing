@@ -159,7 +159,7 @@ class KubernetesPodExecutor(TaskExecutor):
         container = V1Container(
             image=task_config.image,
             name=task_config.name,
-            command=["/bin/sh"],
+            command=["/bin/sh", "-c"],
             args=[task_config.command],
         )
         pod = V1Pod(
