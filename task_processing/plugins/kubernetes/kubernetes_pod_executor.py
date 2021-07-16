@@ -29,6 +29,12 @@ logger = logging.getLogger(__name__)
 POD_WATCH_THREAD_JOIN_TIMEOUT_S = 1.0
 POD_EVENT_THREAD_JOIN_TIMEOUT_S = 1.0
 QUEUE_GET_TIMEOUT_S = 0.5
+SUPPORTED_POD_MODIFIED_EVENT_PHASES = {
+    "Failed",
+    "Running",
+    "Succeeded",
+    "Unknown",
+}
 
 
 class KubernetesPodExecutor(TaskExecutor):
@@ -133,7 +139,7 @@ class KubernetesPodExecutor(TaskExecutor):
         pod_name = pod.metadata.name
         task_metadata = self.task_metadata[pod_name]
 
-        if pod.status.phase not in {"Succeeded", "Failed", "Running", "Unknown"}:
+        if pod.status.phase not in SUPPORTED_POD_MODIFIED_EVENT_PHASES:
             logger.debug(
                 f"Got a MODIFIED event for {pod_name} for unhandled phase: "
                 f"{pod.status.phase} - ignoring."
