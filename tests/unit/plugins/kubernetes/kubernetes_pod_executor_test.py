@@ -3,10 +3,16 @@ from unittest import mock
 
 import pytest
 from kubernetes.client import ApiException
+from kubernetes.client import V1Capabilities
 from kubernetes.client import V1Container
+from kubernetes.client import V1HostPathVolumeSource
 from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
 from kubernetes.client import V1PodSpec
+from kubernetes.client import V1ResourceRequirements
+from kubernetes.client import V1SecurityContext
+from kubernetes.client import V1Volume
+from kubernetes.client import V1VolumeMount
 from pyrsistent import pmap
 from pyrsistent import v
 
@@ -57,28 +63,52 @@ def test_run(k8s_executor):
         name="fake_task_name",
         uuid="fake_id",
         image="fake_docker_image",
-        command="fake_command"
+        command="fake_command",
+        cpus=1,
+        memory=1024,
+        disk=1024,
+        volumes=[{"host_path": "/a", "container_path": "/b", "mode": "RO"}]
     )
-    fake_container = V1Container(
+    expected_container = V1Container(
         image=task_config.image,
         name=task_config.name,
         command=["/bin/sh", "-c"],
         args=[task_config.command],
+        security_context=V1SecurityContext(
+            capabilities=V1Capabilities(drop=list(task_config.cap_drop)),
+        ),
+        resources=V1ResourceRequirements(
+            limits={
+                "cpu": 1.0,
+                "memory": "1024.0Mi",
+                "ephemeral-storage": "1024.0Mi",
+            }
+        ),
+        env=[],
+        volume_mounts=[V1VolumeMount(
+            mount_path="/b",
+            name="host--slash-a",
+            read_only=True,
+        )],
     )
-    fake_pod = V1Pod(
+    expected_pod = V1Pod(
         metadata=V1ObjectMeta(
             name=task_config.pod_name,
             namespace="task_processing_tests"
         ),
         spec=V1PodSpec(
             restart_policy=task_config.restart_policy,
-            containers=[fake_container]
+            containers=[expected_container],
+            volumes=[V1Volume(
+                host_path=V1HostPathVolumeSource(path="/a"),
+                name="host--slash-a",
+            )],
         ),
     )
 
     assert k8s_executor.run(task_config) == task_config.pod_name
     assert k8s_executor.kube_client.core.create_namespaced_pod.call_args_list == [
-        mock.call(body=fake_pod, namespace='task_processing_tests')
+        mock.call(body=expected_pod, namespace='task_processing_tests')
     ]
 
 

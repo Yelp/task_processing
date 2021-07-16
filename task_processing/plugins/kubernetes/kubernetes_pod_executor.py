@@ -10,6 +10,7 @@ from kubernetes.client import V1Container
 from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
 from kubernetes.client import V1PodSpec
+from kubernetes.client import V1ResourceRequirements
 from kubernetes.client.exceptions import ApiException
 from pyrsistent import pmap
 from pyrsistent import v
@@ -23,6 +24,10 @@ from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 from task_processing.plugins.kubernetes.types import KubernetesTaskMetadata
 from task_processing.plugins.kubernetes.types import KubernetesTaskState
 from task_processing.plugins.kubernetes.types import PodEvent
+from task_processing.plugins.kubernetes.utils import get_kubernetes_env_vars
+from task_processing.plugins.kubernetes.utils import get_kubernetes_volume_mounts
+from task_processing.plugins.kubernetes.utils import get_pod_volumes
+from task_processing.plugins.kubernetes.utils import get_security_context_for_capabilities
 
 logger = logging.getLogger(__name__)
 
@@ -316,6 +321,41 @@ class KubernetesPodExecutor(TaskExecutor):
         logger.debug("Exiting Pod event processing - stop requested.")
 
     def run(self, task_config: KubernetesTaskConfig) -> Optional[str]:
+        try:
+            container = V1Container(
+                image=task_config.image,
+                name=task_config.name,
+                command=["/bin/sh", "-c"],
+                args=[task_config.command],
+                security_context=get_security_context_for_capabilities(
+                    cap_add=task_config.cap_add,
+                    cap_drop=task_config.cap_drop,
+                ),
+                resources=V1ResourceRequirements(
+                    limits={
+                        "cpu": task_config.cpus,
+                        "memory": f"{task_config.memory}Mi",
+                        "ephemeral-storage": f"{task_config.disk}Mi",
+                    }
+                ),
+                env=get_kubernetes_env_vars(task_config.environment),
+                volume_mounts=get_kubernetes_volume_mounts(task_config.volumes)
+            )
+            pod = V1Pod(
+                metadata=V1ObjectMeta(
+                    name=task_config.pod_name,
+                    namespace=self.namespace
+                ),
+                spec=V1PodSpec(
+                    restart_policy=task_config.restart_policy,
+                    containers=[container],
+                    volumes=get_pod_volumes(task_config.volumes)
+                ),
+            )
+        except Exception:
+            logger.exception(f"Unable to create PodSpec for {task_config.pod_name}")
+            return None
+
         # we need to lock here since there will be other threads updating this metadata in response
         # to k8s events
         with self.task_metadata_lock:
@@ -329,23 +369,6 @@ class KubernetesPodExecutor(TaskExecutor):
                     ),
                 ),
             )
-        # TODO (TASKPROC-238): Add volume, cpu, gpu, desk, mem, etc.
-        container = V1Container(
-            image=task_config.image,
-            name=task_config.name,
-            command=["/bin/sh", "-c"],
-            args=[task_config.command],
-        )
-        pod = V1Pod(
-            metadata=V1ObjectMeta(
-                name=task_config.pod_name,
-                namespace=self.namespace
-            ),
-            spec=V1PodSpec(
-                restart_policy=task_config.restart_policy,
-                containers=[container]
-            ),
-        )
 
         if self.kube_client.create_pod(
             namespace=self.namespace,
