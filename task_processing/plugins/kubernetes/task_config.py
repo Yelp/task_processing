@@ -165,7 +165,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         type=float,
         initial=128.0,
         factory=float,
-        invariant=lambda m: (m >= 128, 'mem is >= 128'))
+        invariant=lambda m: (m >= 32, 'mem is >= 32'))
     disk = field(
         type=float,
         initial=10.0,
