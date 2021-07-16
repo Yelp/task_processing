@@ -216,7 +216,10 @@ class KubernetesPodExecutor(TaskExecutor):
         # XXX: figure out how to handle this correctly (and when this actually
         # happens - we were unable to cajole k8s into giving us an event with an Unknown
         # phase)
-        elif pod.status.phase == "Unknown":
+        elif (
+            pod.status.phase == "Unknown"
+            and task_metadata.task_state is not KubernetesTaskState.TASK_UNKNOWN
+        ):
             logger.info(
                 f"Got a MODIFIED event for {pod_name} with unknown phase, host likely "
                 "unexpectedly died"
