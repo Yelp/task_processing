@@ -94,17 +94,101 @@ def test_run_failed_exception(k8s_executor):
     assert k8s_executor.run(task_config) is None
 
 
-@pytest.mark.xfail(reason="_process_pod_event is still a stub function")
-def test_process_event_enqueues_task_processing_events(k8s_executor):
-    event = PodEvent(
-        type="ADDED",
-        object=mock.Mock(),
+def test_process_event_enqueues_task_processing_events_pending_to_running(k8s_executor):
+    mock_pod = mock.Mock(spec=V1Pod)
+    mock_pod.metadata.name = "test.1234"
+    mock_pod.status.phase = "Running"
+    mock_pod.status.host_ip = "1.2.3.4"
+    mock_event = PodEvent(
+        type="MODIFIED",
+        object=mock_pod,
         raw_object=mock.Mock(),
     )
+    k8s_executor.task_metadata = pmap({
+        mock_pod.metadata.name: KubernetesTaskMetadata(
+            task_config=mock.Mock(spec=KubernetesTaskConfig),
+            task_state=KubernetesTaskState.TASK_PENDING,
+            task_state_history=v(),
+        )
+    })
 
-    k8s_executor._process_pod_event(event)
+    k8s_executor._process_pod_event(mock_event)
 
     assert k8s_executor.event_queue.qsize() == 1
+    # in normal usage this would actually have 2 items, but we're obiviating the inital PENDING
+    # state for this test
+    assert len(k8s_executor.task_metadata[mock_pod.metadata.name].task_state_history) == 1
+
+
+@pytest.mark.parametrize(
+    "phase", (
+        "Succeeded",
+        "Failed",
+    )
+)
+def test_process_event_enqueues_task_processing_events_running_to_terminal(k8s_executor, phase):
+    mock_pod = mock.Mock(spec=V1Pod)
+    mock_pod.metadata.name = "test.1234"
+    mock_pod.status.phase = phase
+    mock_pod.status.host_ip = "1.2.3.4"
+    mock_event = PodEvent(
+        type="MODIFIED",
+        object=mock_pod,
+        raw_object=mock.Mock(),
+    )
+    k8s_executor.task_metadata = pmap({
+        mock_pod.metadata.name: KubernetesTaskMetadata(
+            task_config=mock.Mock(spec=KubernetesTaskConfig),
+            task_state=KubernetesTaskState.TASK_RUNNING,
+            task_state_history=v(),
+        )
+    })
+
+    k8s_executor._process_pod_event(mock_event)
+
+    assert k8s_executor.event_queue.qsize() == 1
+    assert len(k8s_executor.task_metadata) == 0
+
+
+@pytest.mark.parametrize(
+    "phase,task_state", (
+        ("Succeeded", KubernetesTaskState.TASK_FINISHED),
+        ("Failed", KubernetesTaskState.TASK_FAILED),
+        ("Running", KubernetesTaskState.TASK_RUNNING),
+        ("Pending", KubernetesTaskState.TASK_PENDING),
+    )
+)
+def test_process_event_enqueues_task_processing_events_no_state_transition(
+    k8s_executor,
+    phase,
+    task_state,
+):
+    mock_pod = mock.Mock(spec=V1Pod)
+    mock_pod.metadata.name = "test.1234"
+    mock_pod.status.phase = phase
+    mock_pod.status.host_ip = "1.2.3.4"
+    mock_event = PodEvent(
+        type="MODIFIED",
+        object=mock_pod,
+        raw_object=mock.Mock(),
+    )
+    k8s_executor.task_metadata = pmap({
+        mock_pod.metadata.name: KubernetesTaskMetadata(
+            task_config=mock.Mock(spec=KubernetesTaskConfig),
+            task_state=task_state,
+            task_state_history=v(),
+        )
+    })
+
+    k8s_executor._process_pod_event(mock_event)
+
+    assert k8s_executor.event_queue.qsize() == 0
+    assert len(k8s_executor.task_metadata) == 1
+    assert k8s_executor.task_metadata[mock_pod.metadata.name].task_state == task_state
+    # in reality, this would have some entries, but we're not filling out task_state_history
+    # for tests, so checking that the size is 0 is the same as checking that we didn't transition
+    # to a new state
+    assert len(k8s_executor.task_metadata[mock_pod.metadata.name].task_state_history) == 0
 
 
 def test_pending_event_processing_loop_processes_remaining_events_after_stop(k8s_executor):
@@ -126,3 +210,29 @@ def test_pending_event_processing_loop_processes_remaining_events_after_stop(k8s
 
     mock_process_event.assert_called_once()
     assert k8s_executor.pending_events.qsize() == 0
+
+
+def test_process_event_enqueues_task_processing_events_deleted(
+    k8s_executor,
+):
+    mock_pod = mock.Mock(spec=V1Pod)
+    mock_pod.metadata.name = "test.1234"
+    mock_pod.status.phase = "Running"
+    mock_pod.status.host_ip = "1.2.3.4"
+    mock_event = PodEvent(
+        type="DELETED",
+        object=mock_pod,
+        raw_object=mock.Mock(),
+    )
+    k8s_executor.task_metadata = pmap({
+        mock_pod.metadata.name: KubernetesTaskMetadata(
+            task_config=mock.Mock(spec=KubernetesTaskConfig),
+            task_state=KubernetesTaskState.TASK_RUNNING,
+            task_state_history=v(),
+        )
+    })
+
+    k8s_executor._process_pod_event(mock_event)
+
+    assert k8s_executor.event_queue.qsize() == 1
+    assert len(k8s_executor.task_metadata) == 0

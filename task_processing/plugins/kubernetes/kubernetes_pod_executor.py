@@ -17,6 +17,7 @@ from pyrsistent.typing import PMap
 
 from task_processing.interfaces import TaskExecutor
 from task_processing.interfaces.event import Event
+from task_processing.interfaces.event import task_event
 from task_processing.plugins.kubernetes.kube_client import KubeClient
 from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 from task_processing.plugins.kubernetes.types import KubernetesTaskMetadata
@@ -28,6 +29,12 @@ logger = logging.getLogger(__name__)
 POD_WATCH_THREAD_JOIN_TIMEOUT_S = 1.0
 POD_EVENT_THREAD_JOIN_TIMEOUT_S = 1.0
 QUEUE_GET_TIMEOUT_S = 0.5
+SUPPORTED_POD_MODIFIED_EVENT_PHASES = {
+    "Failed",
+    "Running",
+    "Succeeded",
+    "Unknown",
+}
 
 
 class KubernetesPodExecutor(TaskExecutor):
@@ -107,21 +114,178 @@ class KubernetesPodExecutor(TaskExecutor):
                         "Exception encountered while watching Pod events - restarting watch!")
         logger.debug("Exiting Pod event watcher - stop requested.")
 
-    def _process_pod_event(self, event: PodEvent) -> None:
-        # XXX: ensure that anything here that updates self.task_metadata acquires a lock
-        if event["type"] == "ADDED":
-            pass
-        elif event["type"] == "DELETED":
-            pass
-        elif event["type"] == "MODIFIED":
-            pass
-        else:
-            logger.warning("Got unknown event with type: {event['type']}")
+    def __handle_deleted_pod_event(self, event: PodEvent) -> None:
+        pod = event["object"]
+        pod_name = pod.metadata.name
+        task_metadata = self.task_metadata[pod_name]
 
-        # TODO(TASKPROC-245): actually create real events to send to Tron by placing them in
-        # this plugin's event queue
+        logger.info(f"Removing {pod_name} from state and emitting 'killed' event.")
+
+        self.task_metadata = self.task_metadata.discard(pod_name)
+        self.event_queue.put(
+            task_event(
+                task_id=pod_name,
+                terminal=True,
+                success=False,
+                timestamp=time.time(),
+                raw=event["raw_object"],
+                task_config=task_metadata.task_config,
+                platform_type="killed"
+            )
+        )
+
+    def __handle_modified_pod_event(self, event: PodEvent) -> None:
+        pod = event["object"]
+        pod_name = pod.metadata.name
+        task_metadata = self.task_metadata[pod_name]
+
+        if pod.status.phase not in SUPPORTED_POD_MODIFIED_EVENT_PHASES:
+            logger.debug(
+                f"Got a MODIFIED event for {pod_name} for unhandled phase: "
+                f"{pod.status.phase} - ignoring."
+            )
+            return
+
+        if (
+            pod.status.phase == "Succeeded"
+            and task_metadata.task_state is not KubernetesTaskState.TASK_FINISHED
+        ):
+            logger.info(
+                f"Removing {pod_name} from state and emitting 'finished' event.",
+            )
+            self.task_metadata = self.task_metadata.discard(pod_name)
+            self.event_queue.put(
+                task_event(
+                    task_id=pod_name,
+                    terminal=True,
+                    success=True,
+                    timestamp=time.time(),
+                    raw=event["raw_object"],
+                    task_config=task_metadata.task_config,
+                    platform_type="finished"
+                )
+            )
+            return
+
+        elif (
+            pod.status.phase == "Failed"
+            and task_metadata.task_state is not KubernetesTaskState.TASK_FAILED
+        ):
+            logger.info(f"Removing {pod_name} from state and emitting 'failed' event.")
+            self.task_metadata = self.task_metadata.discard(pod_name)
+            self.event_queue.put(
+                task_event(
+                    task_id=pod_name,
+                    terminal=True,
+                    success=False,
+                    timestamp=time.time(),
+                    raw=event["raw_object"],
+                    task_config=task_metadata.task_config,
+                    platform_type="FAILED"
+                )
+            )
+            return
+
+        elif (
+            pod.status.phase == "Running"
+            and task_metadata.task_state is not KubernetesTaskState.TASK_RUNNING
+        ):
+            logger.info(f"Successfully launched {pod_name}, emitting 'running' event.")
+            self.task_metadata = self.task_metadata.set(
+                pod_name,
+                task_metadata.set(
+                    node_name=pod.status.host_ip,
+                    task_state=KubernetesTaskState.TASK_RUNNING,
+                    task_state_history=task_metadata.task_state_history.append(
+                        (KubernetesTaskState.TASK_RUNNING, time.time()),
+                    )
+                )
+            )
+            self.event_queue.put(
+                task_event(
+                    task_id=pod_name,
+                    terminal=False,
+                    timestamp=time.time(),
+                    raw=event["raw_object"],
+                    task_config=task_metadata.task_config,
+                    platform_type="running"
+                )
+            )
+            return
+
+        # XXX: figure out how to handle this correctly (and when this actually
+        # happens - we were unable to cajole k8s into giving us an event with an Unknown
+        # phase)
+        elif (
+            pod.status.phase == "Unknown"
+            and task_metadata.task_state is not KubernetesTaskState.TASK_UNKNOWN
+        ):
+            logger.info(
+                f"Got a MODIFIED event for {pod_name} with unknown phase, host likely "
+                "unexpectedly died"
+            )
+            self.task_metadata = self.task_metadata.set(
+                pod_name,
+                task_metadata.set(
+                    node_name=pod.spec.node_name,
+                    task_state=KubernetesTaskState.TASK_UNKNOWN,
+                    task_state_history=task_metadata.task_state_history.append(
+                        (KubernetesTaskState.TASK_UNKNOWN, time.time()),
+                    )
+                )
+            )
+            self.event_queue.put(
+                task_event(
+                    task_id=pod_name,
+                    terminal=False,
+                    timestamp=time.time(),
+                    raw=event["raw_object"],
+                    task_config=task_metadata.task_config,
+                    platform_type="unknown"
+                )
+            )
+            return
+
+        logger.info(
+            f"Ignoring MODIFIED event for {pod_name} as it did not result "
+            "in a state transition",
+        )
+
+    def _process_pod_event(self, event: PodEvent) -> None:
+        """
+        Router for handling Pod events based on event type. Currently, we only look at
+        MODIFIED and DELETED events (we ignore ADDED since we handle all processing for
+        those when we create Pods in the first place).
+
+        NOTE: if we get multiple pod events while a Pod is running, we ignore all
+        but the first one to cause us to transition to a new state to make processing
+        easier since our watch might result in events with no state transitions and these
+        don't have any value for us.
+
+        """
+        pod = event["object"]
+        pod_name = pod.metadata.name
+        with self.task_metadata_lock:
+            if pod_name not in self.task_metadata:
+                logger.info(f"Ignoring event for {pod_name} - Pod not tracked by task_processing.")
+                return None
+
+            # this should only ever be run for Pods that were killed either by operator
+            # action (e.g., kubectl delete pod) or by calling kill() - completed/failed
+            # Pods will be removed from task_processing's metadata store
+            elif event["type"] == "DELETED":
+                self.__handle_deleted_pod_event(event)
+
+            elif event["type"] == "MODIFIED":
+                self.__handle_modified_pod_event(event)
+
+            else:
+                logger.warning(f"Got unknown event type for {pod_name}: {event['type']}")
 
     def _pending_event_processing_loop(self) -> None:
+        """
+        Run in a thread to process PodEvents enqueued by the k8s event watcher thread.
+        """
         logger.debug("Starting Pod event processing.")
         event = None
         while not self.stopping or not self.pending_events.empty():
@@ -161,7 +325,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     task_config=task_config,
                     task_state=KubernetesTaskState.TASK_PENDING,
                     task_state_history=v(
-                        (KubernetesTaskState.TASK_PENDING, int(time.time()))
+                        (KubernetesTaskState.TASK_PENDING, time.time())
                     ),
                 ),
             )
