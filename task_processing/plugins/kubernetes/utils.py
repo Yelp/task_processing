@@ -7,7 +7,9 @@ from typing import Optional
 
 from kubernetes.client import V1Capabilities
 from kubernetes.client import V1EnvVar
+from kubernetes.client import V1EnvVarSource
 from kubernetes.client import V1HostPathVolumeSource
+from kubernetes.client import V1SecretKeySelector
 from kubernetes.client import V1SecurityContext
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
@@ -17,6 +19,7 @@ from pyrsistent.typing import PVector
 from task_processing.plugins.kubernetes.types import DockerVolume
 
 SECRET_VALUE_REGEX = re.compile(r"^(SHARED_)?SECRET\([A-Za-z0-9_-]*\)$")
+SHARED_SECRET_SERVICE = "_shared"
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +55,48 @@ def is_secret_env_var(value: str) -> bool:
     return SECRET_VALUE_REGEX.match(value) is not None
 
 
-def get_kubernetes_env_vars(environment: PMap[str, str]) -> List[V1EnvVar]:
+def get_secret_name_from_ref(value: str) -> str:
+    return value.split("(")[1][:-1]
+
+
+def is_shared_secret(value: str) -> bool:
+    return value.startswith("SHARED_")
+
+
+def get_secret_kubernetes_env_var(
+    key: str, value: str, task_prefix: str, namespace: str,
+) -> V1EnvVar:
+    task_prefix = get_sanitised_kubernetes_name(task_prefix)
+    secret = get_secret_name_from_ref(value)
+    sanitised_secret = get_sanitised_kubernetes_name(secret)
+    if is_shared_secret(value):
+        task_prefix = get_sanitised_kubernetes_name(SHARED_SECRET_SERVICE)
+        return V1EnvVar(
+            name=key,
+            value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(
+                    name=f"{namespace}-secret-{task_prefix}-{sanitised_secret}",
+                    key=secret,
+                    optional=False,
+                )
+            ),
+        )
+    else:
+        return V1EnvVar(
+            name=key,
+            value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(
+                    name=f"{namespace}-secret-{task_prefix}-{sanitised_secret}",
+                    key=secret,
+                    optional=False,
+                )
+            ),
+        )
+
+
+def get_kubernetes_env_vars(
+    environment: PMap[str, str], task_prefix: str, namespace: str,
+) -> List[V1EnvVar]:
     """
     Given a dict of environment variables, transform them into the corresponding Kubernetes
     representation. This function will replace any secret placeholders with the value of
@@ -64,12 +108,13 @@ def get_kubernetes_env_vars(environment: PMap[str, str]) -> List[V1EnvVar]:
         if not is_secret_env_var(value)
     ]
 
-    # TODO(TASKPROC-249): we'll want to do what PaaSTA does for grabbing the actual secrets
-    # once we're syncing these to the tron namespace and not just dump these in as-is
     # XXX: we should document how we're expecting secrets to be formatted and how we're expecting
     # to be able to find them in k8s for any readers/users outside of Yelp
     secret_env_vars = [
-        V1EnvVar(name=key, value=value) for key, value
+        get_secret_kubernetes_env_var(
+            key=key, value=value, task_prefix=task_prefix, namespace=namespace
+        )
+        for key, value
         in environment.items()
         if is_secret_env_var(value)
     ]

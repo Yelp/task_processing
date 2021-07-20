@@ -1,17 +1,25 @@
 import pytest
 from kubernetes.client import V1Capabilities
+from kubernetes.client import V1EnvVar
+from kubernetes.client import V1EnvVarSource
 from kubernetes.client import V1HostPathVolumeSource
+from kubernetes.client import V1SecretKeySelector
 from kubernetes.client import V1SecurityContext
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
+from pyrsistent import pmap
 from pyrsistent import v
 
+from task_processing.plugins.kubernetes.utils import get_kubernetes_env_vars
 from task_processing.plugins.kubernetes.utils import get_kubernetes_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 from task_processing.plugins.kubernetes.utils import get_sanitised_volume_name
+from task_processing.plugins.kubernetes.utils import get_secret_kubernetes_env_var
+from task_processing.plugins.kubernetes.utils import get_secret_name_from_ref
 from task_processing.plugins.kubernetes.utils import get_security_context_for_capabilities
 from task_processing.plugins.kubernetes.utils import is_secret_env_var
+from task_processing.plugins.kubernetes.utils import is_shared_secret
 
 
 @pytest.mark.parametrize(
@@ -44,6 +52,27 @@ def test_get_security_context_for_capabilities(cap_add, cap_drop, expected):
 )
 def test_is_secret_env_var(value, expected):
     assert is_secret_env_var(value) is expected
+
+
+@pytest.mark.parametrize(
+    "value,expected", (
+        ("SECRET(secret)", "secret"),
+        ("SHARED_SECRET(secret2)", "secret2"),
+    )
+)
+def test_get_secret_name_from_ref(value, expected):
+    assert get_secret_name_from_ref(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value,expected", (
+        ("not_a_secret", False),
+        ("SECRET(secret)", False),
+        ("SHARED_SECRET(secret2)", True),
+    )
+)
+def test_is_shared_secret(value, expected):
+    assert is_shared_secret(value) is expected
 
 
 @pytest.mark.parametrize(
@@ -131,3 +160,67 @@ def test_get_kubernetes_volume_mounts(volumes, expected):
 )
 def test_get_pod_volumes(volumes, expected):
     assert get_pod_volumes(volumes) == expected
+
+
+@pytest.mark.parametrize(
+    "key, value, prefix, namespace, expected", (
+        ("FAKE_LOCAL_SECRET", "SECRET(plain_secret)", "taskprefix", "taskns",
+            V1EnvVar(name="FAKE_LOCAL_SECRET", value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(
+                    name="taskns-secret-taskprefix-plain--secret",
+                    key="plain_secret",
+                    optional=False
+                )
+            )
+            )
+         ),
+        ("FAKE_SHARED_SECRET", "SHARED_SECRET(plain_secret)", "taskprefix", "taskns",
+            V1EnvVar(name="FAKE_SHARED_SECRET", value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(
+                    name="taskns-secret-underscore-shared-plain--secret",
+                    key="plain_secret",
+                    optional=False
+                )
+            )
+            )
+         ),
+    )
+)
+def test_get_secret_kubernetes_env_var(key, value, prefix, namespace, expected):
+    assert get_secret_kubernetes_env_var(key, value, prefix, namespace) == expected
+
+
+def test_get_kubernetes_env_vars():
+    test_env_vars = pmap(
+        {
+            "FAKE_PLAIN_VAR": "not_secret_data",
+            "FAKE_SECRET": "SECRET(some_secret_name)",
+            "FAKE_SHARED_SECRET": "SHARED_SECRET(shared_secret-name)",
+        }
+    )
+
+    expected_env_vars = [
+        V1EnvVar(name="FAKE_PLAIN_VAR", value="not_secret_data"),
+        V1EnvVar(name="FAKE_SECRET", value_from=V1EnvVarSource(
+            secret_key_ref=V1SecretKeySelector(
+                name="taskns-secret-taskprefix-some--secret--name",
+                key="some_secret_name",
+                optional=False,
+            ),
+        ),
+        ),
+        V1EnvVar(name="FAKE_SHARED_SECRET", value_from=V1EnvVarSource(
+            secret_key_ref=V1SecretKeySelector(
+                name="taskns-secret-underscore-shared-shared--secret-name",
+                key="shared_secret-name",
+                optional=False,
+            ),
+        ),
+        ),
+    ]
+    env_vars = get_kubernetes_env_vars(environment=test_env_vars,
+                                       task_prefix="taskprefix",
+                                       namespace="taskns",
+                                       )
+
+    assert env_vars == expected_env_vars

@@ -191,6 +191,11 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
     )
 
     @property
+    def prefix(self) -> str:
+        # For tron jobs, this is the tron namespace
+        return f'{self.name.split(".")[0]}'
+
+    @property
     def pod_name(self) -> str:
         return f'{self.name}.{self.uuid}'  # type: ignore
 
