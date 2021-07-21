@@ -4,6 +4,7 @@ import re
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import TYPE_CHECKING
 
 from kubernetes.client import V1Capabilities
 from kubernetes.client import V1EnvVar
@@ -14,7 +15,8 @@ from kubernetes.client import V1VolumeMount
 from pyrsistent.typing import PMap
 from pyrsistent.typing import PVector
 
-from task_processing.plugins.kubernetes.types import DockerVolume
+if TYPE_CHECKING:
+    from task_processing.plugins.kubernetes.types import DockerVolume
 
 SECRET_VALUE_REGEX = re.compile(r"^(SHARED_)?SECRET\([A-Za-z0-9_-]*\)$")
 
@@ -105,7 +107,7 @@ def get_sanitised_volume_name(volume_name: str, length_limit: int = 0) -> str:
     return sanitised_name
 
 
-def get_kubernetes_volume_mounts(volumes: PVector[DockerVolume]) -> List[V1VolumeMount]:
+def get_kubernetes_volume_mounts(volumes: PVector['DockerVolume']) -> List[V1VolumeMount]:
     """
     Given a list of volume mounts, return a list corresponding to the Kubernetes objects
     representing these mounts.
@@ -123,12 +125,12 @@ def get_kubernetes_volume_mounts(volumes: PVector[DockerVolume]) -> List[V1Volum
     ]
 
 
-def get_pod_volumes(volumes: PVector[DockerVolume]) -> List[V1Volume]:
+def get_pod_volumes(volumes: PVector['DockerVolume']) -> List[V1Volume]:
     """
     Given a list of volume mounts, return a list corresponding to the Kubernetes objects needed to
     tie the mounts to a Pod.
     """
-    unique_volumes: Dict[str, DockerVolume] = {
+    unique_volumes: Dict[str, 'DockerVolume'] = {
         get_sanitised_volume_name(f"host--{volume['host_path']}", length_limit=63): volume
         for volume in volumes
     }
