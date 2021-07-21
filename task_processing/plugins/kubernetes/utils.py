@@ -64,9 +64,9 @@ def is_shared_secret(value: str) -> bool:
 
 
 def get_secret_kubernetes_env_var(
-    key: str, value: str, task_prefix: str, namespace: str,
+    key: str, value: str, task_name: str, namespace: str,
 ) -> V1EnvVar:
-    task_prefix = task_prefix if not is_shared_secret(value) else SHARED_SECRET_SERVICE
+    task_prefix = task_name.split('.')[0] if not is_shared_secret(value) else SHARED_SECRET_SERVICE
     sanitised_task_prefix = get_sanitised_kubernetes_name(task_prefix)
 
     secret = get_secret_name_from_ref(value)
@@ -85,7 +85,7 @@ def get_secret_kubernetes_env_var(
 
 
 def get_kubernetes_env_vars(
-    environment: PMap[str, str], task_prefix: str, namespace: str,
+    environment: PMap[str, str], task_name: str, namespace: str,
 ) -> List[V1EnvVar]:
     """
     Given a dict of environment variables, transform them into the corresponding Kubernetes
@@ -102,7 +102,7 @@ def get_kubernetes_env_vars(
     # to be able to find them in k8s for any readers/users outside of Yelp
     secret_env_vars = [
         get_secret_kubernetes_env_var(
-            key=key, value=value, task_prefix=task_prefix, namespace=namespace
+            key=key, value=value, task_name=task_name, namespace=namespace
         )
         for key, value
         in environment.items()

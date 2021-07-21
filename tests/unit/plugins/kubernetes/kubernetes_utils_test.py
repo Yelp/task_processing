@@ -163,11 +163,21 @@ def test_get_pod_volumes(volumes, expected):
 
 
 @pytest.mark.parametrize(
-    "key, value, prefix, namespace, expected", (
-        ("FAKE_LOCAL_SECRET", "SECRET(plain_secret)", "taskprefix", "taskns",
+    "key, value, task_name, namespace, expected", (
+        ("FAKE_LOCAL_SECRET", "SECRET(plain_secret)", "taskprefix.subtask.etc", "taskns",
             V1EnvVar(name="FAKE_LOCAL_SECRET", value_from=V1EnvVarSource(
                 secret_key_ref=V1SecretKeySelector(
                     name="taskns-secret-taskprefix-plain--secret",
+                    key="plain_secret",
+                    optional=False
+                )
+            )
+            )
+         ),
+        ("FAKE_LOCAL_SECRET2", "SECRET(plain_secret)", "taskname", "taskns",
+            V1EnvVar(name="FAKE_LOCAL_SECRET2", value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(
+                    name="taskns-secret-taskname-plain--secret",
                     key="plain_secret",
                     optional=False
                 )
@@ -186,8 +196,8 @@ def test_get_pod_volumes(volumes, expected):
          ),
     )
 )
-def test_get_secret_kubernetes_env_var(key, value, prefix, namespace, expected):
-    assert get_secret_kubernetes_env_var(key, value, prefix, namespace) == expected
+def test_get_secret_kubernetes_env_var(key, value, task_name, namespace, expected):
+    assert get_secret_kubernetes_env_var(key, value, task_name, namespace) == expected
 
 
 def test_get_kubernetes_env_vars():
@@ -203,7 +213,7 @@ def test_get_kubernetes_env_vars():
         V1EnvVar(name="FAKE_PLAIN_VAR", value="not_secret_data"),
         V1EnvVar(name="FAKE_SECRET", value_from=V1EnvVarSource(
             secret_key_ref=V1SecretKeySelector(
-                name="taskns-secret-taskprefix-some--secret--name",
+                name="taskns-secret-taskname-some--secret--name",
                 key="some_secret_name",
                 optional=False,
             ),
@@ -219,7 +229,7 @@ def test_get_kubernetes_env_vars():
         ),
     ]
     env_vars = get_kubernetes_env_vars(environment=test_env_vars,
-                                       task_prefix="taskprefix",
+                                       task_name="taskname.subtask",
                                        namespace="taskns",
                                        )
 

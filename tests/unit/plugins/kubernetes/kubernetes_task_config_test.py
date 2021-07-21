@@ -40,24 +40,6 @@ def test_kubernetes_task_config_enforces_kubernetes_name_requirements():
         task_config.set(name=f"INVALID{task_config.name}")
 
 
-def test_kubernetes_task_config_prefix():
-    task_config = KubernetesTaskConfig(
-        name="fakeprefix.task_name",
-        uuid="fake_id",
-        image="fake_docker_image",
-        command="fake_command"
-    )
-    assert task_config.prefix == "fakeprefix"
-
-    task_config = KubernetesTaskConfig(
-        name="fakeprefix.subprefix.task_name",
-        uuid="fake_id",
-        image="fake_docker_image",
-        command="fake_command"
-    )
-    assert task_config.prefix == "fakeprefix"
-
-
 def test_kubernetes_task_config_enforces_command_requirmenets():
     task_config = KubernetesTaskConfig(
         name="fake_task_name",
