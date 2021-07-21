@@ -49,23 +49,52 @@ def get_security_context_for_capabilities(
 
 def is_secret_env_var(value: str) -> bool:
     """
-    Given the value of an environment variable, return if that environment variable represents
-    a secret.
+    Given the value of an environment variable, return if that environment variable
+    represents a secret.
     """
     return SECRET_VALUE_REGEX.match(value) is not None
 
 
 def get_secret_name_from_ref(value: str) -> str:
+    """
+    Given a PaaSTA-style secret reference, return the name of the secret.
+
+    Supported secret references types:
+        * SECRET(value)
+        * SHARED_SECRET(value)
+    """
     return value.split("(")[1][:-1]
 
 
 def is_shared_secret(value: str) -> bool:
+    """
+    In some cases, multiple services need access to the same secrets - rather than storing
+    these N times internally, Yelp has a mechanism in which a secret can be tagged as
+    "shared" and thus only need to be modified in one place should that secret need to be
+    rotated/updated/etc.
+
+    These "shared" secrets are referenced using the format SHARED_SECRET(secret_name)
+    instead of the more tightly-scoped format of SECRET(secret_name)
+    """
     return value.startswith("SHARED_")
 
 
 def get_secret_kubernetes_env_var(
     key: str, value: str, task_name: str, namespace: str,
 ) -> V1EnvVar:
+    """
+    Returns a Kubernetes EnvVar object that will pull the plaintext of a secret from the
+    Kubernetes Secrets store.
+
+    Will attempt to use the task name to retrieve the corresponding secret unless the value
+    referenced is a shared secret (in which case, a special name is used).
+
+    This expects Kubernetes Secrets to have been created by an external process matching a
+    specific naming convention based on Kubernetes namespace, task name, and the requested
+    secret name.
+
+    XXX:  document how these work internally for non-Yelpers?
+    """
     task_prefix = task_name.split('.')[0] if not is_shared_secret(value) else SHARED_SECRET_SERVICE
     sanitised_task_prefix = get_sanitised_kubernetes_name(task_prefix)
 
@@ -98,8 +127,6 @@ def get_kubernetes_env_vars(
         if not is_secret_env_var(value)
     ]
 
-    # XXX: we should document how we're expecting secrets to be formatted and how we're expecting
-    # to be able to find them in k8s for any readers/users outside of Yelp
     secret_env_vars = [
         get_secret_kubernetes_env_var(
             key=key, value=value, task_name=task_name, namespace=namespace
