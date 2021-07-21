@@ -66,32 +66,22 @@ def is_shared_secret(value: str) -> bool:
 def get_secret_kubernetes_env_var(
     key: str, value: str, task_prefix: str, namespace: str,
 ) -> V1EnvVar:
-    task_prefix = get_sanitised_kubernetes_name(task_prefix)
+    task_prefix = task_prefix if not is_shared_secret(value) else SHARED_SECRET_SERVICE
+    sanitised_task_prefix = get_sanitised_kubernetes_name(task_prefix)
+
     secret = get_secret_name_from_ref(value)
     sanitised_secret = get_sanitised_kubernetes_name(secret)
-    if is_shared_secret(value):
-        task_prefix = get_sanitised_kubernetes_name(SHARED_SECRET_SERVICE)
-        return V1EnvVar(
-            name=key,
-            value_from=V1EnvVarSource(
-                secret_key_ref=V1SecretKeySelector(
-                    name=f"{namespace}-secret-{task_prefix}-{sanitised_secret}",
-                    key=secret,
-                    optional=False,
-                )
-            ),
-        )
-    else:
-        return V1EnvVar(
-            name=key,
-            value_from=V1EnvVarSource(
-                secret_key_ref=V1SecretKeySelector(
-                    name=f"{namespace}-secret-{task_prefix}-{sanitised_secret}",
-                    key=secret,
-                    optional=False,
-                )
-            ),
-        )
+
+    return V1EnvVar(
+        name=key,
+        value_from=V1EnvVarSource(
+            secret_key_ref=V1SecretKeySelector(
+                name=f"{namespace}-secret-{sanitised_task_prefix}-{sanitised_secret}",
+                key=secret,
+                optional=False,
+            )
+        ),
+    )
 
 
 def get_kubernetes_env_vars(

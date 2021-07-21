@@ -223,4 +223,4 @@ def test_get_kubernetes_env_vars():
                                        namespace="taskns",
                                        )
 
-    assert env_vars == expected_env_vars
+    assert sorted(expected_env_vars, key=lambda x: x.name) == sorted(env_vars, key=lambda x: x.name)
