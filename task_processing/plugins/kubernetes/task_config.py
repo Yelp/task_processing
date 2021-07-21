@@ -13,6 +13,8 @@ from pyrsistent import pmap
 from pyrsistent import PVector
 from pyrsistent import pvector
 from pyrsistent import v
+
+from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 if TYPE_CHECKING:
     from task_processing.plugins.kubernetes.types import DockerVolume
 
@@ -113,16 +115,16 @@ def _valid_capabilities(capabilities: Sequence[str]) -> Tuple[bool, Optional[str
 
 
 class KubernetesTaskConfig(DefaultTaskConfigInterface):
-    def __invariant__(conf):
+    def __invariant__(self):
         return (
             (
-                len(conf.pod_name) < MAX_POD_NAME_LENGTH,
+                len(get_sanitised_kubernetes_name(self.pod_name)) < MAX_POD_NAME_LENGTH,
                 (
                     f'Pod name must have up to {MAX_POD_NAME_LENGTH} characters.'
                 )
             ),
             (
-                re.match(VALID_POD_NAME_REGEX, conf.pod_name),
+                re.match(VALID_POD_NAME_REGEX, get_sanitised_kubernetes_name(self.pod_name)),
                 (
                     'Must comply with Kubernetes pod naming standards.'
                 )
@@ -192,7 +194,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
 
     @property
     def pod_name(self) -> str:
-        return f'{self.name}.{self.uuid}'  # type: ignore
+        return get_sanitised_kubernetes_name(f'{self.name}.{self.uuid}')  # type: ignore
 
     def set_pod_name(self, pod_name: str):
         try:
