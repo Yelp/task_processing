@@ -16,7 +16,7 @@ from pyrsistent.typing import PVector
 
 from task_processing.plugins.kubernetes.types import DockerVolume
 
-SECRET_VALUE_REGEX = r"^(SHARED_)?SECRET\([A-Za-z0-9_-]*\)$"
+SECRET_VALUE_REGEX = re.compile(r"^(SHARED_)?SECRET\([A-Za-z0-9_-]*\)$")
 
 logger = logging.getLogger(__name__)
 
@@ -29,30 +29,19 @@ def get_security_context_for_capabilities(
     Helper to take lists of capabilties to add/drop and turn them into the
     corresponding Kubernetes representation.
     """
-    if not cap_add and cap_drop:
-        return V1SecurityContext(
-            capabilities=V1Capabilities(
-                drop=list(cap_drop),
-            )
-        )
-    elif not cap_drop and cap_add:
-        return V1SecurityContext(
-            capabilities=V1Capabilities(
-                add=list(cap_add),
-            )
-        )
-    elif cap_add and cap_drop:
-        return V1SecurityContext(
-            capabilities=V1Capabilities(
-                add=list(cap_add),
-                drop=list(cap_drop),
-            )
-        )
-    else:
-        logger.info(
-            "No (or unsupported combination of) capabilities found, not creating a security context"
-        )
-        return None
+    caps = {
+        capability_type: capabilities
+        for (capability_type, capabilities)
+        in [("add", list(cap_add)), ("drop", list(cap_drop))]
+        if capabilities
+    }
+    if caps:
+        return V1SecurityContext(capabilities=V1Capabilities(**caps))
+
+    logger.info(
+        "No capabilities found, not creating a security context"
+    )
+    return None
 
 
 def is_secret_env_var(value: str) -> bool:
@@ -60,7 +49,7 @@ def is_secret_env_var(value: str) -> bool:
     Given the value of an environment variable, return if that environment variable represents
     a secret.
     """
-    return re.match(SECRET_VALUE_REGEX, value) is not None
+    return SECRET_VALUE_REGEX.match(value) is not None
 
 
 def get_kubernetes_env_vars(environment: PMap[str, str]) -> List[V1EnvVar]:
