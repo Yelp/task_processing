@@ -338,7 +338,11 @@ class KubernetesPodExecutor(TaskExecutor):
                         "ephemeral-storage": f"{task_config.disk}Mi",
                     }
                 ),
-                env=get_kubernetes_env_vars(task_config.environment),
+                env=get_kubernetes_env_vars(
+                    task_config.environment,
+                    task_name=task_config.name,
+                    namespace=self.namespace
+                ),
                 volume_mounts=get_kubernetes_volume_mounts(task_config.volumes)
             )
             pod = V1Pod(
