@@ -108,7 +108,7 @@ def _valid_volumes(volumes: Sequence["DockerVolume"]) -> Tuple[bool, Optional[st
 
 
 def _valid_secret_envs(secret_envs: Mapping[str, "SecretEnvSource"]) -> Tuple[bool, Optional[str]]:
-    # XXX: Note we are not validating existence of secret in k8s here, leave that to creation of pod
+    # Note we are not validating existence of secret in k8s here, leave that to creation of pod
     for key, value in secret_envs.items():
         if set(value.keys()) != VALID_SECRET_ENV_KEYS:
             return (

@@ -139,21 +139,25 @@ def test_get_kubernetes_env_vars():
 
     expected_env_vars = [
         V1EnvVar(name="FAKE_PLAIN_VAR", value="not_secret_data"),
-        V1EnvVar(name="FAKE_SECRET", value_from=V1EnvVarSource(
-            secret_key_ref=V1SecretKeySelector(
-                name="taskns-secret-taskname-some--secret--name",
-                key="some_secret_name",
-                optional=False,
+        V1EnvVar(
+            name="FAKE_SECRET",
+            value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(
+                    name="taskns-secret-taskname-some--secret--name",
+                    key="some_secret_name",
+                    optional=False,
+                ),
             ),
         ),
-        ),
-        V1EnvVar(name="FAKE_SHARED_SECRET", value_from=V1EnvVarSource(
-            secret_key_ref=V1SecretKeySelector(
-                name="taskns-secret-underscore-shared-shared--secret-name",
-                key="shared_secret-name",
-                optional=False,
+        V1EnvVar(
+            name="FAKE_SHARED_SECRET",
+            value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(
+                    name="taskns-secret-underscore-shared-shared--secret-name",
+                    key="shared_secret-name",
+                    optional=False,
+                ),
             ),
-        ),
         ),
     ]
     env_vars = get_kubernetes_env_vars(environment=test_env_vars,
