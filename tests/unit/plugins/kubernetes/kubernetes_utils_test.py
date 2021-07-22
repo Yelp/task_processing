@@ -165,3 +165,11 @@ def test_get_kubernetes_env_vars():
                                        )
 
     assert sorted(expected_env_vars, key=lambda x: x.name) == sorted(env_vars, key=lambda x: x.name)
+
+    test_dupe_env_vars = test_env_vars.set("FAKE_SECRET", "SECRET(not_secret_data)")
+
+    env_vars = get_kubernetes_env_vars(environment=test_dupe_env_vars,
+                                       secret_environment=test_secret_env_vars,
+                                       )
+
+    assert sorted(expected_env_vars, key=lambda x: x.name) == sorted(env_vars, key=lambda x: x.name)

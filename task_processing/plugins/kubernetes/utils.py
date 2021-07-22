@@ -56,7 +56,7 @@ def get_kubernetes_env_vars(
     """
     env_vars = [
         V1EnvVar(name=key, value=value) for key, value
-        in environment.items()
+        in environment.items() if key not in secret_environment.keys()
     ]
 
     secret_env_vars = [
