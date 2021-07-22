@@ -340,8 +340,7 @@ class KubernetesPodExecutor(TaskExecutor):
                 ),
                 env=get_kubernetes_env_vars(
                     task_config.environment,
-                    task_name=task_config.name,
-                    namespace=self.namespace
+                    task_config.secret_environment,
                 ),
                 volume_mounts=get_kubernetes_volume_mounts(task_config.volumes)
             )

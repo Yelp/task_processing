@@ -22,6 +22,11 @@ class DockerVolume(TypedDict):
     mode: str  # XXX: Literal["RO", "RW"] once we drop older Python support
 
 
+class SecretEnvSource(TypedDict):
+    secret: str  # full name of k8s secret resource
+    key: str
+
+
 class PodEvent(TypedDict):
     # there are only 3 possible types for Pod events: ADDED, DELETED, MODIFIED
     # XXX: this should be typed as Literal["ADDED", "DELETED", "MODIFIED"] once we drop support
