@@ -325,7 +325,7 @@ class KubernetesPodExecutor(TaskExecutor):
         try:
             container = V1Container(
                 image=task_config.image,
-                name=get_sanitised_kubernetes_name(task_config.name),
+                name=get_sanitised_kubernetes_name(task_config.name, replace_dots=True),
                 command=["/bin/sh", "-c"],
                 args=[task_config.command],
                 security_context=get_security_context_for_capabilities(

@@ -75,13 +75,18 @@ def get_kubernetes_env_vars(
     return env_vars + secret_env_vars
 
 
-def get_sanitised_kubernetes_name(name: str) -> str:
+def get_sanitised_kubernetes_name(name: str, replace_dots: bool = False) -> str:
     """
     Helper to ensure that any names given to Kubernetes objects follow our conventions
+
+    replace_dots is an optional parameter for objects such as Containers that cannot contain `.`s in
+    their names (in contrast to objects such as Pods that can)
     """
     name = name.replace("_", "--")
     if name.startswith("--"):
         name = name.replace("--", "underscore-", 1)
+    if replace_dots:
+        name = name.replace(".", "dot-")
     return name.lower()
 
 
