@@ -1,5 +1,6 @@
 import pytest
 from pyrsistent import InvariantException
+from pyrsistent import pmap
 
 from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 
@@ -149,3 +150,43 @@ def test_volume_valid_specification(volumes):
     )
 
     assert tuple(task_config.volumes) == volumes
+
+
+@pytest.mark.parametrize(
+    "secret_environment", (
+        pmap({'SECRET1': {'secret': 'taskprocns-secret-secret1', 'key': 'secret_1'}}),
+        pmap({
+            'SECRET_A': {'secret': 'taskprocns-secret-secret--a', 'key': 'secreta'},
+            'SECRET_B': {'secret': 'taskprocns-secret-secret--b', 'key': 'secretb'},
+        }),
+    )
+)
+def test_secret_env_valid_specification(secret_environment):
+    task_config = KubernetesTaskConfig(
+        name="fake_task_name",
+        uuid="fake_id",
+        image="fake_docker_image",
+        command="fake_command",
+        secret_environment=secret_environment
+    )
+
+    assert task_config.secret_environment == secret_environment
+
+
+@pytest.mark.parametrize(
+    "secret_environment", (
+        pmap({'SECRET1': {
+            'secret': 'taskprocns-secret-1', 'key': 'secret-1', 'namespace': 'otherns'
+        }}),
+        pmap({'SECRET1': {'secret': 'taskprocns-secret-2'}})
+    )
+)
+def test_secret_env_rejects_invalid_specification(secret_environment):
+    with pytest.raises(InvariantException):
+        KubernetesTaskConfig(
+            name="fake_task_name",
+            uuid="fake_id",
+            image="fake_docker_image",
+            command="fake_command",
+            secret_environment=secret_environment
+        )

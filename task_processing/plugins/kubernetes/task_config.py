@@ -1,6 +1,7 @@
 import re
 import secrets
 import string
+from typing import Mapping
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
@@ -17,6 +18,7 @@ from pyrsistent import v
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 if TYPE_CHECKING:
     from task_processing.plugins.kubernetes.types import DockerVolume
+    from task_processing.plugins.kubernetes.types import SecretEnvSource
 
 from task_processing.interfaces.task_executor import DefaultTaskConfigInterface
 
@@ -25,6 +27,7 @@ POD_SUFFIX_LENGTH = 6
 MAX_POD_NAME_LENGTH = 253
 VALID_POD_NAME_REGEX = '[a-z0-9]([.-a-z0-9]*[a-z0-9])?'
 VALID_VOLUME_KEYS = {'mode', 'container_path', 'host_path'}
+VALID_SECRET_ENV_KEYS = {'secret', 'key'}
 VALID_CAPABILITIES = {
     "AUDIT_CONTROL",
     "AUDIT_READ",
@@ -104,6 +107,18 @@ def _valid_volumes(volumes: Sequence["DockerVolume"]) -> Tuple[bool, Optional[st
     return (True, None)
 
 
+def _valid_secret_envs(secret_envs: Mapping[str, "SecretEnvSource"]) -> Tuple[bool, Optional[str]]:
+    # Note we are not validating existence of secret in k8s here, leave that to creation of pod
+    for key, value in secret_envs.items():
+        if set(value.keys()) != VALID_SECRET_ENV_KEYS:
+            return (
+                False,
+                f'Invalid secret environment variable {key}, must only contain following keys: '
+                f'{VALID_SECRET_ENV_KEYS}, got: {value.keys()}'
+            )
+    return (True, None)
+
+
 def _valid_capabilities(capabilities: Sequence[str]) -> Tuple[bool, Optional[str]]:
     if (set(capabilities) & VALID_CAPABILITIES) != set(capabilities):
         return (
@@ -178,7 +193,12 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         initial=m(),
         factory=pmap,
     )
-
+    secret_environment = field(
+        type=PMap if not TYPE_CHECKING else PMap[str, 'SecretEnvSource'],
+        initial=m(),
+        factory=pmap,
+        invariant=_valid_secret_envs,
+    )
     cap_add = field(
         type=PVector if not TYPE_CHECKING else PVector[str],
         initial=v(),
