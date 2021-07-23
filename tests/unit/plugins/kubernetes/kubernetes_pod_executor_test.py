@@ -21,6 +21,7 @@ from task_processing.plugins.kubernetes.kubernetes_pod_executor import Kubernete
 from task_processing.plugins.kubernetes.kubernetes_pod_executor import KubernetesTaskState
 from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 from task_processing.plugins.kubernetes.types import PodEvent
+from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 
 
 @pytest.fixture
@@ -71,7 +72,7 @@ def test_run(k8s_executor):
     )
     expected_container = V1Container(
         image=task_config.image,
-        name=task_config.name,
+        name=get_sanitised_kubernetes_name(task_config.name),
         command=["/bin/sh", "-c"],
         args=[task_config.command],
         security_context=V1SecurityContext(
