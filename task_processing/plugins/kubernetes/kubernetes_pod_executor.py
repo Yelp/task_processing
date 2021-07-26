@@ -27,7 +27,6 @@ from task_processing.plugins.kubernetes.types import PodEvent
 from task_processing.plugins.kubernetes.utils import get_kubernetes_env_vars
 from task_processing.plugins.kubernetes.utils import get_kubernetes_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
-from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 from task_processing.plugins.kubernetes.utils import get_security_context_for_capabilities
 
 logger = logging.getLogger(__name__)
@@ -325,7 +324,11 @@ class KubernetesPodExecutor(TaskExecutor):
         try:
             container = V1Container(
                 image=task_config.image,
-                name=get_sanitised_kubernetes_name(task_config.name, replace_dots=True),
+                # XXX: we were initially planning on using the name from KubernetesTaskConfig here,
+                # but its too easy to go over the length limit for container names (63 characters),
+                # so we're just hardcoding something for now since container names aren't used for
+                # anything at the moment
+                name="main",
                 command=["/bin/sh", "-c"],
                 args=[task_config.command],
                 security_context=get_security_context_for_capabilities(
