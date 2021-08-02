@@ -154,10 +154,10 @@ def test_volume_valid_specification(volumes):
 
 @pytest.mark.parametrize(
     "secret_environment", (
-        pmap({'SECRET1': {'secret': 'taskprocns-secret-secret1', 'key': 'secret_1'}}),
+        pmap({'SECRET1': {'secret_name': 'taskprocns-secret-secret1', 'key': 'secret_1'}}),
         pmap({
-            'SECRET_A': {'secret': 'taskprocns-secret-secret--a', 'key': 'secreta'},
-            'SECRET_B': {'secret': 'taskprocns-secret-secret--b', 'key': 'secretb'},
+            'SECRET_A': {'secret_name': 'taskprocns-secret-secret--a', 'key': 'secreta'},
+            'SECRET_B': {'secret_name': 'taskprocns-secret-secret--b', 'key': 'secretb'},
         }),
     )
 )
@@ -176,9 +176,9 @@ def test_secret_env_valid_specification(secret_environment):
 @pytest.mark.parametrize(
     "secret_environment", (
         pmap({'SECRET1': {
-            'secret': 'taskprocns-secret-1', 'key': 'secret-1', 'namespace': 'otherns'
+            'secret_name': 'taskprocns-secret-1', 'key': 'secret-1', 'namespace': 'otherns'
         }}),
-        pmap({'SECRET1': {'secret': 'taskprocns-secret-2'}})
+        pmap({'SECRET1': {'secret_name': 'taskprocns-secret-2'}})
     )
 )
 def test_secret_env_rejects_invalid_specification(secret_environment):

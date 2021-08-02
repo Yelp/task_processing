@@ -27,7 +27,7 @@ POD_SUFFIX_LENGTH = 6
 MAX_POD_NAME_LENGTH = 253
 VALID_POD_NAME_REGEX = '[a-z0-9]([.-a-z0-9]*[a-z0-9])?'
 VALID_VOLUME_KEYS = {'mode', 'container_path', 'host_path'}
-VALID_SECRET_ENV_KEYS = {'secret', 'key'}
+VALID_SECRET_ENV_KEYS = {'secret_name', 'key'}
 VALID_CAPABILITIES = {
     "AUDIT_CONTROL",
     "AUDIT_READ",
