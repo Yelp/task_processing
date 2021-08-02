@@ -23,7 +23,7 @@ class DockerVolume(TypedDict):
 
 
 class SecretEnvSource(TypedDict):
-    secret: str  # full name of k8s secret resource
+    secret_name: str  # full name of k8s secret resource
     key: str
 
 

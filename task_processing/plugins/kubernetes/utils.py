@@ -62,7 +62,7 @@ def get_kubernetes_env_vars(
     secret_env_vars = [
         V1EnvVar(name=key, value_from=V1EnvVarSource(
             secret_key_ref=V1SecretKeySelector(
-                name=value["secret"],
+                name=value["secret_name"],
                 key=value["key"],
                 optional=False,
             ),

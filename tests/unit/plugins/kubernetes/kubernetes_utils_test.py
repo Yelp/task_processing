@@ -127,11 +127,11 @@ def test_get_kubernetes_env_vars():
     test_secret_env_vars = pmap(
         {
             "FAKE_SECRET": {
-                "secret": "taskns-secret-taskname-some--secret--name",
+                "secret_name": "taskns-secret-taskname-some--secret--name",
                 "key": "some_secret_name"
             },
             "FAKE_SHARED_SECRET": {
-                "secret": "taskns-secret-underscore-shared-shared--secret-name",
+                "secret_name": "taskns-secret-underscore-shared-shared--secret-name",
                 "key": "shared_secret-name"
             },
         }
