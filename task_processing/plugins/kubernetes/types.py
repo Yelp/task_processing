@@ -44,6 +44,7 @@ class KubernetesTaskState(AutoEnum):
     TASK_FINISHED = auto()
     TASK_FAILED = auto()
     TASK_UNKNOWN = auto()
+    TASK_LOST = auto()
 
 
 class KubernetesTaskMetadata(PRecord):
