@@ -187,7 +187,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     timestamp=time.time(),
                     raw=event["raw_object"],
                     task_config=task_metadata.task_config,
-                    platform_type="FAILED"
+                    platform_type="failed"
                 )
             )
             return
@@ -247,7 +247,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     timestamp=time.time(),
                     raw=event["raw_object"],
                     task_config=task_metadata.task_config,
-                    platform_type="unknown"
+                    platform_type="lost"
                 )
             )
             return
