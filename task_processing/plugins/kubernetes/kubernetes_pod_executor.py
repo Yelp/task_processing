@@ -224,7 +224,7 @@ class KubernetesPodExecutor(TaskExecutor):
         # phase)
         elif (
             pod.status.phase == "Unknown"
-            and task_metadata.task_state is not KubernetesTaskState.TASK_UNKNOWN
+            and task_metadata.task_state is not KubernetesTaskState.TASK_LOST
         ):
             logger.info(
                 f"Got a MODIFIED event for {pod_name} with unknown phase, host likely "
@@ -234,9 +234,9 @@ class KubernetesPodExecutor(TaskExecutor):
                 pod_name,
                 task_metadata.set(
                     node_name=pod.spec.node_name,
-                    task_state=KubernetesTaskState.TASK_UNKNOWN,
+                    task_state=KubernetesTaskState.TASK_LOST,
                     task_state_history=task_metadata.task_state_history.append(
-                        (KubernetesTaskState.TASK_UNKNOWN, time.time()),
+                        (KubernetesTaskState.TASK_LOST, time.time()),
                     )
                 )
             )
