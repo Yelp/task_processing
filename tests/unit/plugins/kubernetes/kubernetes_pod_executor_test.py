@@ -155,7 +155,7 @@ def test_process_event_enqueues_task_processing_events_pending_to_running(k8s_ex
     mock_pod = mock.Mock(spec=V1Pod)
     mock_pod.metadata.name = "test.1234"
     mock_pod.status.phase = "Running"
-    mock_pod.status.host_ip = "1.2.3.4"
+    mock_pod.spec.node_name = "node-1-2-3-4"
     mock_event = PodEvent(
         type="MODIFIED",
         object=mock_pod,
@@ -187,7 +187,7 @@ def test_process_event_enqueues_task_processing_events_running_to_terminal(k8s_e
     mock_pod = mock.Mock(spec=V1Pod)
     mock_pod.metadata.name = "test.1234"
     mock_pod.status.phase = phase
-    mock_pod.status.host_ip = "1.2.3.4"
+    mock_pod.spec.node_name = "node-1-2-3-4"
     mock_event = PodEvent(
         type="MODIFIED",
         object=mock_pod,
@@ -224,6 +224,7 @@ def test_process_event_enqueues_task_processing_events_no_state_transition(
     mock_pod.metadata.name = "test.1234"
     mock_pod.status.phase = phase
     mock_pod.status.host_ip = "1.2.3.4"
+    mock_pod.spec.node_name = 'kubenode'
     mock_event = PodEvent(
         type="MODIFIED",
         object=mock_pod,
@@ -276,6 +277,7 @@ def test_process_event_enqueues_task_processing_events_deleted(
     mock_pod.metadata.name = "test.1234"
     mock_pod.status.phase = "Running"
     mock_pod.status.host_ip = "1.2.3.4"
+    mock_pod.spec.node_name = 'kubenode'
     mock_event = PodEvent(
         type="DELETED",
         object=mock_pod,
@@ -347,7 +349,7 @@ def test_reconcile_existing_pods(
         mock_pod.metadata.name = taskconf.pod_name
         mock_pod.status.phase = phase
         mock_pod.status.host_ip = '1.2.3.4'
-        mock_pod.status.node_name = 'kubenode'
+        mock_pod.spec.node_name = 'kubenode'
         mock_pods.append(mock_pod)
 
     with mock.patch.object(

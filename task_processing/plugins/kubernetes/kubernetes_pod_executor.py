@@ -233,7 +233,7 @@ class KubernetesPodExecutor(TaskExecutor):
             self.task_metadata = self.task_metadata.set(
                 pod_name,
                 task_metadata.set(
-                    node_name=pod.status.host_ip,
+                    node_name=pod.spec.node_name,
                     task_state=KubernetesTaskState.TASK_RUNNING,
                     task_state_history=task_metadata.task_state_history.append(
                         (KubernetesTaskState.TASK_RUNNING, time.time()),
@@ -266,7 +266,7 @@ class KubernetesPodExecutor(TaskExecutor):
             self.task_metadata = self.task_metadata.set(
                 pod_name,
                 task_metadata.set(
-                    node_name=pod.status.host_ip,
+                    node_name=pod.spec.node_name,
                     task_state=KubernetesTaskState.TASK_LOST,
                     task_state_history=task_metadata.task_state_history.append(
                         (KubernetesTaskState.TASK_LOST, time.time()),
