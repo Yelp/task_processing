@@ -37,6 +37,23 @@ def k8s_executor(mock_Thread):
         executor.stop()
 
 
+@pytest.fixture
+def k8s_executor_with_tasks(mock_Thread):
+    with mock.patch(
+        "task_processing.plugins.kubernetes.kube_client.kube_config.load_kube_config",
+        autospec=True
+    ), mock.patch(
+        "task_processing.plugins.kubernetes.kube_client.kube_client",
+        autospec=True
+    ), mock.patch.dict(os.environ, {"KUBECONFIG": "/this/doesnt/exist.conf"}):
+        executor = KubernetesPodExecutor(
+            namespace="task_processing_tests",
+            tasks=['pod--1.uuida', 'pod--2.uuidb', 'pod--3.uuidc', 'pod--4.uuidd']
+        )
+        yield executor, [md.task_config for md in executor.task_metadata.values()]
+        executor.stop()
+
+
 def test_run_updates_task_metadata(k8s_executor):
     task_config = KubernetesTaskConfig(
         name="name",
@@ -266,3 +283,74 @@ def test_process_event_enqueues_task_processing_events_deleted(
 
     assert k8s_executor.event_queue.qsize() == 1
     assert len(k8s_executor.task_metadata) == 0
+
+
+def test_reconcile_missing_pod(
+    k8s_executor,
+):
+    task_config = mock.Mock(spec=KubernetesTaskConfig)
+    task_config.pod_name = 'pod--name.uuid'
+    task_config.name = 'job-name'
+
+    k8s_executor.task_metadata = pmap({
+        task_config.pod_name: KubernetesTaskMetadata(
+            task_config=mock.Mock(spec=KubernetesTaskConfig),
+            task_state=KubernetesTaskState.TASK_UNKNOWN,
+            task_state_history=v(),
+        )
+    })
+
+    with mock.patch.object(k8s_executor, "kube_client", autospec=True) as mock_kube_client:
+        mock_kube_client.get_pod.return_value = None
+        k8s_executor.reconcile(task_config)
+
+    assert k8s_executor.event_queue.qsize() == 1
+    assert len(k8s_executor.task_metadata) == 1
+    tm = k8s_executor.task_metadata['pod--name.uuid']
+    assert tm.task_state == KubernetesTaskState.TASK_LOST
+
+
+def test_initial_task_metadata(
+    k8s_executor_with_tasks
+):
+    executor, task_configs = k8s_executor_with_tasks
+    assert all([tc.pod_name in executor.task_metadata for tc in task_configs])
+    assert all(
+        [
+            tm.task_state == KubernetesTaskState.TASK_UNKNOWN
+            for tm in executor.task_metadata.values()
+        ]
+    )
+
+
+def test_reconcile_existing_pods(
+    k8s_executor_with_tasks
+):
+    executor, task_configs = k8s_executor_with_tasks
+
+    mock_pods = []
+    test_phases = ['Running', 'Succeeded', 'Failed', 'Unknown']
+    for i in range(len(task_configs)):
+        taskconf = task_configs[i]
+        phase = test_phases[i]
+        mock_pod = mock.Mock(spec=V1Pod)
+        mock_pod.metadata.name = taskconf.pod_name
+        mock_pod.status.phase = phase
+        mock_pod.status.host_ip = '1.2.3.4'
+        mock_pod.status.node_name = 'kubenode'
+        mock_pods.append(mock_pod)
+
+    with mock.patch.object(
+        executor,
+        "kube_client",
+        autospec=True
+    ) as mock_kube_client:
+        mock_kube_client.get_pod.side_effect = mock_pods
+        for taskconf in task_configs:
+            executor.reconcile(taskconf)
+
+    assert executor.event_queue.qsize() == 4
+    assert len(executor.task_metadata) == 2
+
+    running_pod_metadata = executor.task_metadata[mock_pods[0].metadata.name]
+    assert running_pod_metadata.task_state == KubernetesTaskState.TASK_RUNNING

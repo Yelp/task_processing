@@ -153,3 +153,33 @@ class KubeClient:
 
         logger.info(f"Ran out of retries attempting to create {pod.metadata.name}.")
         return False
+
+    def get_pod(
+        self, namespace: str, pod_name: str, attempts: int = DEFAULT_ATTEMPTS,
+    ) -> Optional[V1Pod]:
+        while attempts:
+            try:
+                pod = self.core.read_namespaced_pod(
+                    namespace=namespace, name={pod_name},
+                )
+                if not pod:
+                    # XXX: We do not currently distinguish between not finding a pod and hitting api
+                    #      exception when fetching pod
+                    logger.info(f"Found no pods matching {pod_name}.")
+                    return None
+                else:
+                    return pod
+            except ApiException as e:
+                if not self.maybe_reload_on_exception(exception=e) and attempts:
+                    logger.debug(
+                        f"Failed to fetch pod {pod_name} due to unhandled API exception, retrying",
+                        exc_info=True
+                    )
+                attempts -= 1
+            except Exception:
+                logger.exception(
+                    f"Failed to fetch pod {pod_name} due to unhandled exception."
+                )
+                return None
+        logger.info(f"Ran out of retries attempting to fetch pod {pod_name}.")
+        return None

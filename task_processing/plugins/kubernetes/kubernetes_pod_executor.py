@@ -3,6 +3,7 @@ import queue
 import threading
 import time
 from queue import Queue
+from typing import Collection
 from typing import Optional
 
 from kubernetes import watch
@@ -45,12 +46,39 @@ SUPPORTED_POD_MODIFIED_EVENT_PHASES = {
 class KubernetesPodExecutor(TaskExecutor):
     TASK_CONFIG_INTERFACE = KubernetesTaskConfig
 
-    def __init__(self, namespace: str, kubeconfig_path: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        namespace: str,
+        kubeconfig_path: Optional[str] = None,
+        tasks: Optional[Collection[str]] = [],
+    ) -> None:
         self.kube_client = KubeClient(kubeconfig_path=kubeconfig_path)
         self.namespace = namespace
         self.stopping = False
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
+
         self.task_metadata_lock = threading.RLock()
+        if tasks:
+            for pod_name in tasks:
+                logger.debug(
+                    f"Initializing blank task metadata for known pod {pod_name}"
+                )
+                # We are initiating with blank config and state on initial load, then leave
+                # matching tasks to running/completed pods in reconcile()
+                task_config = KubernetesTaskConfig(image='UNKNOWN', command='UNKNOWN')
+                task_config = task_config.set_pod_name(pod_name)
+                with self.task_metadata_lock:
+                    self.task_metadata = self.task_metadata.set(
+                        pod_name,
+                        KubernetesTaskMetadata(
+                            task_config=task_config,
+                            node_name='UNKNOWN',
+                            task_state=KubernetesTaskState.TASK_UNKNOWN,
+                            task_state_history=v(
+                                (KubernetesTaskState.TASK_UNKNOWN, time.time())
+                            ),
+                        )
+                    )
 
         # we have two queues since we need to process Pod Events into something that we can place
         # onto the queue that any application (e.g., something like Tron or Jolt) can actually use
@@ -123,6 +151,7 @@ class KubernetesPodExecutor(TaskExecutor):
         pod = event["object"]
         pod_name = pod.metadata.name
         task_metadata = self.task_metadata[pod_name]
+        raw_event = event['raw_object']
 
         logger.info(f"Removing {pod_name} from state and emitting 'killed' event.")
 
@@ -133,7 +162,7 @@ class KubernetesPodExecutor(TaskExecutor):
                 terminal=True,
                 success=False,
                 timestamp=time.time(),
-                raw=event["raw_object"],
+                raw=raw_event,
                 task_config=task_metadata.task_config,
                 platform_type="killed"
             )
@@ -141,8 +170,14 @@ class KubernetesPodExecutor(TaskExecutor):
 
     def __handle_modified_pod_event(self, event: PodEvent) -> None:
         pod = event["object"]
+        self.__update_modified_pod(pod=pod, event=event)
+
+    def __update_modified_pod(self, pod: V1Pod, event: Optional[PodEvent]) -> None:
+        """ Called during reconciliation and normal event handling """
         pod_name = pod.metadata.name
         task_metadata = self.task_metadata[pod_name]
+
+        raw_event = event['raw_object'] if event else None
 
         if pod.status.phase not in SUPPORTED_POD_MODIFIED_EVENT_PHASES:
             logger.debug(
@@ -165,7 +200,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     terminal=True,
                     success=True,
                     timestamp=time.time(),
-                    raw=event["raw_object"],
+                    raw=raw_event,
                     task_config=task_metadata.task_config,
                     platform_type="finished"
                 )
@@ -184,7 +219,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     terminal=True,
                     success=False,
                     timestamp=time.time(),
-                    raw=event["raw_object"],
+                    raw=raw_event,
                     task_config=task_metadata.task_config,
                     platform_type="failed"
                 )
@@ -211,7 +246,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     task_id=pod_name,
                     terminal=False,
                     timestamp=time.time(),
-                    raw=event["raw_object"],
+                    raw=raw_event,
                     task_config=task_metadata.task_config,
                     platform_type="running"
                 )
@@ -232,7 +267,7 @@ class KubernetesPodExecutor(TaskExecutor):
             self.task_metadata = self.task_metadata.set(
                 pod_name,
                 task_metadata.set(
-                    node_name=pod.spec.node_name,
+                    node_name=pod.status.host_ip,
                     task_state=KubernetesTaskState.TASK_LOST,
                     task_state_history=task_metadata.task_state_history.append(
                         (KubernetesTaskState.TASK_LOST, time.time()),
@@ -244,7 +279,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     task_id=pod_name,
                     terminal=False,
                     timestamp=time.time(),
-                    raw=event["raw_object"],
+                    raw=raw_event,
                     task_config=task_metadata.task_config,
                     platform_type="lost"
                 )
@@ -391,10 +426,47 @@ class KubernetesPodExecutor(TaskExecutor):
         return None
 
     def reconcile(self, task_config: KubernetesTaskConfig) -> None:
-        # TASKPROC(244): we probably only want reconcile() to fill in the task_config
-        # member of the relevant KubernetesTaskMetadata and do an unconditional state
-        # reconciliation on startup
-        pass
+        pod_name = task_config.pod_name
+        pod = self.kube_client.get_pod(namespace=self.namespace, pod_name=pod_name)
+
+        with self.task_metadata_lock:
+            task_metadata = self.task_metadata[pod_name]
+            self.task_metadata = self.task_metadata.set(
+                pod_name,
+                task_metadata.set(
+                    task_config=task_config
+                )
+            )
+
+        with self.task_metadata_lock:
+            if not pod:
+                # Pod has gone away while restarting
+                logger.info(
+                    f"Pod {pod_name} for task {task_config.name} was no longer found. "
+                    "Marking as LOST"
+                )
+                self.task_metadata = self.task_metadata.set(
+                    pod_name,
+                    task_metadata.set(
+                        task_state=KubernetesTaskState.TASK_LOST,
+                        task_state_history=task_metadata.task_state_history.append(
+                            (KubernetesTaskState.TASK_LOST, time.time()),
+                        )
+                    )
+                )
+                self.event_queue.put(
+                    task_event(
+                        task_id=pod_name,
+                        terminal=True,
+                        timestamp=time.time(),
+                        raw=None,
+                        task_config=task_metadata.task_config,
+                        platform_type="lost"
+                    )
+                )
+            else:
+                # Treat like a modified pod
+                self.__update_modified_pod(pod=pod, event=None)
 
     def kill(self, task_id: str) -> bool:
         """
