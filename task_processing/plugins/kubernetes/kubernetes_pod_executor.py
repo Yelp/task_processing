@@ -50,7 +50,7 @@ class KubernetesPodExecutor(TaskExecutor):
         self,
         namespace: str,
         kubeconfig_path: Optional[str] = None,
-        tasks: Optional[Collection[str]] = [],
+        task_configs: Optional[Collection[KubernetesTaskConfig]] = [],
     ) -> None:
         self.kube_client = KubeClient(kubeconfig_path=kubeconfig_path)
         self.namespace = namespace
@@ -58,15 +58,14 @@ class KubernetesPodExecutor(TaskExecutor):
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
 
         self.task_metadata_lock = threading.RLock()
-        if tasks:
-            for pod_name in tasks:
+        if task_configs:
+            for task_config in task_configs:
+                pod_name = task_config.pod_name
                 logger.debug(
-                    f"Initializing blank task metadata for known pod {pod_name}"
+                    f"Initializing task metadata for known pod {pod_name}"
                 )
-                # We are initiating with blank config and state on initial load, then leave
+                # We are initiating with UNKNOWN state on initial load, then leave
                 # matching tasks to running/completed pods in reconcile()
-                task_config = KubernetesTaskConfig(image='UNKNOWN', command='UNKNOWN')
-                task_config = task_config.set_pod_name(pod_name)
                 with self.task_metadata_lock:
                     self.task_metadata = self.task_metadata.set(
                         pod_name,

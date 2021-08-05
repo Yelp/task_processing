@@ -46,9 +46,19 @@ def k8s_executor_with_tasks(mock_Thread):
         "task_processing.plugins.kubernetes.kube_client.kube_client",
         autospec=True
     ), mock.patch.dict(os.environ, {"KUBECONFIG": "/this/doesnt/exist.conf"}):
+        test_task_names = ['job1.action1', 'job1.action2', 'job2.action1', 'job3.action2']
+        task_configs = []
+        for task in test_task_names:
+            taskconf = KubernetesTaskConfig(
+                name=task,
+                uuid='fake_id',
+                image='fake_docker_image',
+                command='fake_command',
+            )
+            task_configs.append(taskconf)
         executor = KubernetesPodExecutor(
             namespace="task_processing_tests",
-            tasks=['pod--1.uuida', 'pod--2.uuidb', 'pod--3.uuidc', 'pod--4.uuidd']
+            task_configs=task_configs,
         )
         yield executor, [md.task_config for md in executor.task_metadata.values()]
         executor.stop()
@@ -285,6 +295,19 @@ def test_process_event_enqueues_task_processing_events_deleted(
     assert len(k8s_executor.task_metadata) == 0
 
 
+def test_initial_task_metadata(
+    k8s_executor_with_tasks
+):
+    executor, task_configs = k8s_executor_with_tasks
+    assert all([tc.pod_name in executor.task_metadata for tc in task_configs])
+    assert all(
+        [
+            tm.task_state == KubernetesTaskState.TASK_UNKNOWN
+            for tm in executor.task_metadata.values()
+        ]
+    )
+
+
 def test_reconcile_missing_pod(
     k8s_executor,
 ):
@@ -308,19 +331,6 @@ def test_reconcile_missing_pod(
     assert len(k8s_executor.task_metadata) == 1
     tm = k8s_executor.task_metadata['pod--name.uuid']
     assert tm.task_state == KubernetesTaskState.TASK_LOST
-
-
-def test_initial_task_metadata(
-    k8s_executor_with_tasks
-):
-    executor, task_configs = k8s_executor_with_tasks
-    assert all([tc.pod_name in executor.task_metadata for tc in task_configs])
-    assert all(
-        [
-            tm.task_state == KubernetesTaskState.TASK_UNKNOWN
-            for tm in executor.task_metadata.values()
-        ]
-    )
 
 
 def test_reconcile_existing_pods(
