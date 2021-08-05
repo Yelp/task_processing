@@ -168,8 +168,6 @@ class KubeClient:
                     namespace=namespace, name={pod_name},
                 )
                 if not pod:
-                    # XXX: We do not currently distinguish between not finding a pod and hitting api
-                    #      exception when fetching pod
                     logger.info(f"Found no pods matching {pod_name}.")
                     return None
                 else:
