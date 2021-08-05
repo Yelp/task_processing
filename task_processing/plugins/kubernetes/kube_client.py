@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_ATTEMPTS = 2
 
 
+class ExceededMaxAttempts(Exception):
+    pass
+
+
 class KubeClient:
     def __init__(self, kubeconfig_path: Optional[str] = None) -> None:
         kubeconfig_path = kubeconfig_path or os.environ.get("KUBECONFIG")
@@ -157,6 +161,7 @@ class KubeClient:
     def get_pod(
         self, namespace: str, pod_name: str, attempts: int = DEFAULT_ATTEMPTS,
     ) -> Optional[V1Pod]:
+        max_attempts = attempts
         while attempts:
             try:
                 pod = self.core.read_namespaced_pod(
@@ -180,6 +185,6 @@ class KubeClient:
                 logger.exception(
                     f"Failed to fetch pod {pod_name} due to unhandled exception."
                 )
-                return None
+                raise
         logger.info(f"Ran out of retries attempting to fetch pod {pod_name}.")
-        return None
+        raise ExceededMaxAttempts(f'Retried fetching pod {pod_name} {max_attempts} times.')

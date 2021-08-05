@@ -427,7 +427,14 @@ class KubernetesPodExecutor(TaskExecutor):
 
     def reconcile(self, task_config: KubernetesTaskConfig) -> None:
         pod_name = task_config.pod_name
-        pod = self.kube_client.get_pod(namespace=self.namespace, pod_name=pod_name)
+        try:
+            pod = self.kube_client.get_pod(namespace=self.namespace, pod_name=pod_name)
+        except Exception:
+            logger.exception(f"Cannot reconcile pod {pod_name}")
+
+        if pod_name not in self.task_metadata:
+            logger.info(f"Cannot reconcile pod {pod_name}, not found in task metadata")
+            return
 
         with self.task_metadata_lock:
             task_metadata = self.task_metadata[pod_name]
