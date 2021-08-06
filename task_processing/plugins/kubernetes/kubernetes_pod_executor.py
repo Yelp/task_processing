@@ -60,24 +60,7 @@ class KubernetesPodExecutor(TaskExecutor):
         self.task_metadata_lock = threading.RLock()
         if task_configs:
             for task_config in task_configs:
-                pod_name = task_config.pod_name
-                logger.debug(
-                    f"Initializing task metadata for known pod {pod_name}"
-                )
-                # We are initiating with UNKNOWN state on initial load, then leave
-                # matching tasks to running/completed pods in reconcile()
-                with self.task_metadata_lock:
-                    self.task_metadata = self.task_metadata.set(
-                        pod_name,
-                        KubernetesTaskMetadata(
-                            task_config=task_config,
-                            node_name='UNKNOWN',
-                            task_state=KubernetesTaskState.TASK_UNKNOWN,
-                            task_state_history=v(
-                                (KubernetesTaskState.TASK_UNKNOWN, time.time())
-                            ),
-                        )
-                    )
+                self._initialize_existing_task(task_config)
 
         # we have two queues since we need to process Pod Events into something that we can place
         # onto the queue that any application (e.g., something like Tron or Jolt) can actually use
@@ -105,6 +88,28 @@ class KubernetesPodExecutor(TaskExecutor):
             target=self._pending_event_processing_loop,
         )
         self.pending_event_processing_thread.start()
+
+    def _initialize_existing_task(self, task_config: KubernetesTaskConfig) -> None:
+        """ Generates task_metadata in UNKNOWN state for an existing KubernetesTaskConfig.
+            Used during initialization or recovery for a task"""
+        pod_name = task_config.pod_name
+        logger.debug(
+            f"Initializing task metadata for known pod {pod_name}"
+        )
+        # We are initiating with UNKNOWN state on initial load, then leave
+        # matching tasks to running/completed pods in reconcile()
+        with self.task_metadata_lock:
+            self.task_metadata = self.task_metadata.set(
+                pod_name,
+                KubernetesTaskMetadata(
+                    task_config=task_config,
+                    node_name='UNKNOWN',
+                    task_state=KubernetesTaskState.TASK_UNKNOWN,
+                    task_state_history=v(
+                        (KubernetesTaskState.TASK_UNKNOWN, time.time())
+                    ),
+                )
+            )
 
     def _pod_event_watch_loop(self) -> None:
         logger.debug(f"Starting watching Pod events for namespace={self.namespace}.")
@@ -432,8 +437,7 @@ class KubernetesPodExecutor(TaskExecutor):
             logger.exception(f"Cannot reconcile pod {pod_name}")
 
         if pod_name not in self.task_metadata:
-            logger.info(f"Cannot reconcile pod {pod_name}, not found in task metadata")
-            return
+            self._initialize_existing_task(task_config)
 
         with self.task_metadata_lock:
             task_metadata = self.task_metadata[pod_name]
@@ -463,7 +467,7 @@ class KubernetesPodExecutor(TaskExecutor):
                 self.event_queue.put(
                     task_event(
                         task_id=pod_name,
-                        terminal=True,
+                        terminal=False,
                         timestamp=time.time(),
                         raw=None,
                         task_config=task_metadata.task_config,
