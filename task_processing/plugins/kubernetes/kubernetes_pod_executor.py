@@ -434,7 +434,8 @@ class KubernetesPodExecutor(TaskExecutor):
         try:
             pod = self.kube_client.get_pod(namespace=self.namespace, pod_name=pod_name)
         except Exception:
-            logger.exception(f"Cannot reconcile pod {pod_name}")
+            logger.exception(f"Hit an exception attempting to fetch pod {pod_name}")
+            pod = None
 
         if pod_name not in self.task_metadata:
             self._initialize_existing_task(task_config)
@@ -448,7 +449,6 @@ class KubernetesPodExecutor(TaskExecutor):
                 )
             )
 
-        with self.task_metadata_lock:
             if not pod:
                 # Pod has gone away while restarting
                 logger.info(

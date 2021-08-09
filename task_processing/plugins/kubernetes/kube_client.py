@@ -167,12 +167,12 @@ class KubeClient:
                 pod = self.core.read_namespaced_pod(
                     namespace=namespace, name={pod_name},
                 )
-                if not pod:
+                return pod
+            except ApiException as e:
+                # Unknown pod throws ApiException w/ 404
+                if e.status == 404:
                     logger.info(f"Found no pods matching {pod_name}.")
                     return None
-                else:
-                    return pod
-            except ApiException as e:
                 if not self.maybe_reload_on_exception(exception=e) and attempts:
                     logger.debug(
                         f"Failed to fetch pod {pod_name} due to unhandled API exception, retrying",

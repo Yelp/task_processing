@@ -347,9 +347,7 @@ def test_reconcile_existing_pods(
 
     mock_pods = []
     test_phases = ['Running', 'Succeeded', 'Failed', 'Unknown']
-    for i in range(len(mock_task_configs)):
-        taskconf = mock_task_configs[i]
-        phase = test_phases[i]
+    for taskconf, phase in zip(mock_task_configs, test_phases):
         mock_pod = mock.Mock(spec=V1Pod)
         mock_pod.metadata.name = taskconf.pod_name
         mock_pod.status.phase = phase
@@ -367,7 +365,25 @@ def test_reconcile_existing_pods(
             k8s_executor.reconcile(taskconf)
 
     assert k8s_executor.event_queue.qsize() == 4
+    # Both Succeeded & Failed pods are removed from metadata
     assert len(k8s_executor.task_metadata) == 2
 
     running_pod_metadata = k8s_executor.task_metadata[mock_pods[0].metadata.name]
     assert running_pod_metadata.task_state == KubernetesTaskState.TASK_RUNNING
+
+
+def test_reconcile_api_error(
+    k8s_executor,
+):
+    task_config = mock.Mock(spec=KubernetesTaskConfig)
+    task_config.pod_name = 'pod--name.uuid'
+    task_config.name = 'job-name'
+
+    with mock.patch.object(k8s_executor, "kube_client", autospec=True) as mock_kube_client:
+        mock_kube_client.get_pod.side_effect = [ApiException]
+        k8s_executor.reconcile(task_config)
+
+    assert k8s_executor.event_queue.qsize() == 1
+    assert len(k8s_executor.task_metadata) == 1
+    tm = k8s_executor.task_metadata['pod--name.uuid']
+    assert tm.task_state == KubernetesTaskState.TASK_LOST
