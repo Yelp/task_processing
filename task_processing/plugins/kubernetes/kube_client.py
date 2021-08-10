@@ -7,7 +7,6 @@ from kubernetes import client as kube_client
 from kubernetes import config as kube_config
 from kubernetes.client.exceptions import ApiException
 from kubernetes.client.models.v1_pod import V1Pod
-from kubernetes.client.models.v1_status import V1Status
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +85,7 @@ class KubeClient:
         while attempts:
             try:
                 logger.info(f"Attempting to terminate {pod_name}")
-                status: V1Status = self.core.delete_namespaced_pod(
+                self.core.delete_namespaced_pod(
                     name=pod_name,
                     namespace=namespace,
                     # attempt to delete immediately - Pods launched by task_processing
@@ -97,10 +96,14 @@ class KubeClient:
                     # https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/
                     propagation_policy="Background"
                 )
-                # this is not ideal, but the k8s clientlib returns the status of the request as a
-                # string that is either "Success" or "Failure" - we could potentially use `code`
-                # instead but it's not exactly documented what HTTP return codes will be used
-                return status.status == "Success"
+                # this is not ideal, but the k8s clientlib should return the status of the request
+                # as a string that is either "Success" or "Failure" (or we could potentially use
+                # `code` instead but it's not exactly documented what HTTP return codes will be
+                # used)...however, due to https://github.com/kubernetes-client/python/issues/1523
+                # the V1Status.status returned by delete_namespaced_pod is not accurate and thus
+                # we assume that if no exception was thrown, we were able to successfully send
+                # the termination request.
+                return True
             except ApiException as e:
                 if not self.maybe_reload_on_exception(exception=e) and attempts:
                     logger.exception(
