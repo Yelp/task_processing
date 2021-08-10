@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_ATTEMPTS = 2
 
 
+class ExceededMaxAttempts(Exception):
+    pass
+
+
 class KubeClient:
     def __init__(self, kubeconfig_path: Optional[str] = None) -> None:
         kubeconfig_path = kubeconfig_path or os.environ.get("KUBECONFIG")
@@ -153,3 +157,32 @@ class KubeClient:
 
         logger.info(f"Ran out of retries attempting to create {pod.metadata.name}.")
         return False
+
+    def get_pod(
+        self, namespace: str, pod_name: str, attempts: int = DEFAULT_ATTEMPTS,
+    ) -> Optional[V1Pod]:
+        max_attempts = attempts
+        while attempts:
+            try:
+                pod = self.core.read_namespaced_pod(
+                    namespace=namespace, name={pod_name},
+                )
+                return pod
+            except ApiException as e:
+                # Unknown pod throws ApiException w/ 404
+                if e.status == 404:
+                    logger.info(f"Found no pods matching {pod_name}.")
+                    return None
+                if not self.maybe_reload_on_exception(exception=e) and attempts:
+                    logger.debug(
+                        f"Failed to fetch pod {pod_name} due to unhandled API exception, retrying",
+                        exc_info=True
+                    )
+                attempts -= 1
+            except Exception:
+                logger.exception(
+                    f"Failed to fetch pod {pod_name} due to unhandled exception."
+                )
+                raise
+        logger.info(f"Ran out of retries attempting to fetch pod {pod_name}.")
+        raise ExceededMaxAttempts(f'Retried fetching pod {pod_name} {max_attempts} times.')
