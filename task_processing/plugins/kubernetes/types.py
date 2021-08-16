@@ -2,7 +2,9 @@ from enum import auto
 from enum import unique
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Tuple
+from typing import Union
 
 from kubernetes.client import V1Pod
 from pyrsistent import field
@@ -25,6 +27,13 @@ class DockerVolume(TypedDict):
 class SecretEnvSource(TypedDict):
     secret_name: str  # full name of k8s secret resource
     key: str
+
+
+# from: https://github.com/kubernetes-client/python/blob/master/kubernetes/docs/V1NodeSelectorRequirement.md
+class NodeAffinity(TypedDict):
+    key: str
+    operator: str
+    value: Union[List[str], int]
 
 
 class PodEvent(TypedDict):

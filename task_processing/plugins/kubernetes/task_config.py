@@ -85,6 +85,15 @@ DEFAULT_CAPS_DROP = {
     "SYS_CHROOT",
 }
 VALID_DOCKER_VOLUME_MODES = {"RW", "RO"}
+REQUIRED_NODE_AFFINITY_KEYS = {"key", "operator", "value"}
+NODE_AFFINITY_OP_VALUE_TYPES  = {
+    "In": (lambda vs: type(vs) == list and all(type(v) == str for v in vs), "List[str]"),
+    "NotIn": (lambda vs: type(vs) == list and all(type(v) == str for v in vs), "List[str]"),
+    "Exists": (lambda _: True, None),  # can be any type, since the value is irrelevant
+    "DoesNotExist": (lambda _: True, None),
+    "Gt": (lambda v: type(v) == int, "int"),
+    "Lt": (lambda v: type(v) == int, "int"),
+}
 
 
 def _generate_pod_suffix() -> str:
@@ -129,6 +138,30 @@ def _valid_capabilities(capabilities: Sequence[str]) -> Tuple[bool, Optional[str
     return (True, None)
 
 
+def _valid_node_affinities(node_affinities: Sequence["NodeAffinity"]) -> Tuple[bool, Optional[str]]:
+    for affinity in node_affinities:
+        missing_keys = REQUIRED_NODE_AFFINITY_KEYS.difference(set(affinity.keys()))
+        if len(missing_keys) > 0:
+            return (
+                False,
+                f"Invalid node affinity: got {affinity} but missing keys {missing_keys}"
+            )
+        if affinity["operator"] not in NODE_AFFINITY_OP_VALUE_TYPES:
+            return (
+                False,
+                f"Invalid node affinity operator: got {affinity} but "
+                f"only the following operators allowed: {VALID_NODE_AFFINITY_OPS}"
+            )
+        type_checker, expected_type = NODE_AFFINITY_OP_VALUE_TYPES[affinity["operator"]]
+        if not type_checker(affinity["value"]):
+            return (
+                False,
+                f"Invalid node affinity value: got operator {affinity['operator']} "
+                f"but got non-{expected_type} value: {affinity['value']}",
+            )
+    return True, None
+
+
 class KubernetesTaskConfig(DefaultTaskConfigInterface):
     def __invariant__(self):
         return (
@@ -148,7 +181,6 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
 
     uuid = field(type=str, initial=_generate_pod_suffix)  # type: ignore
     name = field(type=str, initial="default")
-    node_selector = field(type=PMap)
     # Hardcoded for the time being
     restart_policy = "Never"
     # By default, the retrying executor retries 3 times. This task option
@@ -210,6 +242,17 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         initial=pvector(DEFAULT_CAPS_DROP),
         factory=pvector,
         invariant=_valid_capabilities,
+    )
+    node_selectors = field(
+        type=PMap if not TYPE_CHECKING else PMap[str, str],
+        initial=m(),
+        factory=pmap,
+    )
+    node_affinities = field(
+        type=PVector if not TYPE_CHECKING else PVector["NodeAffinity"],
+        initial=v(),
+        factory=pvector,
+        invariant=_valid_node_affinities,
     )
 
     @property
