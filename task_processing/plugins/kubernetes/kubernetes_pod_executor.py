@@ -22,8 +22,8 @@ from task_processing.interfaces.event import Event
 from task_processing.interfaces.event import task_event
 from task_processing.plugins.kubernetes.kube_client import KubeClient
 from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
-from task_processing.plugins.kubernetes.types import KubernetesTaskMetadata
-from task_processing.plugins.kubernetes.types import KubernetesTaskState
+from task_processing.plugins.kubernetes.task_metadata import KubernetesTaskMetadata
+from task_processing.plugins.kubernetes.task_metadata import KubernetesTaskState
 from task_processing.plugins.kubernetes.types import PodEvent
 from task_processing.plugins.kubernetes.utils import get_kubernetes_env_vars
 from task_processing.plugins.kubernetes.utils import get_kubernetes_volume_mounts
