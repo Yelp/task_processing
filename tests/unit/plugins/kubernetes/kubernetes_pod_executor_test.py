@@ -3,6 +3,7 @@ from unittest import mock
 
 import pytest
 from kubernetes.client import ApiException
+from kubernetes.client import V1Affinity
 from kubernetes.client import V1Capabilities
 from kubernetes.client import V1Container
 from kubernetes.client import V1HostPathVolumeSource
@@ -14,6 +15,7 @@ from kubernetes.client import V1SecurityContext
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
 from pyrsistent import pmap
+from pyrsistent import pvector
 from pyrsistent import v
 
 from task_processing.plugins.kubernetes.kubernetes_pod_executor import KubernetesPodExecutor
@@ -91,7 +93,11 @@ def test_run_updates_task_metadata(k8s_executor):
     )
 
 
-def test_run(k8s_executor):
+@mock.patch(
+    "task_processing.plugins.kubernetes.kubernetes_pod_executor.get_node_affinity",
+    autospec=True,
+)
+def test_run(mock_get_node_affinity, k8s_executor):
     task_config = KubernetesTaskConfig(
         name="fake_task_name",
         uuid="fake_id",
@@ -100,7 +106,9 @@ def test_run(k8s_executor):
         cpus=1,
         memory=1024,
         disk=1024,
-        volumes=[{"host_path": "/a", "container_path": "/b", "mode": "RO"}]
+        volumes=[{"host_path": "/a", "container_path": "/b", "mode": "RO"}],
+        node_selectors={"hello": "world"},
+        node_affinities=[dict(key="a_label", operator="In", value=[])],
     )
     expected_container = V1Container(
         image=task_config.image,
@@ -136,12 +144,17 @@ def test_run(k8s_executor):
                 host_path=V1HostPathVolumeSource(path="/a"),
                 name="host--slash-a",
             )],
+            node_selector={"hello": "world"},
+            affinity=V1Affinity(node_affinity=mock_get_node_affinity.return_value),
         ),
     )
 
     assert k8s_executor.run(task_config) == task_config.pod_name
     assert k8s_executor.kube_client.core.create_namespaced_pod.call_args_list == [
         mock.call(body=expected_pod, namespace='task_processing_tests')
+    ]
+    assert mock_get_node_affinity.call_args_list == [
+        mock.call(pvector([dict(key="a_label", operator="In", value=[])])),
     ]
 
 

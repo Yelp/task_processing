@@ -9,6 +9,10 @@ from kubernetes.client import V1Capabilities
 from kubernetes.client import V1EnvVar
 from kubernetes.client import V1EnvVarSource
 from kubernetes.client import V1HostPathVolumeSource
+from kubernetes.client import V1NodeAffinity
+from kubernetes.client import V1NodeSelector
+from kubernetes.client import V1NodeSelectorRequirement
+from kubernetes.client import V1NodeSelectorTerm
 from kubernetes.client import V1SecretKeySelector
 from kubernetes.client import V1SecurityContext
 from kubernetes.client import V1Volume
@@ -16,8 +20,10 @@ from kubernetes.client import V1VolumeMount
 from pyrsistent.typing import PMap
 from pyrsistent.typing import PVector
 
+from task_processing.plugins.kubernetes.types import NodeAffinityOperator
 if TYPE_CHECKING:
     from task_processing.plugins.kubernetes.types import DockerVolume
+    from task_processing.plugins.kubernetes.types import NodeAffinity
     from task_processing.plugins.kubernetes.types import SecretEnvSource
 
 logger = logging.getLogger(__name__)
@@ -144,3 +150,49 @@ def get_pod_volumes(volumes: PVector['DockerVolume']) -> List[V1Volume]:
         )
         for name, volume in unique_volumes.items()
     ]
+
+
+def get_node_affinity(affinities: PVector["NodeAffinity"]) -> Optional[V1NodeAffinity]:
+    # convert NodeAffinity into V1NodeSelectorRequirement
+    match_expressions = []
+    for aff in affinities:
+        op = aff["operator"]
+        val = aff["value"]
+
+        if op in {NodeAffinityOperator.IN, NodeAffinityOperator.NOT_IN}:
+            if type(val) != list:
+                raise TypeError(
+                    f"got non-list value '{val}' for affinity operator '{op}'"
+                )
+            val = [str(v) for v in val]
+
+        elif op in {NodeAffinityOperator.GT, NodeAffinityOperator.LT}:
+            if type(val) != int:
+                raise TypeError(
+                    f"got non-int value '{val}' for affinity operator '{op}'"
+                )
+            val = [str(val)]
+
+        elif op in {NodeAffinityOperator.EXISTS, NodeAffinityOperator.DOES_NOT_EXIST}:
+            val = []
+
+        else:
+            raise ValueError(
+                f"got invalid affinity operator '{op}'; "
+                f"expected one of: {NodeAffinityOperator.ALL}"
+            )
+
+        match_expressions.append(
+            V1NodeSelectorRequirement(key=str(aff["key"]), operator=op, values=val)
+        )
+
+    # package into V1NodeAffinity
+    if len(match_expressions) == 0:
+        return None
+    term = V1NodeSelectorTerm(match_expressions=match_expressions)
+    selector = V1NodeSelector(node_selector_terms=[term])
+    return V1NodeAffinity(
+        # this means that the selectors are only used during scheduling.
+        # changing it while the pod is running will not cause an eviction.
+        required_during_scheduling_ignored_during_execution=selector,
+    )
