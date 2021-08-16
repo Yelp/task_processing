@@ -190,3 +190,20 @@ def test_secret_env_rejects_invalid_specification(secret_environment):
             command="fake_command",
             secret_environment=secret_environment
         )
+
+
+@pytest.mark.parametrize(
+    "node_affinity", [
+        {},  # missing required keys
+        {"key": "a_label"},  # missing operator
+        {"key": "a_label", "operator": "Exists"},  # missing value
+        {"key": "a_label", "operator": "BAD", "value": None},  # invalid operator
+    ],
+)
+def test_valid_node_affinities_invalid_affinity(node_affinity):
+    with pytest.raises(InvariantException):
+        KubernetesTaskConfig(
+            image="fake_docker_image",
+            command="fake_command",
+            node_affinities=[node_affinity]
+        )

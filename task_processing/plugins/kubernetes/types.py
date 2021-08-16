@@ -16,7 +16,16 @@ class SecretEnvSource(TypedDict):
     key: str
 
 
-# from: https://github.com/kubernetes-client/python/blob/master/kubernetes/docs/V1NodeSelectorRequirement.md
+class NodeAffinityOperator:
+    IN = "In"
+    NOT_IN = "NotIn"
+    EXISTS = "Exists"
+    DOES_NOT_EXIST = "DoesNotExist"
+    GT = "Gt"
+    LT = "Lt"
+    ALL = {IN, NOT_IN, EXISTS, DOES_NOT_EXIST, GT, LT}
+
+
 class NodeAffinity(TypedDict):
     key: str
     operator: str

@@ -15,6 +15,8 @@ from pyrsistent import PVector
 from pyrsistent import pvector
 from pyrsistent import v
 
+from task_processing.plugins.kubernetes.types import NodeAffinity
+from task_processing.plugins.kubernetes.types import NodeAffinityOperator
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 if TYPE_CHECKING:
     from task_processing.plugins.kubernetes.types import DockerVolume
@@ -85,15 +87,7 @@ DEFAULT_CAPS_DROP = {
     "SYS_CHROOT",
 }
 VALID_DOCKER_VOLUME_MODES = {"RW", "RO"}
-REQUIRED_NODE_AFFINITY_KEYS = {"key", "operator", "value"}
-NODE_AFFINITY_OP_VALUE_TYPES  = {
-    "In": (lambda vs: type(vs) == list and all(type(v) == str for v in vs), "List[str]"),
-    "NotIn": (lambda vs: type(vs) == list and all(type(v) == str for v in vs), "List[str]"),
-    "Exists": (lambda _: True, None),  # can be any type, since the value is irrelevant
-    "DoesNotExist": (lambda _: True, None),
-    "Gt": (lambda v: type(v) == int, "int"),
-    "Lt": (lambda v: type(v) == int, "int"),
-}
+REQUIRED_NODE_AFFINITY_KEYS = set(NodeAffinity.__annotations__.keys())
 
 
 def _generate_pod_suffix() -> str:
@@ -138,26 +132,19 @@ def _valid_capabilities(capabilities: Sequence[str]) -> Tuple[bool, Optional[str
     return (True, None)
 
 
-def _valid_node_affinities(node_affinities: Sequence["NodeAffinity"]) -> Tuple[bool, Optional[str]]:
-    for affinity in node_affinities:
-        missing_keys = REQUIRED_NODE_AFFINITY_KEYS.difference(set(affinity.keys()))
+def _valid_node_affinities(affinities: Sequence["NodeAffinity"]) -> Tuple[bool, Optional[str]]:
+    for aff in affinities:
+        missing_keys = REQUIRED_NODE_AFFINITY_KEYS.difference(set(aff.keys()))
         if len(missing_keys) > 0:
             return (
                 False,
-                f"Invalid node affinity: got {affinity} but missing keys {missing_keys}"
+                f"Invalid node affinity: got {aff} but missing keys {missing_keys}"
             )
-        if affinity["operator"] not in NODE_AFFINITY_OP_VALUE_TYPES:
+        if aff["operator"] not in NodeAffinityOperator.ALL:
             return (
                 False,
-                f"Invalid node affinity operator: got {affinity} but "
-                f"only the following operators allowed: {VALID_NODE_AFFINITY_OPS}"
-            )
-        type_checker, expected_type = NODE_AFFINITY_OP_VALUE_TYPES[affinity["operator"]]
-        if not type_checker(affinity["value"]):
-            return (
-                False,
-                f"Invalid node affinity value: got operator {affinity['operator']} "
-                f"but got non-{expected_type} value: {affinity['value']}",
+                f"Invalid node affinity operator: got {aff['operator']}, "
+                f"but expected one of: {NodeAffinityOperator.ALL}",
             )
     return True, None
 
