@@ -108,7 +108,6 @@ def test_KubeClient_get_pod():
         mock_kube_client.CoreV1Api().read_namespaced_pod.return_value = mock.Mock()
         client = KubeClient(kubeconfig_path=mock_config_path)
         client.get_pod(namespace='ns', pod_name='pod-name', attempts=1)
-    assert mock_kube_client.CoreV1Api().read_namespaced_pod.call_count == 1
-    mock_kube_client.CoreV1Api().read_namespaced_pod.assert_called_with(
+    mock_kube_client.CoreV1Api().read_namespaced_pod.assert_called_once_with(
         namespace='ns', name='pod-name'
     )
