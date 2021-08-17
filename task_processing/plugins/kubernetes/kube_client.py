@@ -168,7 +168,7 @@ class KubeClient:
         while attempts:
             try:
                 pod = self.core.read_namespaced_pod(
-                    namespace=namespace, name={pod_name},
+                    namespace=namespace, name=pod_name,
                 )
                 return pod
             except ApiException as e:
