@@ -92,3 +92,22 @@ def test_KubeClient_get_pod_unknown_exception():
         mock_kube_client.CoreV1Api().read_namespaced_pod.side_effect = [Exception]
         client = KubeClient(kubeconfig_path=mock_config_path)
         client.get_pod(namespace='ns', pod_name='pod-name', attempts=2)
+
+
+def test_KubeClient_get_pod():
+    with mock.patch(
+        "task_processing.plugins.kubernetes.kube_client.kube_config.load_kube_config",
+        autospec=True
+    ), mock.patch(
+        "task_processing.plugins.kubernetes.kube_client.kube_client",
+        autospec=True
+    ) as mock_kube_client, mock.patch.dict(
+        os.environ, {"KUBECONFIG": "/another/kube/config.conf"}
+    ):
+        mock_config_path = "/OVERRIDE.conf"
+        mock_kube_client.CoreV1Api().read_namespaced_pod.return_value = mock.Mock()
+        client = KubeClient(kubeconfig_path=mock_config_path)
+        client.get_pod(namespace='ns', pod_name='pod-name', attempts=1)
+    mock_kube_client.CoreV1Api().read_namespaced_pod.assert_called_once_with(
+        namespace='ns', name='pod-name'
+    )
