@@ -1,3 +1,4 @@
+import enum
 from typing import Any
 from typing import Dict
 
@@ -16,16 +17,31 @@ class SecretEnvSource(TypedDict):
     key: str
 
 
-class NodeAffinityOperator:
+class EnumSet(enum.EnumMeta):
+    def __contains__(cls, v):
+        try:
+            cls(v)
+        except ValueError:
+            return False
+        else:
+            return True
+
+
+class NodeAffinityOperator(str, enum.Enum, metaclass=EnumSet):
     IN = "In"
     NOT_IN = "NotIn"
     EXISTS = "Exists"
     DOES_NOT_EXIST = "DoesNotExist"
     GT = "Gt"
     LT = "Lt"
-    ALL = {IN, NOT_IN, EXISTS, DOES_NOT_EXIST, GT, LT}
 
 
+# the value depends on operator:
+# - In/NotIn requires a list
+# - Exists/DoesNotExist does not expect a value
+# - Gt/Lt requires an int
+# the value is converted into a list of strings, which is expected by
+# V1NodeSelectorRequirement.
 class NodeAffinity(TypedDict):
     key: str
     operator: str

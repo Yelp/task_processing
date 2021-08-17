@@ -159,40 +159,26 @@ def get_node_affinity(affinities: PVector["NodeAffinity"]) -> Optional[V1NodeAff
         op = aff["operator"]
         val = aff["value"]
 
+        # operator and value are assumed to be validated
         if op in {NodeAffinityOperator.IN, NodeAffinityOperator.NOT_IN}:
-            if type(val) != list:
-                raise TypeError(
-                    f"got non-list value '{val}' for affinity operator '{op}'"
-                )
             val = [str(v) for v in val]
-
         elif op in {NodeAffinityOperator.GT, NodeAffinityOperator.LT}:
-            if type(val) != int:
-                raise TypeError(
-                    f"got non-int value '{val}' for affinity operator '{op}'"
-                )
             val = [str(val)]
-
         elif op in {NodeAffinityOperator.EXISTS, NodeAffinityOperator.DOES_NOT_EXIST}:
             val = []
-
         else:
-            raise ValueError(
-                f"got invalid affinity operator '{op}'; "
-                f"expected one of: {NodeAffinityOperator.ALL}"
-            )
-
+            continue
         match_expressions.append(
             V1NodeSelectorRequirement(key=str(aff["key"]), operator=op, values=val)
         )
 
     # package into V1NodeAffinity
-    if len(match_expressions) == 0:
+    if not match_expressions:
         return None
-    term = V1NodeSelectorTerm(match_expressions=match_expressions)
-    selector = V1NodeSelector(node_selector_terms=[term])
     return V1NodeAffinity(
         # this means that the selectors are only used during scheduling.
         # changing it while the pod is running will not cause an eviction.
-        required_during_scheduling_ignored_during_execution=selector,
+        required_during_scheduling_ignored_during_execution=V1NodeSelector(
+            node_selector_terms=[V1NodeSelectorTerm(match_expressions=match_expressions)],
+        ),
     )

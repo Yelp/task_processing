@@ -224,17 +224,3 @@ def test_get_node_affinity_ok():
 
 def test_get_node_affinity_empty():
     assert get_node_affinity([]) is None
-
-
-@pytest.mark.parametrize(
-    "aff,exc", [
-        (NodeAffinity(key="a_label", operator="In", value=None), TypeError),
-        (NodeAffinity(key="a_label", operator="NotIn", value=None), TypeError),
-        (NodeAffinity(key="a_label", operator="Gt", value=None), TypeError),
-        (NodeAffinity(key="a_label", operator="Lt", value=None), TypeError),
-        (NodeAffinity(key="a_label", operator="BAD", value=None), ValueError),
-    ],
-)
-def test_get_node_affinity_error(aff, exc):
-    with pytest.raises(exc):
-        get_node_affinity(pvector([aff]))

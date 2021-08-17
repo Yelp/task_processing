@@ -135,17 +135,41 @@ def _valid_capabilities(capabilities: Sequence[str]) -> Tuple[bool, Optional[str
 def _valid_node_affinities(affinities: Sequence["NodeAffinity"]) -> Tuple[bool, Optional[str]]:
     for aff in affinities:
         missing_keys = REQUIRED_NODE_AFFINITY_KEYS.difference(set(aff.keys()))
-        if len(missing_keys) > 0:
+        if missing_keys:
             return (
                 False,
                 f"Invalid node affinity: got {aff} but missing keys {missing_keys}"
             )
-        if aff["operator"] not in NodeAffinityOperator.ALL:
+
+        op, val = aff["operator"], aff["value"]
+        if op not in NodeAffinityOperator:
+            valid_operators = list(o.value for o in NodeAffinityOperator)
             return (
                 False,
-                f"Invalid node affinity operator: got {aff['operator']}, "
-                f"but expected one of: {NodeAffinityOperator.ALL}",
+                f"Invalid node affinity operator: got '{op}', "
+                f"but expected one of: {valid_operators}",
             )
+
+        elif (
+            op in {NodeAffinityOperator.IN, NodeAffinityOperator.NOT_IN} and
+            type(val) != list
+        ):
+            return (
+                False,
+                "Invalid node affinity value: "
+                f"got non-list value '{val}' for affinity operator '{op}'"
+            )
+
+        elif (
+            op in {NodeAffinityOperator.GT, NodeAffinityOperator.LT} and
+            type(val) != int
+        ):
+            return (
+                False,
+                "Invalid node affinity value: "
+                f"got non-int value '{val}' for affinity operator '{op}'",
+            )
+
     return True, None
 
 
