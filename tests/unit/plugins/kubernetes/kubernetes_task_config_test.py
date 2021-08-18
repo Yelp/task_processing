@@ -190,3 +190,40 @@ def test_secret_env_rejects_invalid_specification(secret_environment):
             command="fake_command",
             secret_environment=secret_environment
         )
+
+
+@pytest.mark.parametrize(
+    "node_affinity,exc_msg", [
+        ({}, "missing keys"),  # missing required keys
+        ({"key": "a_label"}, "missing keys"),  # missing operator
+        ({"key": "a_label", "operator": "Exists"}, "missing keys"),  # missing value
+        (  # invalid operator
+            {"key": "a_label", "operator": "BAD", "value": None},
+            "got 'BAD', but expected one of",
+        ),
+        (  # non-list value
+            {"key": "a_label", "operator": "In", "value": None},
+            "got non-list value 'None' for affinity operator 'In'",
+        ),
+        (  # non-list value
+            {"key": "a_label", "operator": "NotIn", "value": None},
+            "got non-list value 'None' for affinity operator 'NotIn'",
+        ),
+        (  # non-int value
+            {"key": "a_label", "operator": "Gt", "value": None},
+            "got non-int value 'None' for affinity operator 'Gt'",
+        ),
+        (  # non-int value
+            {"key": "a_label", "operator": "Lt", "value": None},
+            "got non-int value 'None' for affinity operator 'Lt'",
+        ),
+    ],
+)
+def test_valid_node_affinities_invalid_affinity(node_affinity, exc_msg):
+    with pytest.raises(InvariantException) as exc:
+        KubernetesTaskConfig(
+            image="fake_docker_image",
+            command="fake_command",
+            node_affinities=[node_affinity]
+        )
+    assert exc_msg in exc.value.invariant_errors[0]

@@ -3,15 +3,22 @@ from kubernetes.client import V1Capabilities
 from kubernetes.client import V1EnvVar
 from kubernetes.client import V1EnvVarSource
 from kubernetes.client import V1HostPathVolumeSource
+from kubernetes.client import V1NodeAffinity
+from kubernetes.client import V1NodeSelector
+from kubernetes.client import V1NodeSelectorRequirement
+from kubernetes.client import V1NodeSelectorTerm
 from kubernetes.client import V1SecretKeySelector
 from kubernetes.client import V1SecurityContext
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
 from pyrsistent import pmap
+from pyrsistent import pvector
 from pyrsistent import v
 
+from task_processing.plugins.kubernetes.types import NodeAffinity
 from task_processing.plugins.kubernetes.utils import get_kubernetes_env_vars
 from task_processing.plugins.kubernetes.utils import get_kubernetes_volume_mounts
+from task_processing.plugins.kubernetes.utils import get_node_affinity
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 from task_processing.plugins.kubernetes.utils import get_sanitised_volume_name
@@ -173,3 +180,47 @@ def test_get_kubernetes_env_vars():
                                        )
 
     assert sorted(expected_env_vars, key=lambda x: x.name) == sorted(env_vars, key=lambda x: x.name)
+
+
+def test_get_node_affinity_ok():
+    affinities = pvector([
+        NodeAffinity(key="label0", operator="In", value=[1, 2, 3]),
+        NodeAffinity(key="label1", operator="NotIn", value=[3, 2, 1]),
+        NodeAffinity(key="label2", operator="Gt", value=1),
+        NodeAffinity(key="label3", operator="Lt", value=2),
+        NodeAffinity(key="label4", operator="Exists", value="hi"),
+        NodeAffinity(key="label5", operator="DoesNotExist", value="bye"),
+    ])
+
+    assert get_node_affinity(affinities) == V1NodeAffinity(
+        required_during_scheduling_ignored_during_execution=V1NodeSelector(
+            node_selector_terms=[
+                V1NodeSelectorTerm(
+                    match_expressions=[
+                        V1NodeSelectorRequirement(
+                            key="label0", operator="In", values=["1", "2", "3"],
+                        ),
+                        V1NodeSelectorRequirement(
+                            key="label1", operator="NotIn", values=["3", "2", "1"],
+                        ),
+                        V1NodeSelectorRequirement(
+                            key="label2", operator="Gt", values=["1"],
+                        ),
+                        V1NodeSelectorRequirement(
+                            key="label3", operator="Lt", values=["2"],
+                        ),
+                        V1NodeSelectorRequirement(
+                            key="label4", operator="Exists", values=[],
+                        ),
+                        V1NodeSelectorRequirement(
+                            key="label5", operator="DoesNotExist", values=[],
+                        ),
+                    ]
+                )
+            ]
+        )
+    )
+
+
+def test_get_node_affinity_empty():
+    assert get_node_affinity([]) is None

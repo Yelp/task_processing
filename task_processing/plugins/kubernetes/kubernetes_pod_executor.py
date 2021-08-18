@@ -7,6 +7,7 @@ from typing import Collection
 from typing import Optional
 
 from kubernetes import watch
+from kubernetes.client import V1Affinity
 from kubernetes.client import V1Container
 from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
@@ -22,11 +23,12 @@ from task_processing.interfaces.event import Event
 from task_processing.interfaces.event import task_event
 from task_processing.plugins.kubernetes.kube_client import KubeClient
 from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
-from task_processing.plugins.kubernetes.types import KubernetesTaskMetadata
-from task_processing.plugins.kubernetes.types import KubernetesTaskState
+from task_processing.plugins.kubernetes.task_metadata import KubernetesTaskMetadata
+from task_processing.plugins.kubernetes.task_metadata import KubernetesTaskState
 from task_processing.plugins.kubernetes.types import PodEvent
 from task_processing.plugins.kubernetes.utils import get_kubernetes_env_vars
 from task_processing.plugins.kubernetes.utils import get_kubernetes_volume_mounts
+from task_processing.plugins.kubernetes.utils import get_node_affinity
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_security_context_for_capabilities
 
@@ -395,7 +397,11 @@ class KubernetesPodExecutor(TaskExecutor):
                 spec=V1PodSpec(
                     restart_policy=task_config.restart_policy,
                     containers=[container],
-                    volumes=get_pod_volumes(task_config.volumes)
+                    volumes=get_pod_volumes(task_config.volumes),
+                    node_selector=dict(task_config.node_selectors),
+                    affinity=V1Affinity(
+                        node_affinity=get_node_affinity(task_config.node_affinities),
+                    )
                 ),
             )
         except Exception:

@@ -15,6 +15,8 @@ from pyrsistent import PVector
 from pyrsistent import pvector
 from pyrsistent import v
 
+from task_processing.plugins.kubernetes.types import NodeAffinity
+from task_processing.plugins.kubernetes.types import NodeAffinityOperator
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 if TYPE_CHECKING:
     from task_processing.plugins.kubernetes.types import DockerVolume
@@ -85,6 +87,7 @@ DEFAULT_CAPS_DROP = {
     "SYS_CHROOT",
 }
 VALID_DOCKER_VOLUME_MODES = {"RW", "RO"}
+REQUIRED_NODE_AFFINITY_KEYS = set(NodeAffinity.__annotations__.keys())
 
 
 def _generate_pod_suffix() -> str:
@@ -129,6 +132,47 @@ def _valid_capabilities(capabilities: Sequence[str]) -> Tuple[bool, Optional[str
     return (True, None)
 
 
+def _valid_node_affinities(affinities: Sequence["NodeAffinity"]) -> Tuple[bool, Optional[str]]:
+    for aff in affinities:
+        missing_keys = REQUIRED_NODE_AFFINITY_KEYS.difference(set(aff.keys()))
+        if missing_keys:
+            return (
+                False,
+                f"Invalid node affinity: got {aff} but missing keys {missing_keys}"
+            )
+
+        op, val = aff["operator"], aff["value"]
+        if op not in NodeAffinityOperator:
+            valid_operators = list(o.value for o in NodeAffinityOperator)
+            return (
+                False,
+                f"Invalid node affinity operator: got '{op}', "
+                f"but expected one of: {valid_operators}",
+            )
+
+        elif (
+            op in {NodeAffinityOperator.IN, NodeAffinityOperator.NOT_IN} and
+            type(val) != list
+        ):
+            return (
+                False,
+                "Invalid node affinity value: "
+                f"got non-list value '{val}' for affinity operator '{op}'"
+            )
+
+        elif (
+            op in {NodeAffinityOperator.GT, NodeAffinityOperator.LT} and
+            type(val) != int
+        ):
+            return (
+                False,
+                "Invalid node affinity value: "
+                f"got non-int value '{val}' for affinity operator '{op}'",
+            )
+
+    return True, None
+
+
 class KubernetesTaskConfig(DefaultTaskConfigInterface):
     def __invariant__(self):
         return (
@@ -148,7 +192,6 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
 
     uuid = field(type=str, initial=_generate_pod_suffix)  # type: ignore
     name = field(type=str, initial="default")
-    node_selector = field(type=PMap)
     # Hardcoded for the time being
     restart_policy = "Never"
     # By default, the retrying executor retries 3 times. This task option
@@ -210,6 +253,17 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         initial=pvector(DEFAULT_CAPS_DROP),
         factory=pvector,
         invariant=_valid_capabilities,
+    )
+    node_selectors = field(
+        type=PMap if not TYPE_CHECKING else PMap[str, str],
+        initial=m(),
+        factory=pmap,
+    )
+    node_affinities = field(
+        type=PVector if not TYPE_CHECKING else PVector["NodeAffinity"],
+        initial=v(),
+        factory=pvector,
+        invariant=_valid_node_affinities,
     )
 
     @property
