@@ -152,7 +152,7 @@ def _valid_node_affinities(affinities: Sequence["NodeAffinity"]) -> Tuple[bool, 
 
         elif (
             op in {NodeAffinityOperator.IN, NodeAffinityOperator.NOT_IN} and
-            type(val) != list
+            type(val) not in {list, tuple}
         ):
             return (
                 False,
