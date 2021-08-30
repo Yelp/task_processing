@@ -270,6 +270,13 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         initial=m(),
         factory=pmap,
     )
+    fs_group = field(
+        type=int,
+        # this is the `nobody` user at Yelp, which is what we should always be using
+        # and, as such, is probably the best default to add here.
+        initial=65534,
+        invariant=lambda group: (0 <= group <= 65534, 'fs_group must be >= 0 and <= 65,534'),
+    )
 
     @property
     def pod_name(self) -> str:

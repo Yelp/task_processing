@@ -11,6 +11,7 @@ from kubernetes.client import V1Affinity
 from kubernetes.client import V1Container
 from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
+from kubernetes.client import V1PodSecurityContext
 from kubernetes.client import V1PodSpec
 from kubernetes.client import V1ResourceRequirements
 from kubernetes.client.exceptions import ApiException
@@ -408,6 +409,10 @@ class KubernetesPodExecutor(TaskExecutor):
                     # of the other DNS policies, we can probably punt on plumbing all the
                     # bits for making this configurable
                     dns_policy="Default",
+                    share_process_namespace=True,
+                    security_context=V1PodSecurityContext(
+                        fs_group=task_config.fs_group,
+                    )
                 ),
             )
         except Exception:
