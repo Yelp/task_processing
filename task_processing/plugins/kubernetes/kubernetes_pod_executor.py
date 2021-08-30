@@ -401,7 +401,12 @@ class KubernetesPodExecutor(TaskExecutor):
                     node_selector=dict(task_config.node_selectors),
                     affinity=V1Affinity(
                         node_affinity=get_node_affinity(task_config.node_affinities),
-                    )
+                    ),
+                    # we're hardcoding this as Default as this is what we generally use
+                    # internally - until we have a usecase for something that needs one
+                    # of the other DNS policies, we can probably punt on plumbing all the
+                    # bits for making this configurable
+                    dns_policy="Default",
                 ),
             )
         except Exception:

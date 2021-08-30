@@ -146,6 +146,7 @@ def test_run(mock_get_node_affinity, k8s_executor):
             )],
             node_selector={"hello": "world"},
             affinity=V1Affinity(node_affinity=mock_get_node_affinity.return_value),
+            dns_policy="Default",
         ),
     )
 
