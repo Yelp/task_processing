@@ -265,6 +265,11 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         factory=pvector,
         invariant=_valid_node_affinities,
     )
+    labels = field(
+        type=PMap if not TYPE_CHECKING else PMap[str, str],
+        initial=m(),
+        factory=pmap,
+    )
 
     @property
     def pod_name(self) -> str:

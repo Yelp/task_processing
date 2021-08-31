@@ -109,6 +109,9 @@ def test_run(mock_get_node_affinity, k8s_executor):
         volumes=[{"host_path": "/a", "container_path": "/b", "mode": "RO"}],
         node_selectors={"hello": "world"},
         node_affinities=[dict(key="a_label", operator="In", value=[])],
+        labels={
+            "some_label": "some_label_value",
+        }
     )
     expected_container = V1Container(
         image=task_config.image,
@@ -135,7 +138,10 @@ def test_run(mock_get_node_affinity, k8s_executor):
     expected_pod = V1Pod(
         metadata=V1ObjectMeta(
             name=task_config.pod_name,
-            namespace="task_processing_tests"
+            namespace="task_processing_tests",
+            labels={
+                "some_label": "some_label_value",
+            },
         ),
         spec=V1PodSpec(
             restart_policy=task_config.restart_policy,

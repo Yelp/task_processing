@@ -392,7 +392,8 @@ class KubernetesPodExecutor(TaskExecutor):
             pod = V1Pod(
                 metadata=V1ObjectMeta(
                     name=task_config.pod_name,
-                    namespace=self.namespace
+                    namespace=self.namespace,
+                    labels=dict(task_config.labels),
                 ),
                 spec=V1PodSpec(
                     restart_policy=task_config.restart_policy,
