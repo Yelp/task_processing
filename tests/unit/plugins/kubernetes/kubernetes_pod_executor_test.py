@@ -9,6 +9,7 @@ from kubernetes.client import V1Container
 from kubernetes.client import V1HostPathVolumeSource
 from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
+from kubernetes.client import V1PodSecurityContext
 from kubernetes.client import V1PodSpec
 from kubernetes.client import V1ResourceRequirements
 from kubernetes.client import V1SecurityContext
@@ -150,6 +151,10 @@ def test_run(mock_get_node_affinity, k8s_executor):
                 host_path=V1HostPathVolumeSource(path="/a"),
                 name="host--slash-a",
             )],
+            share_process_namespace=True,
+            security_context=V1PodSecurityContext(
+                fs_group=task_config.fs_group,
+            ),
             node_selector={"hello": "world"},
             affinity=V1Affinity(node_affinity=mock_get_node_affinity.return_value),
             dns_policy="Default",
