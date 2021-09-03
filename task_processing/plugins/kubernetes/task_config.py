@@ -26,7 +26,12 @@ from task_processing.interfaces.task_executor import DefaultTaskConfigInterface
 
 POD_SUFFIX_ALPHABET = string.ascii_lowercase + string.digits
 POD_SUFFIX_LENGTH = 6
-MAX_POD_NAME_LENGTH = 253
+# The max length is actually 253, but https://github.com/kubernetes/kubernetes/issues/91410 means
+# that the effective limit is actually:
+# 255 - 63 - 37 - 2 = 153
+# or (max filename length) - (max namespace length) -(pod UID length) - (separators)
+# but let's give ourselves a little buffer so we'll round down a bit
+MAX_POD_NAME_LENGTH = 150
 VALID_POD_NAME_REGEX = '[a-z0-9]([.-a-z0-9]*[a-z0-9])?'
 VALID_VOLUME_KEYS = {'mode', 'container_path', 'host_path'}
 VALID_SECRET_ENV_KEYS = {'secret_name', 'key'}
