@@ -174,20 +174,13 @@ def _valid_node_affinities(affinities: Sequence["NodeAffinity"]) -> Tuple[bool, 
 
 
 class KubernetesTaskConfig(DefaultTaskConfigInterface):
-    def __invariant__(self):
+    def __invariant__(self) -> Tuple[Tuple[bool, str], ...]:
+        valid_length = len(self.pod_name) <= MAX_POD_NAME_LENGTH
+        valid_name = bool(re.match(VALID_POD_NAME_REGEX, self.pod_name))
+
         return (
-            (
-                len(get_sanitised_kubernetes_name(self.pod_name)) < MAX_POD_NAME_LENGTH,
-                (
-                    f'Pod name must have up to {MAX_POD_NAME_LENGTH} characters.'
-                )
-            ),
-            (
-                re.match(VALID_POD_NAME_REGEX, get_sanitised_kubernetes_name(self.pod_name)),
-                (
-                    'Must comply with Kubernetes pod naming standards.'
-                )
-            )
+            (valid_length, f'Pod name must have up to {MAX_POD_NAME_LENGTH} characters.'),
+            (valid_name, 'Must comply with Kubernetes pod naming standards.'),
         )
 
     uuid = field(type=str, initial=_generate_pod_suffix)  # type: ignore
@@ -273,7 +266,10 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
 
     @property
     def pod_name(self) -> str:
-        return get_sanitised_kubernetes_name(f'{self.name}.{self.uuid}')  # type: ignore
+        return get_sanitised_kubernetes_name(
+            f'{self.name}.{self.uuid}',  # type: ignore
+            length_limit=MAX_POD_NAME_LENGTH,
+        )
 
     def set_pod_name(self, pod_name: str):
         try:
