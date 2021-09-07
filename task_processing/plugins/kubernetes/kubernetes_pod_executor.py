@@ -194,6 +194,35 @@ class KubernetesPodExecutor(TaskExecutor):
             return
 
         if (
+            pod.status.phase in {"Succeeded", "Failed"}
+            and task_metadata.task_state is KubernetesTaskState.TASK_PENDING
+        ):
+            logger.debug(
+                f"Adding running event for {pod_name}, Kubernetes appears to have "
+                "compacted the Running phase event."
+            )
+            self.task_metadata = self.task_metadata.set(
+                pod_name,
+                task_metadata.set(
+                    node_name=pod.spec.node_name,
+                    task_state=KubernetesTaskState.TASK_RUNNING,
+                    task_state_history=task_metadata.task_state_history.append(
+                        (KubernetesTaskState.TASK_RUNNING, time.time()),
+                    )
+                )
+            )
+            self.event_queue.put(
+                task_event(
+                    task_id=pod_name,
+                    terminal=False,
+                    timestamp=time.time(),
+                    raw=raw_event,
+                    task_config=task_metadata.task_config,
+                    platform_type="running"
+                )
+            )
+
+        if (
             pod.status.phase == "Succeeded"
             and task_metadata.task_state is not KubernetesTaskState.TASK_FINISHED
         ):
