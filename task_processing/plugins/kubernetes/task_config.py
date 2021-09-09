@@ -26,7 +26,12 @@ from task_processing.interfaces.task_executor import DefaultTaskConfigInterface
 
 POD_SUFFIX_ALPHABET = string.ascii_lowercase + string.digits
 POD_SUFFIX_LENGTH = 6
-MAX_POD_NAME_LENGTH = 253
+# The max length is actually 253, but https://github.com/kubernetes/kubernetes/issues/91410 means
+# that the effective limit is actually:
+# 255 - 63 - 37 - 2 = 153
+# or (max filename length) - (max namespace length) -(pod UID length) - (separators)
+# but let's give ourselves a little buffer so we'll round down a bit
+MAX_POD_NAME_LENGTH = 150
 VALID_POD_NAME_REGEX = '[a-z0-9]([.-a-z0-9]*[a-z0-9])?'
 VALID_VOLUME_KEYS = {'mode', 'container_path', 'host_path'}
 VALID_SECRET_ENV_KEYS = {'secret_name', 'key'}
@@ -174,20 +179,13 @@ def _valid_node_affinities(affinities: Sequence["NodeAffinity"]) -> Tuple[bool, 
 
 
 class KubernetesTaskConfig(DefaultTaskConfigInterface):
-    def __invariant__(self):
+    def __invariant__(self) -> Tuple[Tuple[bool, str], ...]:
+        valid_length = len(self.pod_name) <= MAX_POD_NAME_LENGTH
+        valid_name = bool(re.match(VALID_POD_NAME_REGEX, self.pod_name))
+
         return (
-            (
-                len(get_sanitised_kubernetes_name(self.pod_name)) < MAX_POD_NAME_LENGTH,
-                (
-                    f'Pod name must have up to {MAX_POD_NAME_LENGTH} characters.'
-                )
-            ),
-            (
-                re.match(VALID_POD_NAME_REGEX, get_sanitised_kubernetes_name(self.pod_name)),
-                (
-                    'Must comply with Kubernetes pod naming standards.'
-                )
-            )
+            (valid_length, f'Pod name must have up to {MAX_POD_NAME_LENGTH} characters.'),
+            (valid_name, 'Must comply with Kubernetes pod naming standards.'),
         )
 
     uuid = field(type=str, initial=_generate_pod_suffix)  # type: ignore
@@ -280,7 +278,10 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
 
     @property
     def pod_name(self) -> str:
-        return get_sanitised_kubernetes_name(f'{self.name}.{self.uuid}')  # type: ignore
+        return get_sanitised_kubernetes_name(
+            f'{self.name}.{self.uuid}',  # type: ignore
+            length_limit=MAX_POD_NAME_LENGTH,
+        )
 
     def set_pod_name(self, pod_name: str):
         try:

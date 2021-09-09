@@ -81,18 +81,42 @@ def get_kubernetes_env_vars(
     return env_vars + secret_env_vars
 
 
-def get_sanitised_kubernetes_name(name: str, replace_dots: bool = False) -> str:
+def get_sanitised_kubernetes_name(
+    name: str,
+    replace_dots: bool = False,
+    replace_forward_slash: bool = False,
+    length_limit: int = 0,
+) -> str:
     """
     Helper to ensure that any names given to Kubernetes objects follow our conventions
 
     replace_dots is an optional parameter for objects such as Containers that cannot contain `.`s in
     their names (in contrast to objects such as Pods that can)
+
+    replace_forward_slash is an optional parameter for objects that may contain / in their "pretty"
+    names, but that cannot contain / in their Kubernetes name
+
+    NOTE: For names exceeding the length limit, we'll truncate the name and replace the
+    truncated portion with a unique suffix.
     """
     name = name.replace("_", "--")
     if name.startswith("--"):
         name = name.replace("--", "underscore-", 1)
     if replace_dots:
         name = name.replace(".", "dot-")
+    if replace_forward_slash:
+        name = name.replace("/", "slash-")
+
+    if length_limit and len(name) > length_limit:
+        # for names that exceed the length limit, we'll remove 6 characters from
+        # the part of the name that does fit in the limit in order to replace them with
+        # -- (2 characters) and then a 4 character hash (which should help ensure uniqueness
+        # after truncation).
+        name = (
+            name[0:length_limit - 6]
+            + "--"
+            + hashlib.md5(name.encode("ascii")).hexdigest()[:4]
+        )
     return name.lower()
 
 
@@ -104,15 +128,12 @@ def get_sanitised_volume_name(volume_name: str, length_limit: int = 0) -> str:
     truncated portion with a unique suffix.
     """
     volume_name = volume_name.rstrip("/")
-    sanitised = volume_name.replace("/", "slash-").replace(".", "dot-")
-    sanitised_name = get_sanitised_kubernetes_name(sanitised)
-    if length_limit and len(sanitised_name) > length_limit:
-        sanitised_name = (
-            sanitised_name[0:length_limit - 6]
-            + "--"
-            + hashlib.md5(sanitised_name.encode("ascii")).hexdigest()[:4]
-        )
-    return sanitised_name
+    return get_sanitised_kubernetes_name(
+        volume_name,
+        replace_dots=True,
+        replace_forward_slash=True,
+        length_limit=length_limit,
+    )
 
 
 def get_kubernetes_volume_mounts(volumes: PVector['DockerVolume']) -> List[V1VolumeMount]:

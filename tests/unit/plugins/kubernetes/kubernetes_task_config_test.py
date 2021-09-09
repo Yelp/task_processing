@@ -17,7 +17,7 @@ def test_kubernetes_task_config_set_pod_name():
     assert result.pod_name == "mock--pod.mock--uuid"
 
 
-def test_kubernetes_task_config_set_pod_name_rejects_long_name():
+def test_kubernetes_task_config_set_pod_name_truncates_long_name():
     task_config = KubernetesTaskConfig(
         name="fake_task_name",
         uuid="fake_id",
@@ -25,8 +25,9 @@ def test_kubernetes_task_config_set_pod_name_rejects_long_name():
         command="fake_command"
     )
 
-    with pytest.raises(InvariantException):
-        task_config.set(name='a' * 254)
+    task_config = task_config.set(name="a" * 1000)
+    assert task_config.name == "a" * 1000
+    assert task_config.pod_name != "a" * 1000
 
 
 def test_kubernetes_task_config_enforces_command_requirmenets():
