@@ -268,6 +268,11 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         initial=m(),
         factory=pmap,
     )
+    annotations = field(
+        type=PMap if not TYPE_CHECKING else PMap[str, str],
+        initial=m(),
+        factory=pmap,
+    )
     fs_group = field(
         type=int,
         # this is the `nobody` user at Yelp, which is what we should always be using

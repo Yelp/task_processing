@@ -112,7 +112,10 @@ def test_run(mock_get_node_affinity, k8s_executor):
         node_affinities=[dict(key="a_label", operator="In", value=[])],
         labels={
             "some_label": "some_label_value",
-        }
+        },
+        annotations={
+            "paasta.yelp.com/some_annotation": "some_value",
+        },
     )
     expected_container = V1Container(
         image=task_config.image,
@@ -142,6 +145,9 @@ def test_run(mock_get_node_affinity, k8s_executor):
             namespace="task_processing_tests",
             labels={
                 "some_label": "some_label_value",
+            },
+            annotations={
+                "paasta.yelp.com/some_annotation": "some_value",
             },
         ),
         spec=V1PodSpec(
