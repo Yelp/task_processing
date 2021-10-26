@@ -424,6 +424,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     name=task_config.pod_name,
                     namespace=self.namespace,
                     labels=dict(task_config.labels),
+                    annotations=dict(task_config.annotations),
                 ),
                 spec=V1PodSpec(
                     restart_policy=task_config.restart_policy,
