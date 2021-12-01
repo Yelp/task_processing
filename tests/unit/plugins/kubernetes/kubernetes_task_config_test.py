@@ -228,3 +228,36 @@ def test_valid_node_affinities_invalid_affinity(node_affinity, exc_msg):
             node_affinities=[node_affinity]
         )
     assert exc_msg in exc.value.invariant_errors[0]
+
+
+@pytest.mark.parametrize(
+    "service_account_name", (
+        "",
+        "F" * 300,
+    )
+)
+def test_service_account_name_invariant(service_account_name):
+    with pytest.raises(InvariantException):
+        KubernetesTaskConfig(
+            name="fake_task_name",
+            uuid="fake_id",
+            image="fake_docker_image",
+            command="fake_command",
+            service_account_name=service_account_name,
+        )
+
+
+@pytest.mark.parametrize(
+    "service_account_name", (
+        None,
+        "yay",
+    )
+)
+def test_service_account_name_invariant_success(service_account_name):
+    KubernetesTaskConfig(
+        name="fake_task_name",
+        uuid="fake_id",
+        image="fake_docker_image",
+        command="fake_command",
+        service_account_name=service_account_name,
+    )

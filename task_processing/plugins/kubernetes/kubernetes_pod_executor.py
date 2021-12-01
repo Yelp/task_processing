@@ -442,7 +442,8 @@ class KubernetesPodExecutor(TaskExecutor):
                     share_process_namespace=True,
                     security_context=V1PodSecurityContext(
                         fs_group=task_config.fs_group,
-                    )
+                    ),
+                    service_account_name=task_config.service_account_name,
                 ),
             )
         except Exception:

@@ -32,7 +32,8 @@ POD_SUFFIX_LENGTH = 6
 # or (max filename length) - (max namespace length) -(pod UID length) - (separators)
 # but let's give ourselves a little buffer so we'll round down a bit
 MAX_POD_NAME_LENGTH = 150
-VALID_POD_NAME_REGEX = '[a-z0-9]([.-a-z0-9]*[a-z0-9])?'
+MAX_DNS_SUBDOMAIN_NAME_LENGTH = 253
+VALID_DNS_SUBDOMAIN_NAME_REGEX = '[a-z0-9]([.-a-z0-9]*[a-z0-9])?'
 VALID_VOLUME_KEYS = {'mode', 'container_path', 'host_path'}
 VALID_SECRET_ENV_KEYS = {'secret_name', 'key'}
 VALID_CAPABILITIES = {
@@ -178,10 +179,25 @@ def _valid_node_affinities(affinities: Sequence["NodeAffinity"]) -> Tuple[bool, 
     return True, None
 
 
+def _valid_service_account_name(
+    service_account_name: Optional[str],
+) -> Tuple[Tuple[bool, str], ...]:
+    if service_account_name is None:
+        return ((True, "No account name provided"),)
+
+    valid_length = 1 <= len(service_account_name) <= MAX_DNS_SUBDOMAIN_NAME_LENGTH
+    valid_name = bool(re.match(VALID_DNS_SUBDOMAIN_NAME_REGEX, service_account_name))
+
+    return (
+        (valid_length, f'Account name length must be >=1,<={MAX_DNS_SUBDOMAIN_NAME_LENGTH}.'),
+        (valid_name, 'Account names must be valid DNS subdomain names.'),
+    )
+
+
 class KubernetesTaskConfig(DefaultTaskConfigInterface):
     def __invariant__(self) -> Tuple[Tuple[bool, str], ...]:
         valid_length = len(self.pod_name) <= MAX_POD_NAME_LENGTH
-        valid_name = bool(re.match(VALID_POD_NAME_REGEX, self.pod_name))
+        valid_name = bool(re.match(VALID_DNS_SUBDOMAIN_NAME_REGEX, self.pod_name))
 
         return (
             (valid_length, f'Pod name must have up to {MAX_POD_NAME_LENGTH} characters.'),
@@ -279,6 +295,11 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         # and, as such, is probably the best default to add here.
         initial=65534,
         invariant=lambda group: (0 <= group <= 65534, 'fs_group must be >= 0 and <= 65,534'),
+    )
+    service_account_name = field(
+        type=(str, type(None)),
+        initial=None,
+        invariant=_valid_service_account_name,
     )
 
     @property
