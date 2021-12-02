@@ -116,7 +116,7 @@ def test_run(mock_get_node_affinity, k8s_executor):
         annotations={
             "paasta.yelp.com/some_annotation": "some_value",
         },
-        service_account_name="test_sa",
+        service_account_name="testsa",
     )
     expected_container = V1Container(
         image=task_config.image,

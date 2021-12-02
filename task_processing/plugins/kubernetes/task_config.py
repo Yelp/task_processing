@@ -33,7 +33,7 @@ POD_SUFFIX_LENGTH = 6
 # but let's give ourselves a little buffer so we'll round down a bit
 MAX_POD_NAME_LENGTH = 150
 MAX_DNS_SUBDOMAIN_NAME_LENGTH = 253
-VALID_DNS_SUBDOMAIN_NAME_REGEX = '[a-z0-9]([.-a-z0-9]*[a-z0-9])?'
+VALID_DNS_SUBDOMAIN_NAME_REGEX = '^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$'
 VALID_VOLUME_KEYS = {'mode', 'container_path', 'host_path'}
 VALID_SECRET_ENV_KEYS = {'secret_name', 'key'}
 VALID_CAPABILITIES = {
