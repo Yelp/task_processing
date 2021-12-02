@@ -7,8 +7,8 @@ from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 
 def test_kubernetes_task_config_set_pod_name():
     task_config = KubernetesTaskConfig(
-        name="fake_task_name",
-        uuid="fake_id",
+        name="fake--task--name",
+        uuid="fake--id",
         image="fake_docker_image",
         command="fake_command"
     )
@@ -19,8 +19,8 @@ def test_kubernetes_task_config_set_pod_name():
 
 def test_kubernetes_task_config_set_pod_name_truncates_long_name():
     task_config = KubernetesTaskConfig(
-        name="fake_task_name",
-        uuid="fake_id",
+        name="fake--task--name",
+        uuid="fake--id",
         image="fake_docker_image",
         command="fake_command"
     )
@@ -32,8 +32,8 @@ def test_kubernetes_task_config_set_pod_name_truncates_long_name():
 
 def test_kubernetes_task_config_enforces_command_requirmenets():
     task_config = KubernetesTaskConfig(
-        name="fake_task_name",
-        uuid="fake_id",
+        name="fake--task--name",
+        uuid="fake--id",
         image="fake_docker_image",
         command="fake_command"
     )
@@ -50,8 +50,8 @@ def test_kubernetes_task_config_enforces_command_requirmenets():
 def test_cap_add_capabilities_rejects_invalid_capabilites(capabilties):
     with pytest.raises(InvariantException):
         KubernetesTaskConfig(
-            name="fake_task_name",
-            uuid="fake_id",
+            name="fake--task--name",
+            uuid="fake--id",
             image="fake_docker_image",
             command="fake_command",
             cap_add=capabilties,
@@ -66,8 +66,8 @@ def test_cap_add_capabilities_rejects_invalid_capabilites(capabilties):
 )
 def test_cap_add_capabilities_valid_capabilites(capabilties):
     task_config = KubernetesTaskConfig(
-        name="fake_task_name",
-        uuid="fake_id",
+        name="fake--task--name",
+        uuid="fake--id",
         image="fake_docker_image",
         command="fake_command",
         cap_add=capabilties,
@@ -84,8 +84,8 @@ def test_cap_add_capabilities_valid_capabilites(capabilties):
 def test_cap_drop_capabilities_rejects_invalid_capabilites(capabilties):
     with pytest.raises(InvariantException):
         KubernetesTaskConfig(
-            name="fake_task_name",
-            uuid="fake_id",
+            name="fake--task--name",
+            uuid="fake--id",
             image="fake_docker_image",
             command="fake_command",
             cap_drop=capabilties,
@@ -100,8 +100,8 @@ def test_cap_drop_capabilities_rejects_invalid_capabilites(capabilties):
 )
 def test_cap_drop_capabilities_valid_capabilites(capabilties):
     task_config = KubernetesTaskConfig(
-        name="fake_task_name",
-        uuid="fake_id",
+        name="fake--task--name",
+        uuid="fake--id",
         image="fake_docker_image",
         command="fake_command",
         cap_drop=capabilties,
@@ -124,8 +124,8 @@ def test_cap_drop_capabilities_valid_capabilites(capabilties):
 def test_volume_rejects_invalid_specification(volumes):
     with pytest.raises(InvariantException):
         KubernetesTaskConfig(
-            name="fake_task_name",
-            uuid="fake_id",
+            name="fake--task--name",
+            uuid="fake--id",
             image="fake_docker_image",
             command="fake_command",
             volumes=volumes
@@ -143,8 +143,8 @@ def test_volume_rejects_invalid_specification(volumes):
 )
 def test_volume_valid_specification(volumes):
     task_config = KubernetesTaskConfig(
-        name="fake_task_name",
-        uuid="fake_id",
+        name="fake--task--name",
+        uuid="fake--id",
         image="fake_docker_image",
         command="fake_command",
         volumes=volumes
@@ -164,8 +164,8 @@ def test_volume_valid_specification(volumes):
 )
 def test_secret_env_valid_specification(secret_environment):
     task_config = KubernetesTaskConfig(
-        name="fake_task_name",
-        uuid="fake_id",
+        name="fake--task--name",
+        uuid="fake--id",
         image="fake_docker_image",
         command="fake_command",
         secret_environment=secret_environment
@@ -185,8 +185,8 @@ def test_secret_env_valid_specification(secret_environment):
 def test_secret_env_rejects_invalid_specification(secret_environment):
     with pytest.raises(InvariantException):
         KubernetesTaskConfig(
-            name="fake_task_name",
-            uuid="fake_id",
+            name="fake--task--name",
+            uuid="fake--id",
             image="fake_docker_image",
             command="fake_command",
             secret_environment=secret_environment
@@ -228,3 +228,37 @@ def test_valid_node_affinities_invalid_affinity(node_affinity, exc_msg):
             node_affinities=[node_affinity]
         )
     assert exc_msg in exc.value.invariant_errors[0]
+
+
+@pytest.mark.parametrize(
+    "service_account_name", (
+        "",
+        "F" * 300,
+        "bad_name",
+    )
+)
+def test_service_account_name_invariant(service_account_name):
+    with pytest.raises(InvariantException):
+        KubernetesTaskConfig(
+            name="fake--task--name",
+            uuid="fake--id",
+            image="fake_docker_image",
+            command="fake_command",
+            service_account_name=service_account_name,
+        )
+
+
+@pytest.mark.parametrize(
+    "service_account_name", (
+        None,
+        "yay",
+    )
+)
+def test_service_account_name_invariant_success(service_account_name):
+    KubernetesTaskConfig(
+        name="fake--task--name",
+        uuid="fake--id",
+        image="fake_docker_image",
+        command="fake_command",
+        service_account_name=service_account_name,
+    )
