@@ -1,4 +1,7 @@
-FROM ubuntu:xenial
+FROM ubuntu:bionic
+
+ARG PIP_INDEX_URL
+ENV PIP_INDEX_URL=${PIP_INDEX_URL:-https://pypi.python.org/simple}
 
 RUN apt-get update -q && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -9,7 +12,6 @@ RUN apt-get update -q && \
         openssh-server docker.io curl vim jq libsvn-dev \
     && apt-get clean
 
-RUN add-apt-repository ppa:deadsnakes
 RUN apt-get update -q && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3.6 python3.6-dev python3.6-venv
 RUN wget https://bootstrap.pypa.io/get-pip.py
@@ -24,17 +26,12 @@ RUN cd /tmp && \
 RUN sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd
 RUN mkdir /var/run/sshd
 
-RUN pip3 install --upgrade setuptools
-RUN pip3 install --upgrade pip==10.0.1
-RUN pip3 install --upgrade virtualenv==15.1.0
-
 ADD . /src
 ENV PYTHONPATH=/src
 WORKDIR /src
 
 # temporarily downpin cryptography until we can make it grab the correct pre-built wheel in itests
-RUN pip3 install cryptography==2.7
-RUN python3 setup.py install
+RUN pip3 install .
 RUN pip3 install -r requirements-dev.txt
 RUN pip3 install pymesos
 
