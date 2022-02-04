@@ -4,12 +4,14 @@ from kubernetes.client import V1EmptyDirVolumeSource
 from kubernetes.client import V1EnvVar
 from kubernetes.client import V1EnvVarSource
 from kubernetes.client import V1HostPathVolumeSource
+from kubernetes.client import V1KeyToPath
 from kubernetes.client import V1NodeAffinity
 from kubernetes.client import V1NodeSelector
 from kubernetes.client import V1NodeSelectorRequirement
 from kubernetes.client import V1NodeSelectorTerm
 from kubernetes.client import V1ObjectFieldSelector
 from kubernetes.client import V1SecretKeySelector
+from kubernetes.client import V1SecretVolumeSource
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
 from pyrsistent import pmap
@@ -20,9 +22,11 @@ from task_processing.plugins.kubernetes.types import NodeAffinity
 from task_processing.plugins.kubernetes.utils import get_capabilities_for_capability_changes
 from task_processing.plugins.kubernetes.utils import get_kubernetes_empty_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_kubernetes_env_vars
+from task_processing.plugins.kubernetes.utils import get_kubernetes_secret_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_kubernetes_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_node_affinity
 from task_processing.plugins.kubernetes.utils import get_pod_empty_volumes
+from task_processing.plugins.kubernetes.utils import get_pod_secret_volumes
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 from task_processing.plugins.kubernetes.utils import get_sanitised_volume_name
@@ -129,6 +133,137 @@ def test_get_pod_volumes(volumes, expected):
 
 
 @pytest.mark.parametrize(
+    "volumes,expected", (
+        (
+            v({
+                "container_path": "/b",
+                "secret_volume_name": "secretvolumename",
+                "secret_name": "secret",
+                "default_mode": "755",
+                "items": None,
+            }),
+            [V1VolumeMount(mount_path="/b", name="secret--secret", read_only=True)]
+        ),
+        (
+            v({
+                "container_path": "/b",
+                "secret_volume_name": "secretvolumename",
+                "secret_name": "secret",
+                "default_mode": "755",
+                "items": [
+                    {
+                        "key": "key",
+                        "path": "path",
+                        "mode": "755",
+                    }
+                ],
+            }),
+            [V1VolumeMount(mount_path="/b", name="secret--secret", read_only=True)]
+        ),
+    )
+)
+def test_get_kubernetes_secret_volume_mounts(volumes, expected):
+    assert get_kubernetes_secret_volume_mounts(volumes) == expected
+
+
+@pytest.mark.parametrize(
+    "volumes,expected", (
+        (
+            v({
+                "container_path": "/b",
+                "secret_volume_name": "secretvolumename",
+                "secret_name": "secret",
+                "default_mode": "755",
+                "items": None,
+            }),
+            [V1Volume(
+                name="secret--secret",
+                secret=V1SecretVolumeSource(
+                    secret_name="secretvolumename",
+                    default_mode=493,
+                    items=None,
+                ),
+            )]
+        ),
+        (
+            v({
+                "container_path": "/b",
+                "secret_volume_name": "secretvolumename",
+                "secret_name": "secret",
+                "default_mode": "755",
+                "items": [
+                    {
+                        "key": "key",
+                        "path": "path",
+                        "mode": "755",
+                    }
+                ],
+            }),
+            [V1Volume(
+                name="secret--secret",
+                secret=V1SecretVolumeSource(
+                    secret_name="secretvolumename",
+                    default_mode=493,
+                    items=[
+                        V1KeyToPath(
+                            key="key",
+                            mode=493,
+                            path="path",
+                        )
+                    ],
+                ),
+            )]
+        ),
+        (
+            v({
+                "container_path": "/b",
+                "secret_volume_name": "secretvolumename",
+                "secret_name": "secret",
+                "default_mode": "755",
+                "items": None,
+            },
+                {
+                "container_path": "/c",
+                "secret_volume_name": "secretvolumename2",
+                "secret_name": "secret2",
+                "default_mode": "755",
+                "items": [
+                    {
+                        "key": "key",
+                        "path": "path",
+                        "mode": "755",
+                    }
+                ],
+            }),
+            [V1Volume(
+                name="secret--secret",
+                secret=V1SecretVolumeSource(
+                    secret_name="secretvolumename",
+                    default_mode=493,
+                    items=None,
+                ),
+            ), V1Volume(
+                name="secret--secret2",
+                secret=V1SecretVolumeSource(
+                    secret_name="secretvolumename2",
+                    default_mode=493,
+                    items=[
+                        V1KeyToPath(
+                            key="key",
+                            mode=493,
+                            path="path",
+                        )
+                    ],
+                ),
+            )]
+        ),
+    )
+)
+def test_get_pod_secret_volumes(volumes, expected):
+    assert get_pod_secret_volumes(volumes) == expected
+
+
+@pytest.mark.parametrize(
     "empty_volumes,expected", (
         (
             v({"container_path": "/a", "medium": None, "size": None}),
@@ -159,7 +294,7 @@ def test_get_kubernetes_empty_volume_mounts(empty_volumes, expected):
                 name="empty--slash-a",
                 empty_dir=V1EmptyDirVolumeSource(medium="Memory", size_limit="1500m")
             )]
-        ),
+        )
     )
 )
 def test_get_pod_empty_volumes(empty_volumes, expected):

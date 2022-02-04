@@ -22,7 +22,10 @@ from task_processing.plugins.kubernetes.types import EmptyVolume
 from task_processing.plugins.kubernetes.types import NodeAffinity
 from task_processing.plugins.kubernetes.types import NodeAffinityOperator
 from task_processing.plugins.kubernetes.types import ObjectFieldSelectorSource
+from task_processing.plugins.kubernetes.types import SecretVolume
+from task_processing.plugins.kubernetes.types import SecretVolumeItem
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
+from task_processing.plugins.kubernetes.utils import mode_to_int
 if TYPE_CHECKING:
     from task_processing.plugins.kubernetes.types import SecretEnvSource
 
@@ -40,6 +43,8 @@ MAX_DNS_SUBDOMAIN_NAME_LENGTH = 253
 VALID_DNS_SUBDOMAIN_NAME_REGEX = '^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$'
 VALID_EMPTY_VOLUME_KEYS = set(EmptyVolume.__annotations__.keys())
 VALID_VOLUME_KEYS = set(DockerVolume.__annotations__.keys())
+VALID_SECRET_VOLUME_KEYS = set(SecretVolume.__annotations__.keys())
+VALID_SECRET_VOLUME_ITEM_KEYS = set(SecretVolumeItem.__annotations__.keys())
 VALID_SECRET_ENV_KEYS = {'secret_name', 'key'}
 VALID_FIELD_SELECTOR_ENV_KEYS = {'field_path'}
 VALID_CAPABILITIES = {
@@ -136,6 +141,47 @@ def _valid_empty_volumes(volumes: Sequence[EmptyVolume]) -> Tuple[bool, Optional
                 False,
                 f"Invalid medium for empty volume, must be one of {VALID_DOCKER_VOLUME_MEDIUM}",
             )
+    return (True, None)
+
+
+def _valid_secret_volumes(volumes: Sequence[SecretVolume]) -> Tuple[bool, Optional[str]]:
+    for volume in volumes:
+        if set(volume.keys()) != VALID_SECRET_VOLUME_KEYS:
+            return (
+                False,
+                f'Invalid volume format, must only contain following keys: '
+                f'{VALID_SECRET_VOLUME_KEYS}, got: {volume.keys()}'
+            )
+
+        if volume['default_mode'] is not None:
+            try:
+                mode_to_int(volume['default_mode'])
+            except (TypeError, ValueError):
+                return (
+                    False,
+                    "Invalid mode for volume, expected octal value (as a string). "
+                    f"Got {volume['default_mode']}",
+                )
+
+        if volume["items"]:
+            for item in volume["items"]:
+                if set(item.keys()) != VALID_SECRET_VOLUME_ITEM_KEYS:
+                    return (
+                        False,
+                        f'Invalid secret item format, must only contain following keys: '
+                        f'{VALID_SECRET_VOLUME_ITEM_KEYS}, got: {item.keys()}'
+                    )
+
+                if item['mode'] is not None:
+                    try:
+                        mode_to_int(item['mode'])
+                    except (TypeError, ValueError):
+                        return (
+                            False,
+                            "Invalid mode for item, expected octal value (as a string). "
+                            f"Got {item['mode']}",
+                        )
+
     return (True, None)
 
 
@@ -282,6 +328,12 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         initial=v(),
         factory=pvector,
         invariant=_valid_volumes,
+    )
+    secret_volumes = field(
+        type=PVector if not TYPE_CHECKING else PVector["SecretVolume"],
+        initial=v(),
+        factory=pvector,
+        invariant=_valid_secret_volumes,
     )
 
     extra_containers = field(

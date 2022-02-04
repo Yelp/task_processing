@@ -1,6 +1,7 @@
 import enum
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Optional
 
 from kubernetes.client import V1Pod
@@ -17,6 +18,20 @@ class EmptyVolume(TypedDict):
     container_path: str
     medium: Optional[str]  # XXX: Optional[Literal["Memory"]] In this case
     size: Optional[str]  # XXX: implement a validator for this
+
+
+class SecretVolumeItem(TypedDict):
+    key: str
+    path: str
+    mode: Optional[str]  # octal permissions mode
+
+
+class SecretVolume(TypedDict):
+    secret_volume_name: str
+    secret_name: str
+    container_path: str
+    default_mode: Optional[str]  # octal permissions mode
+    items: List[SecretVolumeItem]
 
 
 class SecretEnvSource(TypedDict):
