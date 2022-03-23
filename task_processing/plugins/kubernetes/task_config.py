@@ -196,6 +196,13 @@ def _valid_node_affinities(affinities: Sequence["NodeAffinity"]) -> Tuple[bool, 
     return True, None
 
 
+def _valid_port(ports: Sequence[int]) -> Tuple[bool, Optional[str]]:
+    if not all(0 < port < 65536 for port in ports):
+        return False, f"All ports must be between 0 and 65536: got {ports}"
+
+    return True, None
+
+
 def _valid_service_account_name(
     service_account_name: Optional[str],
 ) -> Tuple[Tuple[bool, str], ...]:
@@ -323,6 +330,12 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         type=(str, type(None)),
         initial=None,
         invariant=_valid_service_account_name,
+    )
+    ports = field(
+        type=PVector if not TYPE_CHECKING else PVector[int],
+        initial=v(),
+        factory=pvector,
+        invariant=_valid_port,
     )
 
     @property
