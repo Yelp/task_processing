@@ -17,6 +17,7 @@ from pyrsistent import v
 
 from task_processing.plugins.kubernetes.types import NodeAffinity
 from task_processing.plugins.kubernetes.types import NodeAffinityOperator
+from task_processing.plugins.kubernetes.types import ObjectFieldSelectorSource
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 if TYPE_CHECKING:
     from task_processing.plugins.kubernetes.types import DockerVolume
@@ -36,6 +37,7 @@ MAX_DNS_SUBDOMAIN_NAME_LENGTH = 253
 VALID_DNS_SUBDOMAIN_NAME_REGEX = '^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$'
 VALID_VOLUME_KEYS = {'mode', 'container_path', 'host_path'}
 VALID_SECRET_ENV_KEYS = {'secret_name', 'key'}
+VALID_FIELD_SELECTOR_ENV_KEYS = {'field_path'}
 VALID_CAPABILITIES = {
     "AUDIT_CONTROL",
     "AUDIT_READ",
@@ -124,6 +126,21 @@ def _valid_secret_envs(secret_envs: Mapping[str, "SecretEnvSource"]) -> Tuple[bo
                 False,
                 f'Invalid secret environment variable {key}, must only contain following keys: '
                 f'{VALID_SECRET_ENV_KEYS}, got: {value.keys()}'
+            )
+    return (True, None)
+
+
+def _valid_field_selector_envs(
+    field_selector_envs: Mapping[str, "ObjectFieldSelectorSource"],
+) -> Tuple[bool, Optional[str]]:
+    # Note we are not validating existence of the path referenced by the field selector here,
+    # leave that to creation of pod
+    for key, value in field_selector_envs.items():
+        if set(value.keys()) != VALID_FIELD_SELECTOR_ENV_KEYS:
+            return (
+                False,
+                f'Invalid field selector environment variable {key}, must only contain following '
+                f'keys: {VALID_FIELD_SELECTOR_ENV_KEYS}, got: {value.keys()}'
             )
     return (True, None)
 
@@ -255,6 +272,12 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         initial=m(),
         factory=pmap,
         invariant=_valid_secret_envs,
+    )
+    field_selector_environment = field(
+        type=PMap if not TYPE_CHECKING else PMap[str, 'ObjectFieldSelectorSource'],
+        initial=m(),
+        factory=pmap,
+        invariant=_valid_field_selector_envs,
     )
     cap_add = field(
         type=PVector if not TYPE_CHECKING else PVector[str],

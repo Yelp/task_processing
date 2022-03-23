@@ -17,6 +17,10 @@ class SecretEnvSource(TypedDict):
     key: str
 
 
+class ObjectFieldSelectorSource(TypedDict):
+    field_path: str  # full field path - e.g., status.podIP
+
+
 class EnumSet(enum.EnumMeta):
     def __contains__(cls, v):
         try:

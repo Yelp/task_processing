@@ -13,6 +13,7 @@ from kubernetes.client import V1NodeAffinity
 from kubernetes.client import V1NodeSelector
 from kubernetes.client import V1NodeSelectorRequirement
 from kubernetes.client import V1NodeSelectorTerm
+from kubernetes.client import V1ObjectFieldSelector
 from kubernetes.client import V1SecretKeySelector
 from kubernetes.client import V1SecurityContext
 from kubernetes.client import V1Volume
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
     from task_processing.plugins.kubernetes.types import DockerVolume
     from task_processing.plugins.kubernetes.types import NodeAffinity
     from task_processing.plugins.kubernetes.types import SecretEnvSource
+    from task_processing.plugins.kubernetes.types import ObjectFieldSelectorSource
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +55,9 @@ def get_security_context_for_capabilities(
 
 
 def get_kubernetes_env_vars(
-    environment: PMap[str, str], secret_environment: PMap[str, 'SecretEnvSource'],
+    environment: PMap[str, str],
+    secret_environment: PMap[str, 'SecretEnvSource'],
+    field_selector_environment: PMap[str, 'ObjectFieldSelectorSource'],
 ) -> List[V1EnvVar]:
     """
     Given a dict of environment variables, transform them into the corresponding Kubernetes
@@ -78,7 +82,20 @@ def get_kubernetes_env_vars(
         in secret_environment.items()
     ]
 
-    return env_vars + secret_env_vars
+    field_selector_env_vars = [
+        V1EnvVar(
+            name=key,
+            value_from=V1EnvVarSource(
+                field_ref=V1ObjectFieldSelector(
+                    field_path=value["field_path"],
+                )
+            ),
+        )
+        for key, value
+        in field_selector_environment.items()
+    ]
+
+    return env_vars + secret_env_vars + field_selector_env_vars
 
 
 def get_sanitised_kubernetes_name(
