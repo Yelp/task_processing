@@ -7,6 +7,7 @@ from kubernetes.client import V1NodeAffinity
 from kubernetes.client import V1NodeSelector
 from kubernetes.client import V1NodeSelectorRequirement
 from kubernetes.client import V1NodeSelectorTerm
+from kubernetes.client import V1ObjectFieldSelector
 from kubernetes.client import V1SecretKeySelector
 from kubernetes.client import V1SecurityContext
 from kubernetes.client import V1Volume
@@ -143,6 +144,13 @@ def test_get_kubernetes_env_vars():
             },
         }
     )
+    test_field_selector_env_vars = pmap(
+        {
+            "PAASTA_POD_IP": {
+                "field_path": "status.podIP"
+            }
+        }
+    )
 
     expected_env_vars = [
         V1EnvVar(name="FAKE_PLAIN_VAR", value="not_secret_data"),
@@ -166,18 +174,30 @@ def test_get_kubernetes_env_vars():
                 ),
             ),
         ),
+        V1EnvVar(
+            name="PAASTA_POD_IP",
+            value_from=V1EnvVarSource(
+                field_ref=V1ObjectFieldSelector(
+                    field_path="status.podIP",
+                )
+            ),
+        )
     ]
-    env_vars = get_kubernetes_env_vars(environment=test_env_vars,
-                                       secret_environment=test_secret_env_vars,
-                                       )
+    env_vars = get_kubernetes_env_vars(
+        environment=test_env_vars,
+        secret_environment=test_secret_env_vars,
+        field_selector_environment=test_field_selector_env_vars,
+    )
 
     assert sorted(expected_env_vars, key=lambda x: x.name) == sorted(env_vars, key=lambda x: x.name)
 
     test_dupe_env_vars = test_env_vars.set("FAKE_SECRET", "SECRET(not_secret_data)")
 
-    env_vars = get_kubernetes_env_vars(environment=test_dupe_env_vars,
-                                       secret_environment=test_secret_env_vars,
-                                       )
+    env_vars = get_kubernetes_env_vars(
+        environment=test_dupe_env_vars,
+        secret_environment=test_secret_env_vars,
+        field_selector_environment=test_field_selector_env_vars,
+    )
 
     assert sorted(expected_env_vars, key=lambda x: x.name) == sorted(env_vars, key=lambda x: x.name)
 

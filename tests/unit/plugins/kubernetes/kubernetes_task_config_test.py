@@ -194,6 +194,47 @@ def test_secret_env_rejects_invalid_specification(secret_environment):
 
 
 @pytest.mark.parametrize(
+    "field_selector_environment", (
+        pmap({'PAASTA_POD_IP': {"field_path": "status.podIP"}}),
+        pmap({
+            'PAASTA_POD_IP': {"field_path": "status.podIP"},
+            'PAASTA_HOST': {"field_path": "spec.nodeName"},
+        }),
+    )
+)
+def test_field_selector_env_valid_specification(field_selector_environment):
+    task_config = KubernetesTaskConfig(
+        name="fake--task--name",
+        uuid="fake--id",
+        image="fake_docker_image",
+        command="fake_command",
+        field_selector_environment=field_selector_environment
+    )
+
+    assert task_config.field_selector_environment == field_selector_environment
+
+
+@pytest.mark.parametrize(
+    "field_selector_environment", (
+        pmap({'PAASTA_POD_IP': {}}),
+        pmap({
+            'PAASTA_POD_IP': {"path": "status.podIP"},
+            'PAASTA_HOST': {"field_path": "spec.nodeName"},
+        }),
+    )
+)
+def test_field_selector_env_rejects_invalid_specification(field_selector_environment):
+    with pytest.raises(InvariantException):
+        KubernetesTaskConfig(
+            name="fake--task--name",
+            uuid="fake--id",
+            image="fake_docker_image",
+            command="fake_command",
+            field_selector_environment=field_selector_environment
+        )
+
+
+@pytest.mark.parametrize(
     "node_affinity,exc_msg", [
         ({}, "missing keys"),  # missing required keys
         ({"key": "a_label"}, "missing keys"),  # missing operator
