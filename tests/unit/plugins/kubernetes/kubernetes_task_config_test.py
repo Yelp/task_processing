@@ -303,3 +303,39 @@ def test_service_account_name_invariant_success(service_account_name):
         command="fake_command",
         service_account_name=service_account_name,
     )
+
+
+@pytest.mark.parametrize(
+    "ports", (
+        [0],
+        [99999],
+        [65536],
+        [1, 2, 3, 4, 0],
+    ),
+)
+def test_valid_ports_invariant_failure(ports):
+    with pytest.raises(InvariantException):
+        KubernetesTaskConfig(
+            image="fake_docker_image",
+            command="fake_command",
+            ports=ports
+        )
+
+
+@pytest.mark.parametrize(
+    "ports", (
+        [1],
+        [65535],
+        [1, 2, 3, 4, 5],
+    ),
+)
+def test_valid_ports_invariant(ports):
+    task_config = KubernetesTaskConfig(
+        name="fake--task--name",
+        uuid="fake--id",
+        image="fake_docker_image",
+        command="fake_command",
+        ports=ports,
+    )
+
+    assert task_config.ports == ports

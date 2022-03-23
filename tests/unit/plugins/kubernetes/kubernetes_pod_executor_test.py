@@ -15,6 +15,7 @@ from kubernetes.client import V1ResourceRequirements
 from kubernetes.client import V1SecurityContext
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
+from kubernetes.client.models.v1_container_port import V1ContainerPort
 from pyrsistent import pmap
 from pyrsistent import pvector
 from pyrsistent import v
@@ -117,6 +118,7 @@ def test_run(mock_get_node_affinity, k8s_executor):
             "paasta.yelp.com/some_annotation": "some_value",
         },
         service_account_name="testsa",
+        ports=[8888],
     )
     expected_container = V1Container(
         image=task_config.image,
@@ -139,6 +141,7 @@ def test_run(mock_get_node_affinity, k8s_executor):
             name="host--slash-a",
             read_only=True,
         )],
+        ports=[V1ContainerPort(container_port=8888)],
     )
     expected_pod = V1Pod(
         metadata=V1ObjectMeta(
