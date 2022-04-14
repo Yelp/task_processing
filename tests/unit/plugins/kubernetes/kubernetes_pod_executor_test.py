@@ -6,6 +6,7 @@ from kubernetes.client import ApiException
 from kubernetes.client import V1Affinity
 from kubernetes.client import V1Capabilities
 from kubernetes.client import V1Container
+from kubernetes.client import V1ContainerPort
 from kubernetes.client import V1HostPathVolumeSource
 from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
@@ -15,7 +16,6 @@ from kubernetes.client import V1ResourceRequirements
 from kubernetes.client import V1SecurityContext
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
-from kubernetes.client.models.v1_container_port import V1ContainerPort
 from pyrsistent import pmap
 from pyrsistent import pvector
 from pyrsistent import v
