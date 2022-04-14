@@ -9,6 +9,7 @@ from typing import Optional
 from kubernetes import watch
 from kubernetes.client import V1Affinity
 from kubernetes.client import V1Container
+from kubernetes.client import V1ContainerPort
 from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
 from kubernetes.client import V1PodSecurityContext
@@ -418,7 +419,8 @@ class KubernetesPodExecutor(TaskExecutor):
                     secret_environment=task_config.secret_environment,
                     field_selector_environment=task_config.field_selector_environment,
                 ),
-                volume_mounts=get_kubernetes_volume_mounts(task_config.volumes)
+                volume_mounts=get_kubernetes_volume_mounts(task_config.volumes),
+                ports=[V1ContainerPort(container_port=port) for port in task_config.ports],
             )
             pod = V1Pod(
                 metadata=V1ObjectMeta(

@@ -6,6 +6,7 @@ from kubernetes.client import ApiException
 from kubernetes.client import V1Affinity
 from kubernetes.client import V1Capabilities
 from kubernetes.client import V1Container
+from kubernetes.client import V1ContainerPort
 from kubernetes.client import V1HostPathVolumeSource
 from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
@@ -117,6 +118,7 @@ def test_run(mock_get_node_affinity, k8s_executor):
             "paasta.yelp.com/some_annotation": "some_value",
         },
         service_account_name="testsa",
+        ports=[8888],
     )
     expected_container = V1Container(
         image=task_config.image,
@@ -139,6 +141,7 @@ def test_run(mock_get_node_affinity, k8s_executor):
             name="host--slash-a",
             read_only=True,
         )],
+        ports=[V1ContainerPort(container_port=8888)],
     )
     expected_pod = V1Pod(
         metadata=V1ObjectMeta(
