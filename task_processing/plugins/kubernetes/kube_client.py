@@ -1,6 +1,8 @@
 import logging
 import os
 from http import HTTPStatus
+from typing import Any
+from typing import Dict
 from typing import Optional
 
 from kubernetes import client as kube_client
@@ -18,21 +20,28 @@ class ExceededMaxAttempts(Exception):
 
 
 class KubeClient:
-    def __init__(self, kubeconfig_path: Optional[str] = None) -> None:
+    def __init__(self, kubeconfig_path: Optional[str] = None, kubeconfig_dict: Optional[Dict[Any, Any]] = None) -> None:
         kubeconfig_path = kubeconfig_path or os.environ.get("KUBECONFIG")
-        if kubeconfig_path is None:
+        if kubeconfig_dict is None and kubeconfig_path is None:
             raise ValueError(
                 "No kubeconfig specified: set a KUBECONFIG environment variable "
                 "or pass a value for `kubeconfig_path`!"
             )
 
         self.kubeconfig_path = kubeconfig_path
+        self.kubeconfig_dict = kubeconfig_dict
         self.kubecontext = os.environ.get("KUBECONTEXT")
 
-        kube_config.load_kube_config(
-            config_file=self.kubeconfig_path,
-            context=self.kubecontext
-        )
+        if not self.kubeconfig_dict:
+            kube_config.load_kube_config(
+                config_file=self.kubeconfig_path,
+                context=self.kubecontext
+            )
+        else:
+            kube_config.load_kube_config_from_dict(
+                self.kubeconfig_dict,
+                context=self.kubecontext
+            )
 
         # any Kubernetes APIs that we use should be added as members here (much like as we
         # do in the KubeClient class in PaaSTA) to ensure that they're only used after we've

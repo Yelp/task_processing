@@ -3,7 +3,9 @@ import queue
 import threading
 import time
 from queue import Queue
+from typing import Any
 from typing import Collection
+from typing import Dict
 from typing import Optional
 
 from kubernetes import watch
@@ -54,9 +56,11 @@ class KubernetesPodExecutor(TaskExecutor):
         self,
         namespace: str,
         kubeconfig_path: Optional[str] = None,
+        kubeconfig_dict: Optional[Dict[Any, Any]] = None,
         task_configs: Optional[Collection[KubernetesTaskConfig]] = [],
     ) -> None:
-        self.kube_client = KubeClient(kubeconfig_path=kubeconfig_path)
+        self.kube_client = KubeClient(kubeconfig_path=kubeconfig_path,
+                                      kubeconfig_dict=kubeconfig_dict)
         self.namespace = namespace
         self.stopping = False
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
