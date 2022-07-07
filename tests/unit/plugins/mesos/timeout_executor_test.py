@@ -1,4 +1,3 @@
-import time
 from queue import Queue
 
 import mock
@@ -76,9 +75,9 @@ def test_timeout_loop_nontask(
     mock_timeout_executor.stopping = True
     mock_timeout_executor.src_queue.put(mock_event)
     mock_timeout_executor.running_tasks.append(mock_entry)
-    time.time = mock.Mock(return_value=0)
 
-    mock_timeout_executor.timeout_loop()
+    with mock.patch('time.time', mock.Mock(return_value=0)):
+        mock_timeout_executor.timeout_loop()
 
     assert len(mock_timeout_executor.running_tasks) == 1
 
@@ -111,9 +110,9 @@ def test_timeout_loop_existing_nonterminal_task(
     mock_timeout_executor.src_queue.put(mock_event)
     mock_timeout_executor.running_tasks.append(mock_entry)
     mock_timeout_executor.downstream_executor.kill = mock.Mock()
-    time.time = mock.Mock(return_value=10000)
 
-    mock_timeout_executor.timeout_loop()
+    with mock.patch('time.time', mock.Mock(return_value=10000)):
+        mock_timeout_executor.timeout_loop()
 
     assert mock_timeout_executor.downstream_executor.kill.call_args ==\
         mock.call(mock_entry.task_id)
@@ -130,9 +129,9 @@ def test_timeout_loop_nonexistent_nonterminal_task(
     mock_timeout_executor.stopping = True
     mock_timeout_executor.src_queue.put(mock_event)
     mock_timeout_executor.downstream_executor.kill = mock.Mock()
-    time.time = mock.Mock(return_value=10000)
 
-    mock_timeout_executor.timeout_loop()
+    with mock.patch('time.time', mock.Mock(return_value=10000)):
+        mock_timeout_executor.timeout_loop()
 
     assert mock_timeout_executor.downstream_executor.kill.call_args ==\
         mock.call(mock_entry.task_id)
