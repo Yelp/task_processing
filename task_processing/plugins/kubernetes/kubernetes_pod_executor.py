@@ -28,9 +28,11 @@ from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 from task_processing.plugins.kubernetes.task_metadata import KubernetesTaskMetadata
 from task_processing.plugins.kubernetes.task_metadata import KubernetesTaskState
 from task_processing.plugins.kubernetes.types import PodEvent
+from task_processing.plugins.kubernetes.utils import get_kubernetes_empty_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_kubernetes_env_vars
 from task_processing.plugins.kubernetes.utils import get_kubernetes_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_node_affinity
+from task_processing.plugins.kubernetes.utils import get_pod_empty_volumes
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_security_context_for_capabilities
 
@@ -394,6 +396,11 @@ class KubernetesPodExecutor(TaskExecutor):
 
     def run(self, task_config: KubernetesTaskConfig) -> Optional[str]:
         try:
+            volume_mounts = (
+                get_kubernetes_volume_mounts(task_config.volumes)
+                + get_kubernetes_empty_volume_mounts(task_config.empty_volumes)
+            )
+
             container = V1Container(
                 image=task_config.image,
                 # XXX: we were initially planning on using the name from KubernetesTaskConfig here,
@@ -419,9 +426,15 @@ class KubernetesPodExecutor(TaskExecutor):
                     secret_environment=task_config.secret_environment,
                     field_selector_environment=task_config.field_selector_environment,
                 ),
-                volume_mounts=get_kubernetes_volume_mounts(task_config.volumes),
+                volume_mounts=volume_mounts,
                 ports=[V1ContainerPort(container_port=port) for port in task_config.ports],
             )
+
+            volumes = (
+                get_pod_volumes(task_config.volumes)
+                + get_pod_empty_volumes(task_config.empty_volumes)
+            )
+
             pod = V1Pod(
                 metadata=V1ObjectMeta(
                     name=task_config.pod_name,
@@ -432,7 +445,7 @@ class KubernetesPodExecutor(TaskExecutor):
                 spec=V1PodSpec(
                     restart_policy=task_config.restart_policy,
                     containers=[container],
-                    volumes=get_pod_volumes(task_config.volumes),
+                    volumes=volumes,
                     node_selector=dict(task_config.node_selectors),
                     affinity=V1Affinity(
                         node_affinity=get_node_affinity(task_config.node_affinities),

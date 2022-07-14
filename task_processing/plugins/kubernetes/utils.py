@@ -6,6 +6,7 @@ from typing import Optional
 from typing import TYPE_CHECKING
 
 from kubernetes.client import V1Capabilities
+from kubernetes.client import V1EmptyDirVolumeSource
 from kubernetes.client import V1EnvVar
 from kubernetes.client import V1EnvVarSource
 from kubernetes.client import V1HostPathVolumeSource
@@ -23,6 +24,7 @@ from pyrsistent.typing import PVector
 
 from task_processing.plugins.kubernetes.types import NodeAffinityOperator
 if TYPE_CHECKING:
+    from task_processing.plugins.kubernetes.types import EmptyVolume
     from task_processing.plugins.kubernetes.types import DockerVolume
     from task_processing.plugins.kubernetes.types import NodeAffinity
     from task_processing.plugins.kubernetes.types import SecretEnvSource
@@ -185,6 +187,49 @@ def get_pod_volumes(volumes: PVector['DockerVolume']) -> List[V1Volume]:
         V1Volume(
             host_path=V1HostPathVolumeSource(path=volume["host_path"]),
             name=name,
+        )
+        for name, volume in unique_volumes.items()
+    ]
+
+
+def get_kubernetes_empty_volume_mounts(
+    empty_volumes: PVector['EmptyVolume']
+) -> List[V1VolumeMount]:
+    """
+    Given a list of empty volume mounts, return a list corresponding to
+    the Kubernetes objects representing these mounts.
+    """
+    return [
+        V1VolumeMount(
+            mount_path=volume["container_path"],
+            name=get_sanitised_volume_name(
+                f"empty--{volume['container_path']}",
+                length_limit=63
+            ),
+        )
+        for volume in empty_volumes
+    ]
+
+
+def get_pod_empty_volumes(
+    empty_volumes: PVector['EmptyVolume']
+) -> List[V1Volume]:
+    """
+    Given a list of empty volume mounts, return a list corresponding to
+    the Kubernetes objects needed to tie the mounts to a Pod.
+    """
+    unique_volumes: Dict[str, 'EmptyVolume'] = {
+        get_sanitised_volume_name(f"empty--{volume['container_path']}", length_limit=63): volume
+        for volume in empty_volumes
+    }
+
+    return [
+        V1Volume(
+            name=name,
+            empty_dir=V1EmptyDirVolumeSource(
+                medium=volume.get('medium', ""),
+                size=volume.get('size'),
+            ),
         )
         for name, volume in unique_volumes.items()
     ]

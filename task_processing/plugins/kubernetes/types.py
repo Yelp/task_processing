@@ -1,6 +1,7 @@
 import enum
 from typing import Any
 from typing import Dict
+from typing import Optional
 
 from kubernetes.client import V1Pod
 from typing_extensions import TypedDict
@@ -10,6 +11,12 @@ class DockerVolume(TypedDict):
     host_path: str
     container_path: str
     mode: str  # XXX: Literal["RO", "RW"] once we drop older Python support
+
+
+class EmptyVolume(TypedDict):
+    container_path: str
+    medium: Optional[str]  # XXX: Optional[Literal["Memory"]] In this case
+    size: Optional[str]
 
 
 class SecretEnvSource(TypedDict):

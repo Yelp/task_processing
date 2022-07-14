@@ -15,12 +15,13 @@ from pyrsistent import PVector
 from pyrsistent import pvector
 from pyrsistent import v
 
+from task_processing.plugins.kubernetes.types import DockerVolume
+from task_processing.plugins.kubernetes.types import EmptyVolume
 from task_processing.plugins.kubernetes.types import NodeAffinity
 from task_processing.plugins.kubernetes.types import NodeAffinityOperator
 from task_processing.plugins.kubernetes.types import ObjectFieldSelectorSource
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 if TYPE_CHECKING:
-    from task_processing.plugins.kubernetes.types import DockerVolume
     from task_processing.plugins.kubernetes.types import SecretEnvSource
 
 from task_processing.interfaces.task_executor import DefaultTaskConfigInterface
@@ -35,7 +36,8 @@ POD_SUFFIX_LENGTH = 6
 MAX_POD_NAME_LENGTH = 150
 MAX_DNS_SUBDOMAIN_NAME_LENGTH = 253
 VALID_DNS_SUBDOMAIN_NAME_REGEX = '^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$'
-VALID_VOLUME_KEYS = {'mode', 'container_path', 'host_path'}
+VALID_EMPTY_VOLUME_KEYS = set(EmptyVolume.__annotations__.keys())
+VALID_VOLUME_KEYS = set(DockerVolume.__annotations__.keys())
 VALID_SECRET_ENV_KEYS = {'secret_name', 'key'}
 VALID_FIELD_SELECTOR_ENV_KEYS = {'field_path'}
 VALID_CAPABILITIES = {
@@ -102,7 +104,7 @@ def _generate_pod_suffix() -> str:
     return ''.join(secrets.choice(POD_SUFFIX_ALPHABET) for i in range(POD_SUFFIX_LENGTH))
 
 
-def _valid_volumes(volumes: Sequence["DockerVolume"]) -> Tuple[bool, Optional[str]]:
+def _valid_volumes(volumes: Sequence[DockerVolume]) -> Tuple[bool, Optional[str]]:
     for volume in volumes:
         if set(volume.keys()) != VALID_VOLUME_KEYS:
             return (
@@ -114,6 +116,22 @@ def _valid_volumes(volumes: Sequence["DockerVolume"]) -> Tuple[bool, Optional[st
             return (
                 False,
                 f"Invalid mode for volume, must be one of {VALID_DOCKER_VOLUME_MODES}",
+            )
+    return (True, None)
+
+
+def _valid_empty_volumes(volumes: Sequence[EmptyVolume]) -> Tuple[bool, Optional[str]]:
+    for volume in volumes:
+        if set(volume.keys()) != VALID_EMPTY_VOLUME_KEYS:
+            return (
+                False,
+                f'Invalid empty volume format, must only contain following keys: '
+                f'{VALID_EMPTY_VOLUME_KEYS}, got: {volume.keys()}'
+            )
+        if volume.get('medium') not in [None, "Memory"]:
+            return (
+                False,
+                "Invalid medium for empty volume, must be one of [None, 'Memory']",
             )
     return (True, None)
 
@@ -336,6 +354,12 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         initial=v(),
         factory=pvector,
         invariant=_valid_port,
+    )
+    empty_volumes = field(
+        type=PVector if not TYPE_CHECKING else PVector["EmptyVolume"],
+        initial=v(),
+        factory=pvector,
+        invariant=_valid_empty_volumes,
     )
 
     @property
