@@ -254,6 +254,12 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         invariant=_valid_volumes,
     )
 
+    extra_containers = field(
+        type=PMap if not TYPE_CHECKING else PMap[str, "KubernetesTaskConfig"],
+        initial=m(),
+        factory=pmap,
+    )
+
     cpus = field(
         type=float,
         initial=0.1,
