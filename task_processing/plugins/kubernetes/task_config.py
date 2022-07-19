@@ -258,6 +258,10 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         type=PMap if not TYPE_CHECKING else PMap[str, "KubernetesTaskConfig"],
         initial=m(),
         factory=pmap,
+        invariant=lambda containers: (
+            not any([container.extra_containers for container in containers.values()]),
+            'extra_containers cannot have extra_containers',
+        ),
     )
 
     cpus = field(
