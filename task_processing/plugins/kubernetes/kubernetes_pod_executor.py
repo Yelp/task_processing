@@ -433,7 +433,7 @@ class KubernetesPodExecutor(TaskExecutor):
 
             for name, nested_config in task_config.extra_containers.items():
                 containers.append(self._create_container_definition(
-                    get_sanitised_kubernetes_name(name),
+                    get_sanitised_kubernetes_name(name, length_limit=63),
                     nested_config,
                 ))
 
