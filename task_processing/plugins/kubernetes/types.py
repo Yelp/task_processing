@@ -16,7 +16,7 @@ class DockerVolume(TypedDict):
 class EmptyVolume(TypedDict):
     container_path: str
     medium: Optional[str]  # XXX: Optional[Literal["Memory"]] In this case
-    size: Optional[str]
+    size: Optional[str]  # XXX: implement a validator for this
 
 
 class SecretEnvSource(TypedDict):

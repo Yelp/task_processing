@@ -97,6 +97,7 @@ DEFAULT_CAPS_DROP = {
     "SYS_CHROOT",
 }
 VALID_DOCKER_VOLUME_MODES = {"RW", "RO"}
+VALID_DOCKER_VOLUME_MEDIUM = {"Memory", None}
 REQUIRED_NODE_AFFINITY_KEYS = set(NodeAffinity.__annotations__.keys())
 
 
@@ -122,16 +123,21 @@ def _valid_volumes(volumes: Sequence[DockerVolume]) -> Tuple[bool, Optional[str]
 
 def _valid_empty_volumes(volumes: Sequence[EmptyVolume]) -> Tuple[bool, Optional[str]]:
     for volume in volumes:
-        if set(volume.keys()) != VALID_EMPTY_VOLUME_KEYS:
+        if not set(volume.keys()) <= VALID_EMPTY_VOLUME_KEYS:
             return (
                 False,
                 f'Invalid empty volume format, must only contain following keys: '
                 f'{VALID_EMPTY_VOLUME_KEYS}, got: {volume.keys()}'
             )
-        if volume.get('medium') not in [None, "Memory"]:
+        if 'container_path' not in set(volume.keys()):
             return (
                 False,
-                "Invalid medium for empty volume, must be one of [None, 'Memory']",
+                'Invalid empty volume format, "container_path" is mandatory'
+            )
+        if volume.get('medium') not in VALID_DOCKER_VOLUME_MEDIUM:
+            return (
+                False,
+                f"Invalid medium for empty volume, must be one of {VALID_DOCKER_VOLUME_MEDIUM}",
             )
     return (True, None)
 

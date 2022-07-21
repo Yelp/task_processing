@@ -228,7 +228,7 @@ def get_pod_empty_volumes(
             name=name,
             empty_dir=V1EmptyDirVolumeSource(
                 medium=volume.get('medium', ""),
-                size=volume.get('size'),
+                size_limit=volume.get('size'),
             ),
         )
         for name, volume in unique_volumes.items()
