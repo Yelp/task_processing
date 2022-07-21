@@ -62,6 +62,23 @@ def test_kubernetes_task_config_no_nested_containers():
         )
 
 
+def test_kubernetes_task_config_no_duplicate_ports():
+    with pytest.raises(InvariantException):
+        KubernetesTaskConfig(
+            name="myname",
+            image="myimage",
+            command="mycommand",
+            ports=[1000],
+            extra_containers={
+                "second": KubernetesTaskConfig(
+                    image="myimage",
+                    command="myothercommand",
+                    ports=[1000],
+                ),
+            },
+        )
+
+
 @pytest.mark.parametrize(
     "capabilties", (
         ("NOT_A_CAP",),
