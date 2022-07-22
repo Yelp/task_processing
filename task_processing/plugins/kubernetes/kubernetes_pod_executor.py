@@ -59,7 +59,7 @@ class KubernetesPodExecutor(TaskExecutor):
         task_configs: Optional[Collection[KubernetesTaskConfig]] = [],
     ) -> None:
         if not version:
-            version = "Unknown_Version"
+            version = "unknown_task_processing"
         user_agent = f"{namespace}/v{version}"
         self.kube_client = KubeClient(kubeconfig_path=kubeconfig_path, user_agent=user_agent)
         self.namespace = namespace
