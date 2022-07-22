@@ -1,6 +1,7 @@
 import re
 import secrets
 import string
+from itertools import chain
 from typing import Mapping
 from typing import Optional
 from typing import Sequence
@@ -223,9 +224,14 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         valid_length = len(self.pod_name) <= MAX_POD_NAME_LENGTH
         valid_name = bool(re.match(VALID_DNS_SUBDOMAIN_NAME_REGEX, self.pod_name))
 
+        all_ports = list(chain.from_iterable(
+            [self.ports] + [container.ports for container in self.extra_containers.values()]))
+        duplicate_ports = bool(len(set(all_ports)) == len(all_ports))
+
         return (
             (valid_length, f'Pod name must have up to {MAX_POD_NAME_LENGTH} characters.'),
             (valid_name, 'Must comply with Kubernetes pod naming standards.'),
+            (duplicate_ports, 'Containers must define unique ports.'),
         )
 
     uuid = field(type=str, initial=_generate_pod_suffix)  # type: ignore
@@ -252,6 +258,16 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         initial=v(),
         factory=pvector,
         invariant=_valid_volumes,
+    )
+
+    extra_containers = field(
+        type=PMap if not TYPE_CHECKING else PMap[str, "KubernetesTaskConfig"],
+        initial=m(),
+        factory=pmap,
+        invariant=lambda containers: (
+            not any([container.extra_containers for container in containers.values()]),
+            'extra_containers cannot have extra_containers',
+        ),
     )
 
     cpus = field(
