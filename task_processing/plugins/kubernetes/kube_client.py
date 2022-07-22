@@ -18,7 +18,11 @@ class ExceededMaxAttempts(Exception):
 
 
 class KubeClient:
-    def __init__(self, kubeconfig_path: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        kubeconfig_path: Optional[str] = None,
+        user_agent: Optional[str] = None
+    ) -> None:
         kubeconfig_path = kubeconfig_path or os.environ.get("KUBECONFIG")
         if kubeconfig_path is None:
             raise ValueError(
@@ -34,11 +38,14 @@ class KubeClient:
             context=self.kubecontext
         )
 
+        self.api_client = kube_client.ApiClient()
+        self.api_client.user_agent = user_agent
+
         # any Kubernetes APIs that we use should be added as members here (much like as we
         # do in the KubeClient class in PaaSTA) to ensure that they're only used after we've
         # loaded the relevant kubeconfig. Additionally, they should also be recreated in
         # reload_kubeconfig() so that changes in certs are picked up.
-        self.core = kube_client.CoreV1Api()
+        self.core = kube_client.CoreV1Api(self.api_client)
 
     def reload_kubeconfig(self) -> None:
         """
@@ -53,7 +60,7 @@ class KubeClient:
             config_file=self.kubeconfig_path,
             context=self.kubecontext
         )
-        self.core = kube_client.CoreV1Api()
+        self.core = kube_client.CoreV1Api(self.api_client)
 
     def maybe_reload_on_exception(self, exception: Exception) -> bool:
         """

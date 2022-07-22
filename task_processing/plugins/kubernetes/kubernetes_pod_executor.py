@@ -54,10 +54,14 @@ class KubernetesPodExecutor(TaskExecutor):
     def __init__(
         self,
         namespace: str,
+        version: Optional[str] = None,
         kubeconfig_path: Optional[str] = None,
         task_configs: Optional[Collection[KubernetesTaskConfig]] = [],
     ) -> None:
-        self.kube_client = KubeClient(kubeconfig_path=kubeconfig_path)
+        if not version:
+            version = "Unknown_Version"
+        user_agent = f"{namespace}/v{version}"
+        self.kube_client = KubeClient(kubeconfig_path=kubeconfig_path, user_agent=user_agent)
         self.namespace = namespace
         self.stopping = False
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
