@@ -34,6 +34,7 @@ from task_processing.plugins.kubernetes.utils import get_kubernetes_volume_mount
 from task_processing.plugins.kubernetes.utils import get_node_affinity
 from task_processing.plugins.kubernetes.utils import get_pod_empty_volumes
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
+from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 from task_processing.plugins.kubernetes.utils import get_security_context_for_capabilities
 
 logger = logging.getLogger(__name__)
@@ -55,10 +56,14 @@ class KubernetesPodExecutor(TaskExecutor):
     def __init__(
         self,
         namespace: str,
+        version: Optional[str] = None,
         kubeconfig_path: Optional[str] = None,
         task_configs: Optional[Collection[KubernetesTaskConfig]] = [],
     ) -> None:
-        self.kube_client = KubeClient(kubeconfig_path=kubeconfig_path)
+        if not version:
+            version = "unknown_task_processing"
+        user_agent = f"{namespace}/v{version}"
+        self.kube_client = KubeClient(kubeconfig_path=kubeconfig_path, user_agent=user_agent)
         self.namespace = namespace
         self.stopping = False
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
@@ -394,41 +399,54 @@ class KubernetesPodExecutor(TaskExecutor):
 
         logger.debug("Exiting Pod event processing - stop requested.")
 
+    def _create_container_definition(
+        self,
+        name: str,
+        task_config: KubernetesTaskConfig,
+    ) -> V1Container:
+        volume_mounts = (
+            get_kubernetes_volume_mounts(task_config.volumes)
+            + get_kubernetes_empty_volume_mounts(task_config.empty_volumes)
+        )
+
+        return V1Container(
+            image=task_config.image,
+            name=name,
+            command=["/bin/sh", "-c"],
+            args=[task_config.command],
+            security_context=get_security_context_for_capabilities(
+                cap_add=task_config.cap_add,
+                cap_drop=task_config.cap_drop,
+            ),
+            resources=V1ResourceRequirements(
+                limits={
+                    "cpu": task_config.cpus,
+                    "memory": f"{task_config.memory}Mi",
+                    "ephemeral-storage": f"{task_config.disk}Mi",
+                }
+            ),
+            env=get_kubernetes_env_vars(
+                environment=task_config.environment,
+                secret_environment=task_config.secret_environment,
+                field_selector_environment=task_config.field_selector_environment,
+            ),
+            volume_mounts=volume_mounts,
+            ports=[V1ContainerPort(container_port=port) for port in task_config.ports],
+        )
+
     def run(self, task_config: KubernetesTaskConfig) -> Optional[str]:
         try:
-            volume_mounts = (
-                get_kubernetes_volume_mounts(task_config.volumes)
-                + get_kubernetes_empty_volume_mounts(task_config.empty_volumes)
-            )
+            # XXX: we were initially planning on using the name from KubernetesTaskConfig here,
+            # but its too easy to go over the length limit for container names (63 characters),
+            # so we're just hardcoding something for now since container names aren't used for
+            # anything at the moment
+            containers = [self._create_container_definition("main", task_config)]
 
-            container = V1Container(
-                image=task_config.image,
-                # XXX: we were initially planning on using the name from KubernetesTaskConfig here,
-                # but its too easy to go over the length limit for container names (63 characters),
-                # so we're just hardcoding something for now since container names aren't used for
-                # anything at the moment
-                name="main",
-                command=["/bin/sh", "-c"],
-                args=[task_config.command],
-                security_context=get_security_context_for_capabilities(
-                    cap_add=task_config.cap_add,
-                    cap_drop=task_config.cap_drop,
-                ),
-                resources=V1ResourceRequirements(
-                    limits={
-                        "cpu": task_config.cpus,
-                        "memory": f"{task_config.memory}Mi",
-                        "ephemeral-storage": f"{task_config.disk}Mi",
-                    }
-                ),
-                env=get_kubernetes_env_vars(
-                    environment=task_config.environment,
-                    secret_environment=task_config.secret_environment,
-                    field_selector_environment=task_config.field_selector_environment,
-                ),
-                volume_mounts=volume_mounts,
-                ports=[V1ContainerPort(container_port=port) for port in task_config.ports],
-            )
+            for name, nested_config in task_config.extra_containers.items():
+                containers.append(self._create_container_definition(
+                    get_sanitised_kubernetes_name(name, length_limit=63),
+                    nested_config,
+                ))
 
             volumes = (
                 get_pod_volumes(task_config.volumes)
@@ -444,7 +462,7 @@ class KubernetesPodExecutor(TaskExecutor):
                 ),
                 spec=V1PodSpec(
                     restart_policy=task_config.restart_policy,
-                    containers=[container],
+                    containers=containers,
                     volumes=volumes,
                     node_selector=dict(task_config.node_selectors),
                     affinity=V1Affinity(

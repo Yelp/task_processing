@@ -30,7 +30,7 @@ def test_kubernetes_task_config_set_pod_name_truncates_long_name():
     assert task_config.pod_name != "a" * 1000
 
 
-def test_kubernetes_task_config_enforces_command_requirmenets():
+def test_kubernetes_task_config_enforces_command_requirements():
     task_config = KubernetesTaskConfig(
         name="fake--task--name",
         uuid="fake--id",
@@ -39,6 +39,44 @@ def test_kubernetes_task_config_enforces_command_requirmenets():
     )
     with pytest.raises(InvariantException):
         task_config.set(command="")
+
+
+def test_kubernetes_task_config_no_nested_containers():
+    with pytest.raises(InvariantException):
+        KubernetesTaskConfig(
+            name="myname",
+            image="myimage",
+            command="mycommand",
+            extra_containers={
+                "second": KubernetesTaskConfig(
+                    image="myimage",
+                    command="myothercommand",
+                    extra_containers={
+                        "third": KubernetesTaskConfig(
+                            image="myimage",
+                            command="mythirdcommand",
+                        ),
+                    },
+                ),
+            },
+        )
+
+
+def test_kubernetes_task_config_no_duplicate_ports():
+    with pytest.raises(InvariantException):
+        KubernetesTaskConfig(
+            name="myname",
+            image="myimage",
+            command="mycommand",
+            ports=[1000],
+            extra_containers={
+                "second": KubernetesTaskConfig(
+                    image="myimage",
+                    command="myothercommand",
+                    ports=[1000],
+                ),
+            },
+        )
 
 
 @pytest.mark.parametrize(
