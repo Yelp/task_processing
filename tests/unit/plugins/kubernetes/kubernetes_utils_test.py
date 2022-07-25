@@ -1,5 +1,6 @@
 import pytest
 from kubernetes.client import V1Capabilities
+from kubernetes.client import V1EmptyDirVolumeSource
 from kubernetes.client import V1EnvVar
 from kubernetes.client import V1EnvVarSource
 from kubernetes.client import V1HostPathVolumeSource
@@ -17,9 +18,11 @@ from pyrsistent import pvector
 from pyrsistent import v
 
 from task_processing.plugins.kubernetes.types import NodeAffinity
+from task_processing.plugins.kubernetes.utils import get_kubernetes_empty_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_kubernetes_env_vars
 from task_processing.plugins.kubernetes.utils import get_kubernetes_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_node_affinity
+from task_processing.plugins.kubernetes.utils import get_pod_empty_volumes
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 from task_processing.plugins.kubernetes.utils import get_sanitised_volume_name
@@ -124,6 +127,44 @@ def test_get_kubernetes_volume_mounts(volumes, expected):
 )
 def test_get_pod_volumes(volumes, expected):
     assert get_pod_volumes(volumes) == expected
+
+
+@pytest.mark.parametrize(
+    "empty_volumes,expected", (
+        (
+            v({"container_path": "/a", "medium": None, "size": None}),
+            [V1VolumeMount(mount_path="/a", name="empty--slash-a")]
+        ),
+        (
+            v({"container_path": "/a", "medium": "Memory", "size": "1500m"}),
+            [V1VolumeMount(mount_path="/a", name="empty--slash-a")]
+        ),
+    )
+)
+def test_get_kubernetes_empty_volume_mounts(empty_volumes, expected):
+    assert get_kubernetes_empty_volume_mounts(empty_volumes) == expected
+
+
+@pytest.mark.parametrize(
+    "empty_volumes,expected", (
+        (
+            v({"container_path": "/a", "medium": None, "size": None}),
+            [V1Volume(
+                name="empty--slash-a",
+                empty_dir=V1EmptyDirVolumeSource(medium=None, size_limit=None)
+            )]
+        ),
+        (
+            v({"container_path": "/a", "medium": "Memory", "size": "1500m"}),
+            [V1Volume(
+                name="empty--slash-a",
+                empty_dir=V1EmptyDirVolumeSource(medium="Memory", size_limit="1500m")
+            )]
+        ),
+    )
+)
+def test_get_pod_empty_volumes(empty_volumes, expected):
+    assert get_pod_empty_volumes(empty_volumes) == expected
 
 
 def test_get_kubernetes_env_vars():

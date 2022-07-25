@@ -192,6 +192,50 @@ def test_volume_valid_specification(volumes):
 
 
 @pytest.mark.parametrize(
+    "empty_volumes", (
+        ({"medium": None},),
+        ({"medium": "Memory"},),
+        ({"size": None},),
+        ({"size": "1500m"},),
+        ({"size": None, "medium": None},),
+        ({"size": "1500m", "medium": None},),
+        ({"size": None, "medium": "Memory"},),
+        ({"size": "1500m", "medium": "Memory"},),
+        ({"random_garbage": "aaaaa"},),
+    )
+)
+def test_empty_volume_rejects_invalid_specification(empty_volumes):
+    with pytest.raises(InvariantException):
+        KubernetesTaskConfig(
+            name="fake--task--name",
+            uuid="fake--id",
+            image="fake_docker_image",
+            command="fake_command",
+            empty_volumes=empty_volumes
+        )
+
+
+@pytest.mark.parametrize(
+    "empty_volumes", (
+        ({"container_path": "/a", "size": None, "medium": None},),
+        ({"container_path": "/a", "size": "1500m", "medium": None},),
+        ({"container_path": "/a", "size": None, "medium": "Memory"},),
+        ({"container_path": "/a", "size": "1500m", "medium": "Memory"},),
+    )
+)
+def test_empty_volume_valid_specification(empty_volumes):
+    task_config = KubernetesTaskConfig(
+        name="fake--task--name",
+        uuid="fake--id",
+        image="fake_docker_image",
+        command="fake_command",
+        empty_volumes=empty_volumes
+    )
+
+    assert tuple(task_config.empty_volumes) == empty_volumes
+
+
+@pytest.mark.parametrize(
     "secret_environment", (
         pmap({'SECRET1': {'secret_name': 'taskprocns-secret-secret1', 'key': 'secret_1'}}),
         pmap({
