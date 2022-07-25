@@ -123,18 +123,13 @@ def _valid_volumes(volumes: Sequence[DockerVolume]) -> Tuple[bool, Optional[str]
 
 def _valid_empty_volumes(volumes: Sequence[EmptyVolume]) -> Tuple[bool, Optional[str]]:
     for volume in volumes:
-        if not set(volume.keys()) <= VALID_EMPTY_VOLUME_KEYS:
+        if set(volume.keys()) != VALID_EMPTY_VOLUME_KEYS:
             return (
                 False,
                 f'Invalid empty volume format, must only contain following keys: '
                 f'{VALID_EMPTY_VOLUME_KEYS}, got: {volume.keys()}'
             )
-        if 'container_path' not in set(volume.keys()):
-            return (
-                False,
-                'Invalid empty volume format, "container_path" is mandatory'
-            )
-        if volume.get('medium') not in VALID_DOCKER_VOLUME_MEDIUM:
+        if volume['medium'] not in VALID_DOCKER_VOLUME_MEDIUM:
             return (
                 False,
                 f"Invalid medium for empty volume, must be one of {VALID_DOCKER_VOLUME_MEDIUM}",

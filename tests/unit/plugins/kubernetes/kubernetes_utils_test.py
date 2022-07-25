@@ -132,15 +132,7 @@ def test_get_pod_volumes(volumes, expected):
 @pytest.mark.parametrize(
     "empty_volumes,expected", (
         (
-            v({"container_path": "/a"}),
-            [V1VolumeMount(mount_path="/a", name="empty--slash-a")]
-        ),
-        (
-            v({"container_path": "/a", "medium": "Memory"}),
-            [V1VolumeMount(mount_path="/a", name="empty--slash-a")]
-        ),
-        (
-            v({"container_path": "/a", "size": "1500m"}),
+            v({"container_path": "/a", "medium": None, "size": None}),
             [V1VolumeMount(mount_path="/a", name="empty--slash-a")]
         ),
         (
@@ -156,24 +148,10 @@ def test_get_kubernetes_empty_volume_mounts(empty_volumes, expected):
 @pytest.mark.parametrize(
     "empty_volumes,expected", (
         (
-            v({"container_path": "/a"}),
+            v({"container_path": "/a", "medium": None, "size": None}),
             [V1Volume(
                 name="empty--slash-a",
-                empty_dir=V1EmptyDirVolumeSource(medium="", size_limit=None)
-            )]
-        ),
-        (
-            v({"container_path": "/a", "medium": "Memory"}),
-            [V1Volume(
-                name="empty--slash-a",
-                empty_dir=V1EmptyDirVolumeSource(medium="Memory", size_limit=None)
-            )]
-        ),
-        (
-            v({"container_path": "/a", "size": "1500m"}),
-            [V1Volume(
-                name="empty--slash-a",
-                empty_dir=V1EmptyDirVolumeSource(medium="", size_limit="1500m")
+                empty_dir=V1EmptyDirVolumeSource(medium=None, size_limit=None)
             )]
         ),
         (

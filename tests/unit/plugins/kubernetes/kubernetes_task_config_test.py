@@ -179,11 +179,6 @@ def test_empty_volume_rejects_invalid_specification(empty_volumes):
 
 @pytest.mark.parametrize(
     "empty_volumes", (
-        ({"container_path": "/a"},),
-        ({"container_path": "/a", "medium": None},),
-        ({"container_path": "/a", "medium": "Memory"},),
-        ({"container_path": "/a", "size": None},),
-        ({"container_path": "/a", "size": "1500m"},),
         ({"container_path": "/a", "size": None, "medium": None},),
         ({"container_path": "/a", "size": "1500m", "medium": None},),
         ({"container_path": "/a", "size": None, "medium": "Memory"},),
