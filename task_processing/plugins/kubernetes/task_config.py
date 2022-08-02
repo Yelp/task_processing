@@ -333,6 +333,10 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         factory=pvector,
         invariant=_valid_capabilities,
     )
+    privileged = field(
+        type=(bool, type(None)),
+        initial=None,
+    )
     node_selectors = field(
         type=PMap if not TYPE_CHECKING else PMap[str, str],
         initial=m(),

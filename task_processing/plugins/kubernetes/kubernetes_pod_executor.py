@@ -15,6 +15,7 @@ from kubernetes.client import V1Pod
 from kubernetes.client import V1PodSecurityContext
 from kubernetes.client import V1PodSpec
 from kubernetes.client import V1ResourceRequirements
+from kubernetes.client import V1SecurityContext
 from kubernetes.client.exceptions import ApiException
 from pyrsistent import pmap
 from pyrsistent import v
@@ -28,6 +29,7 @@ from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 from task_processing.plugins.kubernetes.task_metadata import KubernetesTaskMetadata
 from task_processing.plugins.kubernetes.task_metadata import KubernetesTaskState
 from task_processing.plugins.kubernetes.types import PodEvent
+from task_processing.plugins.kubernetes.utils import get_capabilities_for_capability_changes
 from task_processing.plugins.kubernetes.utils import get_kubernetes_empty_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_kubernetes_env_vars
 from task_processing.plugins.kubernetes.utils import get_kubernetes_volume_mounts
@@ -35,7 +37,6 @@ from task_processing.plugins.kubernetes.utils import get_node_affinity
 from task_processing.plugins.kubernetes.utils import get_pod_empty_volumes
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
-from task_processing.plugins.kubernetes.utils import get_security_context_for_capabilities
 
 logger = logging.getLogger(__name__)
 
@@ -409,15 +410,24 @@ class KubernetesPodExecutor(TaskExecutor):
             + get_kubernetes_empty_volume_mounts(task_config.empty_volumes)
         )
 
+        capabilities = get_capabilities_for_capability_changes(
+            cap_add=task_config.cap_add,
+            cap_drop=task_config.cap_drop,
+        )
+
+        security_context = None
+        if capabilities is not None or task_config.privileged is not None:
+            security_context = V1SecurityContext(
+                capabilities=capabilities,
+                privileged=task_config.privileged,
+            )
+
         return V1Container(
             image=task_config.image,
             name=name,
             command=["/bin/sh", "-c"],
             args=[task_config.command],
-            security_context=get_security_context_for_capabilities(
-                cap_add=task_config.cap_add,
-                cap_drop=task_config.cap_drop,
-            ),
+            security_context=security_context,
             resources=V1ResourceRequirements(
                 limits={
                     "cpu": task_config.cpus,
