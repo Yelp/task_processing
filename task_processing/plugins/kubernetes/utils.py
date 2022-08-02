@@ -16,7 +16,6 @@ from kubernetes.client import V1NodeSelectorRequirement
 from kubernetes.client import V1NodeSelectorTerm
 from kubernetes.client import V1ObjectFieldSelector
 from kubernetes.client import V1SecretKeySelector
-from kubernetes.client import V1SecurityContext
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
 from pyrsistent.typing import PMap
@@ -33,10 +32,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def get_security_context_for_capabilities(
+def get_capabilities_for_capability_changes(
     cap_add: PVector[str],
     cap_drop: PVector[str],
-) -> Optional[V1SecurityContext]:
+) -> Optional[V1Capabilities]:
     """
     Helper to take lists of capabilties to add/drop and turn them into the
     corresponding Kubernetes representation.
@@ -48,10 +47,10 @@ def get_security_context_for_capabilities(
         if capabilities
     }
     if caps:
-        return V1SecurityContext(capabilities=V1Capabilities(**caps))
+        return V1Capabilities(**caps)
 
     logger.info(
-        "No capabilities found, not creating a security context"
+        "No capabilities found, not creating a capabilities object"
     )
     return None
 

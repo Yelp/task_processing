@@ -10,7 +10,6 @@ from kubernetes.client import V1NodeSelectorRequirement
 from kubernetes.client import V1NodeSelectorTerm
 from kubernetes.client import V1ObjectFieldSelector
 from kubernetes.client import V1SecretKeySelector
-from kubernetes.client import V1SecurityContext
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
 from pyrsistent import pmap
@@ -18,6 +17,7 @@ from pyrsistent import pvector
 from pyrsistent import v
 
 from task_processing.plugins.kubernetes.types import NodeAffinity
+from task_processing.plugins.kubernetes.utils import get_capabilities_for_capability_changes
 from task_processing.plugins.kubernetes.utils import get_kubernetes_empty_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_kubernetes_env_vars
 from task_processing.plugins.kubernetes.utils import get_kubernetes_volume_mounts
@@ -26,20 +26,19 @@ from task_processing.plugins.kubernetes.utils import get_pod_empty_volumes
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 from task_processing.plugins.kubernetes.utils import get_sanitised_volume_name
-from task_processing.plugins.kubernetes.utils import get_security_context_for_capabilities
 
 
 @pytest.mark.parametrize(
     "cap_add,cap_drop,expected", (
         (v(), v(), None),
-        (v("AUDIT_READ"), v(), V1SecurityContext(capabilities=V1Capabilities(add=["AUDIT_READ"]))),
-        (v(), v("AUDIT_READ"), V1SecurityContext(capabilities=V1Capabilities(drop=["AUDIT_READ"]))),
-        (v("AUDIT_WRITE"), v("AUDIT_READ"), V1SecurityContext(
-            capabilities=V1Capabilities(add=["AUDIT_WRITE"], drop=["AUDIT_READ"]))),
+        (v("AUDIT_READ"), v(), V1Capabilities(add=["AUDIT_READ"])),
+        (v(), v("AUDIT_READ"), V1Capabilities(drop=["AUDIT_READ"])),
+        (v("AUDIT_WRITE"), v("AUDIT_READ"), V1Capabilities(
+            add=["AUDIT_WRITE"], drop=["AUDIT_READ"])),
     )
 )
-def test_get_security_context_for_capabilities(cap_add, cap_drop, expected):
-    assert get_security_context_for_capabilities(cap_add, cap_drop) == expected
+def test_get_capabilities_for_capability_changes(cap_add, cap_drop, expected):
+    assert get_capabilities_for_capability_changes(cap_add, cap_drop) == expected
 
 
 @pytest.mark.parametrize(
