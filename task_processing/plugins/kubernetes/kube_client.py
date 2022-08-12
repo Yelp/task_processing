@@ -38,8 +38,12 @@ class KubeClient:
             context=self.kubecontext
         )
 
+        self.user_agent = user_agent
+        self.initialize_api_client()
+
+    def initialize_api_client(self) -> None:
         self.api_client = kube_client.ApiClient()
-        self.api_client.user_agent = user_agent
+        self.api_client.user_agent = self.user_agent
 
         # any Kubernetes APIs that we use should be added as members here (much like as we
         # do in the KubeClient class in PaaSTA) to ensure that they're only used after we've
@@ -60,6 +64,7 @@ class KubeClient:
             config_file=self.kubeconfig_path,
             context=self.kubecontext
         )
+        self.initialize_api_client()
         self.core = kube_client.CoreV1Api(self.api_client)
 
     def maybe_reload_on_exception(self, exception: Exception) -> bool:
