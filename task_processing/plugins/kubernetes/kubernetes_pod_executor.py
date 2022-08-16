@@ -60,12 +60,20 @@ class KubernetesPodExecutor(TaskExecutor):
         version: Optional[str] = None,
         kubeconfig_path: Optional[str] = None,
         task_configs: Optional[Collection[KubernetesTaskConfig]] = [],
+        emit_events_without_state_transitions: bool = False,
+
     ) -> None:
         if not version:
             version = "unknown_task_processing"
         user_agent = f"{namespace}/v{version}"
         self.kube_client = KubeClient(kubeconfig_path=kubeconfig_path, user_agent=user_agent)
         self.namespace = namespace
+
+        # Pod modified events that did not result in a pod state transition are usually not
+        # forwarded, but some consumers are interested in container state changes. This
+        # variable controls whether such additional pod modified events are forwarded.
+        self.emit_events_without_state_transitions = emit_events_without_state_transitions
+
         self.stopping = False
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
 
@@ -331,10 +339,22 @@ class KubernetesPodExecutor(TaskExecutor):
             )
             return
 
-        logger.info(
-            f"Ignoring MODIFIED event for {pod_name} as it did not result "
-            "in a state transition",
-        )
+        if self.emit_events_without_state_transitions:
+            self.event_queue.put(
+                task_event(
+                    task_id=pod_name,
+                    terminal=False,
+                    timestamp=time.time(),
+                    raw=raw_event,
+                    task_config=task_metadata.task_config,
+                    platform_type="running",
+                )
+            )
+        else:
+            logger.info(
+                f"Ignoring MODIFIED event for {pod_name} as it did not result "
+                "in a state transition",
+            )
 
     def _process_pod_event(self, event: PodEvent) -> None:
         """
