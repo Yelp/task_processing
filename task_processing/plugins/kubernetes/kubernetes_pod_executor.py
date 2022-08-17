@@ -442,19 +442,21 @@ class KubernetesPodExecutor(TaskExecutor):
                 privileged=task_config.privileged,
             )
 
+            limits = {
+                "cpu": task_config.cpus,
+                "memory": f"{task_config.memory}Mi",
+            }
+
+            if task_config.disk is not None:
+                limits['ephemeral-storage'] = f"{task_config.disk}Mi"
+
         return V1Container(
             image=task_config.image,
             name=name,
             command=["/bin/sh", "-c"],
             args=[task_config.command],
             security_context=security_context,
-            resources=V1ResourceRequirements(
-                limits={
-                    "cpu": task_config.cpus,
-                    "memory": f"{task_config.memory}Mi",
-                    "ephemeral-storage": f"{task_config.disk}Mi",
-                }
-            ),
+            resources=V1ResourceRequirements(limits=limits),
             env=get_kubernetes_env_vars(
                 environment=task_config.environment,
                 secret_environment=task_config.secret_environment,

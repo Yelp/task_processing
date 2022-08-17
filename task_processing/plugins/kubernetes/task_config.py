@@ -300,10 +300,10 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         factory=float,
         invariant=lambda m: (m >= 32, 'mem is >= 32'))
     disk = field(
-        type=float,
+        type=(float, type(None)),
         initial=10.0,
         factory=float,
-        invariant=lambda d: (d > 0, 'disk > 0'))
+        invariant=lambda d: (d is None or d > 0, 'disk is None or disk > 0'))
     environment = field(
         type=PMap if not TYPE_CHECKING else PMap[str, str],
         initial=m(),
