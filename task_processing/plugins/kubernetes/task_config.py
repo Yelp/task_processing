@@ -337,6 +337,14 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         type=(bool, type(None)),
         initial=None,
     )
+    uid = field(
+        type=(int, type(None)),
+        initial=None,
+    )
+    gid = field(
+        type=(int, type(None)),
+        initial=None,
+    )
     node_selectors = field(
         type=PMap if not TYPE_CHECKING else PMap[str, str],
         initial=m(),

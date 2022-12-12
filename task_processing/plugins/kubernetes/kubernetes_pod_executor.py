@@ -436,10 +436,17 @@ class KubernetesPodExecutor(TaskExecutor):
         )
 
         security_context = None
-        if capabilities is not None or task_config.privileged is not None:
+        if any((
+            capabilities is not None,
+            task_config.privileged is not None,
+            task_config.uid is not None,
+            task_config.gid is not None
+        )):
             security_context = V1SecurityContext(
                 capabilities=capabilities,
                 privileged=task_config.privileged,
+                run_as_user=task_config.uid,
+                run_as_group=task_config.gid,
             )
 
         return V1Container(
