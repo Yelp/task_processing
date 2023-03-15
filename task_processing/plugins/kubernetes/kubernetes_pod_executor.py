@@ -3,6 +3,7 @@ import queue
 import threading
 import time
 from queue import Queue
+from time import sleep
 from typing import Collection
 from typing import Optional
 
@@ -49,6 +50,8 @@ SUPPORTED_POD_MODIFIED_EVENT_PHASES = {
     "Succeeded",
     "Unknown",
 }
+REFRESH_EXECUTOR_STATE_THREAD_GRACE = 300
+REFRESH_EXECUTOR_STATE_THREAD_INTERVAL = 120
 
 
 class KubernetesPodExecutor(TaskExecutor):
@@ -108,6 +111,12 @@ class KubernetesPodExecutor(TaskExecutor):
             target=self._pending_event_processing_loop,
         )
         self.pending_event_processing_thread.start()
+
+        self.reconciliation_task_thread = threading.Thread(
+            target=self._reconcile_task_loop,
+            daemon=True,
+        )
+        self.reconciliation_task_thread.start()
 
     def _initialize_existing_task(self, task_config: KubernetesTaskConfig) -> None:
         """ Generates task_metadata in UNKNOWN state for an existing KubernetesTaskConfig.
@@ -419,6 +428,24 @@ class KubernetesPodExecutor(TaskExecutor):
                 logger.error("task_done() called on pending events queue too many times!")
 
         logger.debug("Exiting Pod event processing - stop requested.")
+
+    def _reconcile_task_loop(self) -> None:
+        """
+        Run in a thread to reconcile task_metadata from k8s.
+        """
+        logger.info(f'Waiting {REFRESH_EXECUTOR_STATE_THREAD_GRACE}s before doing work')
+        sleep(REFRESH_EXECUTOR_STATE_THREAD_GRACE)
+        logger.debug("Starting Pod task config reconciliation.")
+
+        while not self.stopping:
+            for pod_name in self.task_metadata:
+                task_config = self.task_metadata[pod_name].task_config
+                self.reconcile(task_config)
+
+            logger.info(f'Sleeping for {REFRESH_EXECUTOR_STATE_THREAD_INTERVAL}s')
+            sleep(REFRESH_EXECUTOR_STATE_THREAD_INTERVAL)
+
+        logger.debug("Exiting Pod task config reconciliation - stop requested.")
 
     def _create_container_definition(
         self,
