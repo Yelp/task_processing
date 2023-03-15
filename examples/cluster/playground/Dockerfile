@@ -18,12 +18,6 @@ RUN apt-get update -q && \
 
 ARG PIP_INDEX_URL
 ENV PIP_INDEX_URL=${PIP_INDEX_URL:-https://pypi.python.org/simple}
-# Get yarn
-# I'd use ubuntu yarn (yarnpkg) but https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1019291
-RUN wget --quiet -O - https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
-RUN echo "deb http://dl.yarnpkg.com/debian/ stable main" > /etc/apt/sources.list.d/yarn.list
-RUN apt-get -q update && apt-get -q install -y --no-install-recommends yarn
-
 RUN pip3 install --index-url ${PIP_INDEX_URL} virtualenv==16.7.5
 
 RUN sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd
