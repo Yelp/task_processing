@@ -12,11 +12,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from pathlib import Path
+
 from setuptools import find_packages
 from setuptools import setup
 
 import task_processing
-
+# read the contents of your README file
+this_directory = Path(__file__).parent
+long_description = (this_directory / "README.md").read_text()
 
 setup(
     name='task_processing',
@@ -25,6 +29,8 @@ setup(
     author='Task Processing',
     author_email='team-taskproc@yelp.com',
     description='Framework for task processing executors and configuration',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     packages=find_packages(exclude=('tests*', "examples*")),
     package_data={
         "task_processing": ["py.typed"]
