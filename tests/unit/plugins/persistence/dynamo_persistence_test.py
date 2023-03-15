@@ -1,5 +1,6 @@
 import pytest
 from hypothesis import given
+from hypothesis import HealthCheck
 from hypothesis import settings
 from hypothesis import strategies as st
 
@@ -23,6 +24,7 @@ def persister(mocker):
     return persister
 
 
+@settings(suppress_health_check=(HealthCheck.function_scoped_fixture,))
 @given(x=st.dictionaries(
     keys=st.text(),
     values=st.decimals(allow_nan=False, allow_infinity=False)
@@ -32,16 +34,19 @@ def test_replaces_decimals_dict(x, persister):
         assert type(v) == float
 
 
+@settings(suppress_health_check=(HealthCheck.function_scoped_fixture,))
 @given(x=st.decimals(allow_nan=False, allow_infinity=False))
 def test_replaces_decimals_decimal(x, persister):
     assert type(persister._replace_decimals(x)) is float
 
 
+@settings(suppress_health_check=(HealthCheck.function_scoped_fixture,))
 @given(x=st.lists(st.decimals(allow_nan=False, allow_infinity=False)))
 def test_replaces_decimals_list(x, persister):
     assert all([type(v) == float for v in persister._replace_decimals(x)])
 
 
+@settings(suppress_health_check=(HealthCheck.function_scoped_fixture,))
 @given(x=st.one_of(
     st.text(),
     st.booleans(),
@@ -73,7 +78,7 @@ events = st.builds(
 )
 
 
-@settings(max_examples=50)
+@settings(max_examples=50, suppress_health_check=(HealthCheck.function_scoped_fixture,))
 @given(x=events)
 def test_event_to_item_timestamp(x, persister):
     res = persister._event_to_item(x)['M']
@@ -83,7 +88,7 @@ def test_event_to_item_timestamp(x, persister):
     assert 'M' in res['task_config'].keys()
 
 
-@settings(max_examples=50)
+@settings(max_examples=50, suppress_health_check=(HealthCheck.function_scoped_fixture,))
 @given(x=events)
 def test_event_to_item_list(x, persister):
     res = persister._event_to_item(x)['M']

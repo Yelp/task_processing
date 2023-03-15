@@ -125,7 +125,7 @@ class TaskProcessor:
         else:
             raise ValueError(
                 '{0} provider not registered; available providers: {1}'.format(
-                    provider, self.registry.task_executors.keys().tolist()
+                    provider, list(self.registry.task_executors.keys())
                 )
             )
 
