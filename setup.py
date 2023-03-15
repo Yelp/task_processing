@@ -32,8 +32,6 @@ setup(
     install_requires=[
         # used for immutable data structures
         'pyrsistent',
-        # until we can drop py36, used for things like TypedDicts
-        'typing-extensions',
     ],
     extras_require={
         # We can add the Mesos specific dependencies here

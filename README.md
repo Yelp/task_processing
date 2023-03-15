@@ -7,7 +7,7 @@ Interfaces and shared infrastructure for generic task processing (also known as 
 ### Pre-requisites
 
 + [Docker](https://www.docker.com/get-docker)
-+ [Python 3.6](https://www.python.org/downloads/)
++ [Python 3.8](https://www.python.org/downloads/)
 + [Virtualenv](https://virtualenv.pypa.io/en/stable/installation/)
 
 ### Running examples

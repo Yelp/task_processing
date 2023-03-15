@@ -1,8 +1,7 @@
 # Testing dependencies
 docker-compose
 flake8
-# pin hypothesis since we don't want to switch to testing p37-only until we move tron to py37
-hypothesis==4.57.1
+hypothesis
 mock
 mypy
 pre-commit

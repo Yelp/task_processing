@@ -1,4 +1,4 @@
-FROM ubuntu:bionic
+FROM ubuntu:jammy
 
 ARG PIP_INDEX_URL
 ENV PIP_INDEX_URL=${PIP_INDEX_URL:-https://pypi.python.org/simple}
@@ -13,10 +13,10 @@ RUN apt-get update -q && \
     && apt-get clean
 
 RUN apt-get update -q && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3.6 python3.6-dev python3.6-venv
-RUN wget https://bootstrap.pypa.io/pip/3.6/get-pip.py
-RUN python3.6 get-pip.py
-RUN ln -s /usr/bin/python3.6 /usr/local/bin/python3
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3.8 python3.8-dev python3.8-venv
+RUN wget https://bootstrap.pypa.io/pip/3.8/get-pip.py
+RUN python3.8 get-pip.py
+RUN ln -s /usr/bin/python3.8 /usr/local/bin/python3
 
 RUN cd /tmp && \
     wget http://mirrors.kernel.org/ubuntu/pool/universe/d/dh-virtualenv/dh-virtualenv_1.0-1_all.deb && \
