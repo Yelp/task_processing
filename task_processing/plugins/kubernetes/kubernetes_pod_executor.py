@@ -1,9 +1,10 @@
 import logging
 import time
+from multiprocessing import cpu_count
 from multiprocessing import JoinableQueue
 from multiprocessing import Lock
-from multiprocessing import Pool
 from multiprocessing import Process
+from multiprocessing.pool import Pool
 from queue import Empty
 from time import sleep
 from typing import Collection
@@ -436,12 +437,13 @@ class KubernetesPodExecutor(TaskExecutor):
         logger.info(f'Waiting {REFRESH_EXECUTOR_STATE_PROCESS_GRACE}s before doing work')
         sleep(REFRESH_EXECUTOR_STATE_PROCESS_GRACE)
         logger.debug("Starting Pod task config reconciliation.")
-
+        # allocate half of total cpu count for multiprocessing
+        num_cpus = cpu_count()//2 or 1
         while not self.stopping:
-            # create a process pool that uses all cpus
+            # create a process pool that uses half of total cpus
             task_configs = [
                 self.task_metadata[pod_name].task_config for pod_name in self.task_metadata]
-            with Pool() as pool:
+            with Pool(num_cpus) as pool:
                 # call reconcile function for each task_config in parallel
                 result = pool.map_async(self.reconcile, task_configs)
                 # wait for all tasks to finish
