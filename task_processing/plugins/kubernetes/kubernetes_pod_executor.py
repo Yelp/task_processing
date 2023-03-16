@@ -1,9 +1,10 @@
 import logging
-import queue
-import threading
 import time
+from multiprocessing import JoinableQueue
+from multiprocessing import Lock
 from multiprocessing import Pool
-from queue import Queue
+from multiprocessing import Process
+from queue import Empty
 from time import sleep
 from typing import Collection
 from typing import Optional
@@ -54,8 +55,8 @@ from task_processing.plugins.kubernetes.utils import get_topology_spread_constra
 
 logger = logging.getLogger(__name__)
 
-POD_WATCH_THREAD_JOIN_TIMEOUT_S = 1.0
-POD_EVENT_THREAD_JOIN_TIMEOUT_S = 1.0
+POD_WATCH_PROCESS_JOIN_TIMEOUT_S = 1.0
+POD_EVENT_PROCESS_JOIN_TIMEOUT_S = 1.0
 QUEUE_GET_TIMEOUT_S = 0.5
 SUPPORTED_POD_MODIFIED_EVENT_PHASES = {
     "Failed",
@@ -70,8 +71,8 @@ MAX_WATCH_BACKOFF_S = 30
 # control plane some breathing room
 RETRY_BACKOFF_EXPONENT = 1.5
 
-REFRESH_EXECUTOR_STATE_THREAD_GRACE = 300
-REFRESH_EXECUTOR_STATE_THREAD_INTERVAL = 120
+REFRESH_EXECUTOR_STATE_PROCESS_GRACE = 300
+REFRESH_EXECUTOR_STATE_PROCESS_INTERVAL = 120
 
 
 class KubernetesPodExecutor(TaskExecutor):
@@ -112,7 +113,7 @@ class KubernetesPodExecutor(TaskExecutor):
         self.stopping = False
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
 
-        self.task_metadata_lock = threading.RLock()
+        self.task_metadata_lock = Lock()
         if task_configs:
             for task_config in task_configs:
                 self._initialize_existing_task(task_config)
@@ -122,39 +123,38 @@ class KubernetesPodExecutor(TaskExecutor):
         # and we've opted to not do that processing in the Pod event watcher thread so as to keep
         # that logic for the threads that operate on them as simple as possible and to make it
         # possible to cleanly shutdown both of these.
-        self.pending_events: "Queue[PodEvent]" = Queue()
-        self.event_queue: "Queue[Event]" = Queue()
-
+        self.pending_events: "JoinableQueue[PodEvent]" = JoinableQueue()
+        self.event_queue: "JoinableQueue[Event]" = JoinableQueue()
         # TODO(TASKPROC-243): keep track of resourceVersion so that we can continue event processing
         # from where we left off on restarts
-        self.pod_event_watch_threads = []
+        self.pod_event_watch_processes = []
         self.watches = []
         for kube_client in [self.kube_client] + self.watcher_kube_clients:
             watch = kube_watch.Watch()
-            pod_event_watch_thread = threading.Thread(
+            pod_event_watch_process = Process(
                 target=self._pod_event_watch_loop,
                 args=(kube_client, watch),
-                # ideally this wouldn't be a daemon thread, but a watch.Watch() only checks
+                # ideally this wouldn't be a daemon process, but a watch.Watch() only checks
                 # if it should stop after receiving an event - and it's possible that we
                 # have periods with no events so instead we'll attempt to stop the watch
                 # and then join() with a small timeout to make sure that, if we shutdown
-                # with the thread alive, we did not drop any events
+                # with the process alive, we did not drop any events
                 daemon=True,
             )
-            pod_event_watch_thread.start()
-            self.pod_event_watch_threads.append(pod_event_watch_thread)
+            pod_event_watch_process.start()
+            self.pod_event_watch_processs.append(pod_event_watch_process)
             self.watches.append(watch)
 
-        self.pending_event_processing_thread = threading.Thread(
+        self.pending_event_processing_process = Process(
             target=self._pending_event_processing_loop,
         )
-        self.pending_event_processing_thread.start()
+        self.pending_event_processing_process.start()
 
-        self.reconciliation_task_thread = threading.Thread(
+        self.reconciliation_task_process = Process(
             target=self._reconcile_task_loop,
             daemon=True,
         )
-        self.reconciliation_task_thread.start()
+        self.reconciliation_task_process.start()
 
     def _initialize_existing_task(self, task_config: KubernetesTaskConfig) -> None:
         """Generates task_metadata in UNKNOWN state for an existing KubernetesTaskConfig.
@@ -479,7 +479,7 @@ class KubernetesPodExecutor(TaskExecutor):
             try:
                 event = self.pending_events.get(timeout=QUEUE_GET_TIMEOUT_S)
                 self._process_pod_event(event)
-            except queue.Empty:
+            except Empty:
                 logger.debug(
                     f"Pending event queue remained empty after {QUEUE_GET_TIMEOUT_S} seconds.",
                 )
@@ -508,8 +508,8 @@ class KubernetesPodExecutor(TaskExecutor):
         """
         Run in a thread to reconcile task_metadata from k8s.
         """
-        logger.info(f'Waiting {REFRESH_EXECUTOR_STATE_THREAD_GRACE}s before doing work')
-        sleep(REFRESH_EXECUTOR_STATE_THREAD_GRACE)
+        logger.info(f'Waiting {REFRESH_EXECUTOR_STATE_PROCESS_GRACE}s before doing work')
+        sleep(REFRESH_EXECUTOR_STATE_PROCESS_GRACE)
         logger.debug("Starting Pod task config reconciliation.")
 
         while not self.stopping:
@@ -518,10 +518,11 @@ class KubernetesPodExecutor(TaskExecutor):
                 self.task_metadata[pod_name].task_config for pod_name in self.task_metadata]
             with Pool() as pool:
                 # call reconcile function for each task_config in parallel
-                pool.map(self.reconcile, task_configs)
-
-            logger.info(f'Sleeping for {REFRESH_EXECUTOR_STATE_THREAD_INTERVAL}s')
-            sleep(REFRESH_EXECUTOR_STATE_THREAD_INTERVAL)
+                result = pool.map_async(self.reconcile, task_configs)
+                # wait for all tasks to finish
+                result.wait()
+            logger.info(f'Sleeping for {REFRESH_EXECUTOR_STATE_PROCESS_INTERVAL}s')
+            sleep(REFRESH_EXECUTOR_STATE_PROCESS_INTERVAL)
 
         logger.debug("Exiting Pod task config reconciliation - stop requested.")
 
@@ -783,8 +784,7 @@ class KubernetesPodExecutor(TaskExecutor):
         # grace period to flush the current event to the pending_events queue as well as
         # any other clean-up  - it's possible that after this join() the thread is still alive
         # but in that case we can be reasonably sure that we're not dropping any data.
-        for pod_event_watch_thread in self.pod_event_watch_threads:
-            pod_event_watch_thread.join(timeout=POD_WATCH_THREAD_JOIN_TIMEOUT_S)
+        self.pod_event_watch_process.join(timeout=POD_WATCH_PROCESS_JOIN_TIMEOUT_S)
 
         logger.debug("Waiting for all pending PodEvents to be processed...")
         # once we've stopped updating the pending events queue, we then wait until we're done
@@ -793,11 +793,9 @@ class KubernetesPodExecutor(TaskExecutor):
         self.pending_events.join()
         logger.debug("All pending PodEvents have been processed.")
         # and then give ourselves time to do any post-stop cleanup
-        self.pending_event_processing_thread.join(
-            timeout=POD_EVENT_THREAD_JOIN_TIMEOUT_S
-        )
+        self.pending_event_processing_process.join(timeout=POD_EVENT_PROCESS_JOIN_TIMEOUT_S)
 
         logger.debug("Done stopping KubernetesPodExecutor!")
 
-    def get_event_queue(self) -> "Queue[Event]":
+    def get_event_queue(self) -> "JoinableQueue[Event]":
         return self.event_queue
