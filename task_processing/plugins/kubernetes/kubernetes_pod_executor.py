@@ -2,6 +2,7 @@ import logging
 import queue
 import threading
 import time
+from multiprocessing import Pool
 from queue import Queue
 from time import sleep
 from typing import Collection
@@ -512,9 +513,12 @@ class KubernetesPodExecutor(TaskExecutor):
         logger.debug("Starting Pod task config reconciliation.")
 
         while not self.stopping:
-            for pod_name in self.task_metadata:
-                task_config = self.task_metadata[pod_name].task_config
-                self.reconcile(task_config)
+            # create a process pool that uses all cpus
+            task_configs = [
+                self.task_metadata[pod_name].task_config for pod_name in self.task_metadata]
+            with Pool() as pool:
+                # call reconcile function for each task_config in parallel
+                pool.map(self.reconcile, task_configs)
 
             logger.info(f'Sleeping for {REFRESH_EXECUTOR_STATE_THREAD_INTERVAL}s')
             sleep(REFRESH_EXECUTOR_STATE_THREAD_INTERVAL)
