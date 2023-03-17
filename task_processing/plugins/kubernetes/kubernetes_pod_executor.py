@@ -515,14 +515,26 @@ class KubernetesPodExecutor(TaskExecutor):
         # allocate half of total cpu count for multiprocessing
         num_cpus = cpu_count()//2 or 1
         while not self.stopping:
-            # create a process pool that uses half of total cpus
-            task_configs = [
-                self.task_metadata[pod_name].task_config for pod_name in self.task_metadata]
-            with Pool(num_cpus) as pool:
-                # call reconcile function for each task_config in parallel
-                result = pool.map_async(self.reconcile, task_configs)
-                # wait for all tasks to finish
-                result.wait()
+            try:
+                pods = self.kube_client.get_pods(namespace=self.namespace)
+            except Exception:
+                logger.exception(
+                    f"Hit an exception attempting to fetch pods in namespace {self.namespace}")
+                pods = None
+
+            if pods is not None:
+                # returns a list of tuples containing (list[tuple[KubernetesTaskConfig, V1Pod]])
+                # if the pod is already in task_metadata
+                task_configs_pods = [
+                    (self.task_metadata[pod.metadata.name].task_config, pod)
+                    for pod in pods if pod.metadata.name in self.task_metadata]
+
+                # create a process pool that uses half of total cpus
+                with Pool(num_cpus) as pool:
+                    # call reconcile function for each task_config in parallel
+                    result = pool.starmap_async(self.reconcile, task_configs_pods)
+                    # wait for all tasks to finish
+                    result.wait()
             logger.info(f'Sleeping for {REFRESH_EXECUTOR_STATE_PROCESS_INTERVAL}s')
             sleep(REFRESH_EXECUTOR_STATE_PROCESS_INTERVAL)
 
@@ -679,7 +691,7 @@ class KubernetesPodExecutor(TaskExecutor):
 
         return None
 
-    def reconcile(self, task_config: KubernetesTaskConfig) -> None:
+    def reconcile(self, task_config: KubernetesTaskConfig, pod: Optional[V1Pod] = None) -> None:
         pod_name = task_config.pod_name
         pod = None
         for kube_client in [self.kube_client] + self.watcher_kube_clients:
