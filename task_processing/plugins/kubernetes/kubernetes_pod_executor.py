@@ -1,11 +1,12 @@
 import logging
+import multiprocessing
 import time
 from multiprocessing import cpu_count
-from multiprocessing import JoinableQueue
-from multiprocessing import Lock
-from multiprocessing import Process
+from multiprocessing import Manager
+from multiprocessing import RLock
 from multiprocessing.pool import Pool
 from queue import Empty
+from queue import Queue
 from time import sleep
 from typing import Collection
 from typing import Optional
@@ -82,7 +83,7 @@ class KubernetesPodExecutor(TaskExecutor):
         self.stopping = False
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
 
-        self.task_metadata_lock = Lock()
+        self.task_metadata_lock = RLock()
         if task_configs:
             for task_config in task_configs:
                 self._initialize_existing_task(task_config)
@@ -92,12 +93,15 @@ class KubernetesPodExecutor(TaskExecutor):
         # and we've opted to not do that processing in the Pod event watcher thread so as to keep
         # that logic for the threads that operate on them as simple as possible and to make it
         # possible to cleanly shutdown both of these.
-        self.pending_events: "JoinableQueue[PodEvent]" = JoinableQueue()
-        self.event_queue: "JoinableQueue[Event]" = JoinableQueue()
+
+        self.pending_events_manager = Manager()
+        self.pending_events: "Queue[PodEvent]" = self.pending_events_manager.Queue()
+        self.event_queue_manager = Manager()
+        self.event_queue: "Queue[Event]" = self.event_queue_manager.Queue()
         # TODO(TASKPROC-243): keep track of resourceVersion so that we can continue event processing
         # from where we left off on restarts
         self.watch = watch.Watch()
-        self.pod_event_watch_process = Process(
+        self.pod_event_watch_process = multiprocessing.Process(
             target=self._pod_event_watch_loop,
             # ideally this wouldn't be a daemon process, but a watch.Watch() only checks
             # if it should stop after receiving an event - and it's possible that we
@@ -108,12 +112,12 @@ class KubernetesPodExecutor(TaskExecutor):
         )
         self.pod_event_watch_process.start()
 
-        self.pending_event_processing_process = Process(
+        self.pending_event_processing_process = multiprocessing.Process(
             target=self._pending_event_processing_loop,
         )
         self.pending_event_processing_process.start()
 
-        self.reconciliation_task_process = Process(
+        self.reconciliation_task_process = multiprocessing.Process(
             target=self._reconcile_task_loop,
             daemon=True,
         )
@@ -676,5 +680,5 @@ class KubernetesPodExecutor(TaskExecutor):
 
         logger.debug("Done stopping KubernetesPodExecutor!")
 
-    def get_event_queue(self) -> "JoinableQueue[Event]":
+    def get_event_queue(self) -> "Queue[Event]":
         return self.event_queue
