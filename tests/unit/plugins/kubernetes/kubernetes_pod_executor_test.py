@@ -41,7 +41,7 @@ from task_processing.plugins.kubernetes.types import PodEvent
 
 
 @pytest.fixture
-def k8s_executor(mock_Thread):
+def k8s_executor(mock_Process):
     with mock.patch(
         "task_processing.plugins.kubernetes.kube_client.kube_config.load_kube_config",
         autospec=True,
@@ -90,7 +90,7 @@ def mock_task_configs():
 
 
 @pytest.fixture
-def k8s_executor_with_tasks(mock_Thread, mock_task_configs):
+def k8s_executor_with_tasks(mock_Process, mock_task_configs):
     with mock.patch(
         "task_processing.plugins.kubernetes.kube_client.kube_config.load_kube_config",
         autospec=True,
