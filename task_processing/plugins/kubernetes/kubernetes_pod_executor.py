@@ -1,10 +1,10 @@
 import logging
 import multiprocessing
 import time
+from concurrent.futures import ProcessPoolExecutor as Pool
 from multiprocessing import cpu_count
 from multiprocessing import Manager
 from multiprocessing import RLock
-from multiprocessing.pool import Pool
 from queue import Empty
 from queue import Queue
 from time import sleep
@@ -457,13 +457,11 @@ class KubernetesPodExecutor(TaskExecutor):
                 task_configs_pods = [
                     (self.task_metadata[pod.metadata.name].task_config, pod)
                     for pod in pods if pod.metadata.name in self.task_metadata]
-
+                list_task_configs, list_pods = zip(*task_configs_pods)
                 # create a process pool that uses half of total cpus
-                with Pool(num_cpus) as pool:
+                with Pool(max_workers=num_cpus) as pool:
                     # call reconcile function for each task_config in parallel
-                    result = pool.starmap_async(self.reconcile, task_configs_pods)
-                    # wait for all tasks to finish
-                    result.wait()
+                    pool.map(self.reconcile, list_task_configs, list_pods)
             logger.info(f'Sleeping for {REFRESH_EXECUTOR_STATE_PROCESS_INTERVAL}s')
             sleep(REFRESH_EXECUTOR_STATE_PROCESS_INTERVAL)
 
