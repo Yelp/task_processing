@@ -383,6 +383,22 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         invariant=_valid_empty_volumes,
     )
 
+    stdin = field(
+        type=bool,
+        initial=False,
+        mandatory=False,
+    )
+    stdin_once = field(
+        type=bool,
+        initial=False,
+        mandatory=False,
+    )
+    tty = field(
+        type=bool,
+        initial=False,
+        mandatory=False,
+    )
+
     @property
     def pod_name(self) -> str:
         return get_sanitised_kubernetes_name(

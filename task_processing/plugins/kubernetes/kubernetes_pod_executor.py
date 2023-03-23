@@ -462,6 +462,9 @@ class KubernetesPodExecutor(TaskExecutor):
             ),
             volume_mounts=volume_mounts,
             ports=[V1ContainerPort(container_port=port) for port in task_config.ports],
+            stdin=task_config.stdin,
+            stdin_once=task_config.stdin_once,
+            tty=task_config.tty,
         )
 
     def run(self, task_config: KubernetesTaskConfig) -> Optional[str]:
