@@ -119,6 +119,9 @@ def test_run(mock_get_node_affinity, k8s_executor):
         },
         service_account_name="testsa",
         ports=[8888],
+        stdin=True,
+        stdin_once=True,
+        tty=True,
     )
     expected_container = V1Container(
         image=task_config.image,
@@ -142,6 +145,9 @@ def test_run(mock_get_node_affinity, k8s_executor):
             read_only=True,
         )],
         ports=[V1ContainerPort(container_port=8888)],
+        stdin=True,
+        stdin_once=True,
+        tty=True,
     )
     expected_pod = V1Pod(
         metadata=V1ObjectMeta(
