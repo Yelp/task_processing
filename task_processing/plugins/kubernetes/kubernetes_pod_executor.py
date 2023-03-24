@@ -4,7 +4,6 @@ import time
 from concurrent.futures import ProcessPoolExecutor as Pool
 from multiprocessing import cpu_count
 from multiprocessing import Manager
-from multiprocessing import RLock
 from queue import Empty
 from queue import Queue
 from time import sleep
@@ -72,6 +71,10 @@ class KubernetesPodExecutor(TaskExecutor):
         if not version:
             version = "unknown_task_processing"
         user_agent = f"{namespace}/v{version}"
+
+        # Create a manager that shares data between different processes and manages shared objects
+        self.process_manager = Manager()
+
         self.kube_client = KubeClient(kubeconfig_path=kubeconfig_path, user_agent=user_agent)
         self.namespace = namespace
 
@@ -83,7 +86,7 @@ class KubernetesPodExecutor(TaskExecutor):
         self.stopping = False
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
 
-        self.task_metadata_lock = RLock()
+        self.task_metadata_lock = self.process_manager.RLock()
         if task_configs:
             for task_config in task_configs:
                 self._initialize_existing_task(task_config)
@@ -94,10 +97,8 @@ class KubernetesPodExecutor(TaskExecutor):
         # that logic for the threads that operate on them as simple as possible and to make it
         # possible to cleanly shutdown both of these.
 
-        self.pending_events_manager = Manager()
-        self.pending_events: "Queue[PodEvent]" = self.pending_events_manager.Queue()
-        self.event_queue_manager = Manager()
-        self.event_queue: "Queue[Event]" = self.event_queue_manager.Queue()
+        self.pending_events: "Queue[PodEvent]" = self.process_manager.Queue()
+        self.event_queue: "Queue[Event]" = self.process_manager.Queue()
         # TODO(TASKPROC-243): keep track of resourceVersion so that we can continue event processing
         # from where we left off on restarts
         self.watch = watch.Watch()
@@ -114,6 +115,7 @@ class KubernetesPodExecutor(TaskExecutor):
 
         self.pending_event_processing_process = multiprocessing.Process(
             target=self._pending_event_processing_loop,
+            daemon=True,
         )
         self.pending_event_processing_process.start()
 
