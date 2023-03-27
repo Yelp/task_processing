@@ -355,11 +355,16 @@ def test_reconcile_task_loop_reconcile_existing_pods_only(k8s_executor, mock_tas
         k8s_executor,
         "kube_client",
         autospec=True
-    ) as mock_kube_client:
+    ) as mock_kube_client, mock.patch(
+        "task_processing.plugins.kubernetes.kubernetes_pod_executor.KubernetesPodExecutor.is_stopping",  # noqa
+        new_callable=mock.PropertyMock,
+        side_effect=[False, True]
+    ):
         mock_kube_client.get_pods.return_value = mock_pods
         k8s_executor._reconcile_task_loop()
 
-    assert len(mock_reconcile_task.assert_called()) == 3
+    mock_reconcile_task.assert_called()
+    assert mock_reconcile_task.call_count == 3
 
 
 def test_process_event_enqueues_task_processing_events_deleted(

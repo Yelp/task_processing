@@ -436,7 +436,7 @@ class KubernetesPodExecutor(TaskExecutor):
         logger.info(f'Waiting {REFRESH_EXECUTOR_STATE_THREAD_GRACE}s before doing work')
         sleep(REFRESH_EXECUTOR_STATE_THREAD_GRACE)
         logger.debug("Starting Pod task config reconciliation.")
-        while not self.stopping:
+        while not self.is_stopping:
             try:
                 pods = self.kube_client.get_pods(namespace=self.namespace)
             except Exception:
@@ -675,3 +675,11 @@ class KubernetesPodExecutor(TaskExecutor):
 
     def get_event_queue(self) -> "Queue[Event]":
         return self.event_queue
+
+    @property
+    def is_stopping(self):
+        return self.stopping
+
+    @is_stopping.setter
+    def is_stopping(self, val):
+        self.stopping = val
