@@ -1,8 +1,9 @@
 import logging
-import queue
 import threading
 import time
+from queue import Empty
 from queue import Queue
+from time import sleep
 from typing import Collection
 from typing import Optional
 
@@ -49,6 +50,8 @@ SUPPORTED_POD_MODIFIED_EVENT_PHASES = {
     "Succeeded",
     "Unknown",
 }
+REFRESH_EXECUTOR_STATE_THREAD_GRACE = 300
+REFRESH_EXECUTOR_STATE_THREAD_INTERVAL = 120
 
 
 class KubernetesPodExecutor(TaskExecutor):
@@ -108,6 +111,12 @@ class KubernetesPodExecutor(TaskExecutor):
             target=self._pending_event_processing_loop,
         )
         self.pending_event_processing_thread.start()
+
+        self.reconciliation_task_thread = threading.Thread(
+            target=self._reconcile_task_loop,
+            daemon=True,
+        )
+        self.reconciliation_task_thread.start()
 
     def _initialize_existing_task(self, task_config: KubernetesTaskConfig) -> None:
         """ Generates task_metadata in UNKNOWN state for an existing KubernetesTaskConfig.
@@ -397,7 +406,7 @@ class KubernetesPodExecutor(TaskExecutor):
             try:
                 event = self.pending_events.get(timeout=QUEUE_GET_TIMEOUT_S)
                 self._process_pod_event(event)
-            except queue.Empty:
+            except Empty:
                 logger.debug(
                     f"Pending event queue remained empty after {QUEUE_GET_TIMEOUT_S} seconds.",
                 )
@@ -419,6 +428,33 @@ class KubernetesPodExecutor(TaskExecutor):
                 logger.error("task_done() called on pending events queue too many times!")
 
         logger.debug("Exiting Pod event processing - stop requested.")
+
+    def _reconcile_task_loop(self) -> None:
+        """
+        Run in a thread to reconcile task_metadata from k8s.
+        """
+        logger.info(f'Waiting {REFRESH_EXECUTOR_STATE_THREAD_GRACE}s before doing work')
+        sleep(REFRESH_EXECUTOR_STATE_THREAD_GRACE)
+        logger.debug("Starting Pod task config reconciliation.")
+        while not self.stopping:
+            try:
+                pods = self.kube_client.get_pods(namespace=self.namespace)
+            except Exception:
+                logger.exception(
+                    f"Hit an exception attempting to fetch pods in namespace {self.namespace}")
+                pods = None
+
+            if pods is not None:
+                # returns a list of tuples containing (list[tuple[KubernetesTaskConfig, V1Pod]])
+                # if the pod is already in task_metadata
+                task_configs_pods = [
+                    (self.task_metadata[pod.metadata.name].task_config, pod)
+                    for pod in pods if pod.metadata.name in self.task_metadata]
+                for task_metadata, pod in task_configs_pods:
+                    self.reconcile(task_metadata, pod)
+            logger.info(f'Sleeping for {REFRESH_EXECUTOR_STATE_THREAD_INTERVAL}s')
+            sleep(REFRESH_EXECUTOR_STATE_THREAD_INTERVAL)
+        logger.debug("Exiting Pod task config reconciliation - stop requested.")
 
     def _create_container_definition(
         self,
@@ -544,13 +580,14 @@ class KubernetesPodExecutor(TaskExecutor):
 
         return None
 
-    def reconcile(self, task_config: KubernetesTaskConfig) -> None:
+    def reconcile(self, task_config: KubernetesTaskConfig, pod: Optional[V1Pod] = None) -> None:
         pod_name = task_config.pod_name
-        try:
-            pod = self.kube_client.get_pod(namespace=self.namespace, pod_name=pod_name)
-        except Exception:
-            logger.exception(f"Hit an exception attempting to fetch pod {pod_name}")
-            pod = None
+        if pod is None:
+            try:
+                pod = self.kube_client.get_pod(namespace=self.namespace, pod_name=pod_name)
+            except Exception:
+                logger.exception(f"Hit an exception attempting to fetch pod {pod_name}")
+                pod = None
 
         if pod_name not in self.task_metadata:
             self._initialize_existing_task(task_config)
@@ -621,6 +658,9 @@ class KubernetesPodExecutor(TaskExecutor):
         # any other clean-up  - it's possible that after this join() the thread is still alive
         # but in that case we can be reasonably sure that we're not dropping any data.
         self.pod_event_watch_thread.join(timeout=POD_WATCH_THREAD_JOIN_TIMEOUT_S)
+
+        logger.debug("Signaling reconciliation task to stop.")
+        self.reconciliation_task_thread.join()
 
         logger.debug("Waiting for all pending PodEvents to be processed...")
         # once we've stopped updating the pending events queue, we then wait until we're done

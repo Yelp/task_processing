@@ -8,5 +8,6 @@ pre-commit
 pytest
 pytest-cov
 pytest-mock
+pytest_bdd
 types-pyyaml
 types-requests

@@ -318,6 +318,50 @@ def test_pending_event_processing_loop_processes_remaining_events_after_stop(k8s
     assert k8s_executor.pending_events.qsize() == 0
 
 
+@mock.patch(
+    "task_processing.plugins.kubernetes.kubernetes_pod_executor.REFRESH_EXECUTOR_STATE_THREAD_GRACE",  # noqa
+    1,
+)
+@mock.patch(
+    "task_processing.plugins.kubernetes.kubernetes_pod_executor.REFRESH_EXECUTOR_STATE_THREAD_INTERVAL",  # noqa
+    1,
+)
+def test_reconcile_task_loop_reconcile_existing_pods_only(k8s_executor, mock_task_configs):
+    mock_pods = []
+    test_phases = ['Unknown', 'Succeeded', 'Failed', 'Running']
+    task_metadata = {}
+
+    for taskconf, phase in zip(mock_task_configs, test_phases):
+        mock_pod = mock.Mock(spec=V1Pod)
+        mock_pod.metadata.name = taskconf.pod_name
+        mock_pod.status.phase = phase
+        mock_pod.status.host_ip = '1.2.3.4'
+        mock_pod.spec.node_name = 'kubenode'
+        mock_pods.append(mock_pod)
+        task_metadata[taskconf.pod_name] = KubernetesTaskMetadata(
+            task_config=taskconf,
+            task_state=KubernetesTaskState.TASK_RUNNING,
+            task_state_history=v(),
+        )
+    # Keep only 3 task_configs in task_metadata
+    task_metadata.popitem()
+    k8s_executor.task_metadata = pmap(task_metadata)
+
+    with mock.patch.object(
+        k8s_executor,
+        "reconcile",
+        autospec=True,
+    ) as mock_reconcile_task, mock.patch.object(
+        k8s_executor,
+        "kube_client",
+        autospec=True
+    ) as mock_kube_client:
+        mock_kube_client.get_pods.return_value = mock_pods
+        k8s_executor._reconcile_task_loop()
+
+    assert len(mock_reconcile_task.assert_called()) == 3
+
+
 def test_process_event_enqueues_task_processing_events_deleted(
     k8s_executor,
 ):
