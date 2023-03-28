@@ -1,4 +1,5 @@
 import logging
+import os
 import threading
 import time
 from queue import Empty
@@ -38,7 +39,7 @@ from task_processing.plugins.kubernetes.utils import get_node_affinity
 from task_processing.plugins.kubernetes.utils import get_pod_empty_volumes
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
-
+from task_processing.utils import strtobool
 logger = logging.getLogger(__name__)
 
 POD_WATCH_THREAD_JOIN_TIMEOUT_S = 1.0
@@ -50,8 +51,12 @@ SUPPORTED_POD_MODIFIED_EVENT_PHASES = {
     "Succeeded",
     "Unknown",
 }
-REFRESH_EXECUTOR_STATE_THREAD_GRACE = 300
-REFRESH_EXECUTOR_STATE_THREAD_INTERVAL = 120
+REFRESH_EXECUTOR_STATE_THREAD_GRACE: int = int(
+    os.getenv("TASK_PROCESSING_REFRESH_EXECUTOR_STATE_THREAD_GRACE", 300))
+REFRESH_EXECUTOR_STATE_THREAD_INTERVAL: int = int(
+    os.getenv("TASK_PROCESSING_REFRESH_EXECUTOR_STATE_THREAD_INTERVAL", 120))
+ENABLE_RECONCILIATION: bool = strtobool(
+    os.getenv("TASK_PROCESSING_RECONCILIATION_ENABLE", "True"))
 
 
 class KubernetesPodExecutor(TaskExecutor):
@@ -112,11 +117,12 @@ class KubernetesPodExecutor(TaskExecutor):
         )
         self.pending_event_processing_thread.start()
 
-        self.reconciliation_task_thread = threading.Thread(
-            target=self._reconcile_task_loop,
-            daemon=True,
-        )
-        self.reconciliation_task_thread.start()
+        if ENABLE_RECONCILIATION:
+            self.reconciliation_task_thread = threading.Thread(
+                target=self._reconcile_task_loop,
+                daemon=True,
+            )
+            self.reconciliation_task_thread.start()
 
     def _initialize_existing_task(self, task_config: KubernetesTaskConfig) -> None:
         """ Generates task_metadata in UNKNOWN state for an existing KubernetesTaskConfig.
