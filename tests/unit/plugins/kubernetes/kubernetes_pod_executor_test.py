@@ -36,7 +36,10 @@ def k8s_executor(mock_Thread):
         "task_processing.plugins.kubernetes.kube_client.kube_client",
         autospec=True
     ), mock.patch.dict(os.environ, {"KUBECONFIG": "/this/doesnt/exist.conf"}):
-        executor = KubernetesPodExecutor(namespace="task_processing_tests")
+        executor = KubernetesPodExecutor(namespace="task_processing_tests",
+                                         refresh_reconciliation_thread_grace=1,
+                                         refresh_reconciliation_thread_interval=1,
+                                         enable_reconciliation=True)
         yield executor
         executor.stop()
 
@@ -318,14 +321,6 @@ def test_pending_event_processing_loop_processes_remaining_events_after_stop(k8s
     assert k8s_executor.pending_events.qsize() == 0
 
 
-@mock.patch(
-    "task_processing.plugins.kubernetes.kubernetes_pod_executor.REFRESH_EXECUTOR_STATE_THREAD_GRACE",  # noqa
-    1,
-)
-@mock.patch(
-    "task_processing.plugins.kubernetes.kubernetes_pod_executor.REFRESH_EXECUTOR_STATE_THREAD_INTERVAL",  # noqa
-    1,
-)
 def test_reconcile_task_loop_reconcile_existing_pods_only(k8s_executor, mock_task_configs):
     mock_pods = []
     test_phases = ['Unknown', 'Succeeded', 'Failed', 'Running']

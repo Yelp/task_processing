@@ -39,13 +39,3 @@ def get_cluster_master_by_proxy(
     else:
         addr_info = services[proxy_name]
         return addr_info['host'] + ':' + str(addr_info['port'])
-
-
-def strtobool(s: str) -> bool:
-    truevals = ("yes", "y", "on", "true", "t", "1")
-    falsevals = ("no", "n", "off", "false", "f", "0")
-    if s.lower() in truevals:
-        return True
-    if s.lower() in falsevals:
-        return False
-    raise ValueError(f"invalid truth value: {s}")

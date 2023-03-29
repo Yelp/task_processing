@@ -1,12 +1,13 @@
 import logging
-import os
 import threading
 import time
 from queue import Empty
 from queue import Queue
 from time import sleep
 from typing import Collection
+from typing import List
 from typing import Optional
+from typing import Tuple
 
 from kubernetes import watch
 from kubernetes.client import V1Affinity
@@ -39,7 +40,6 @@ from task_processing.plugins.kubernetes.utils import get_node_affinity
 from task_processing.plugins.kubernetes.utils import get_pod_empty_volumes
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
-from task_processing.utils import strtobool
 logger = logging.getLogger(__name__)
 
 POD_WATCH_THREAD_JOIN_TIMEOUT_S = 1.0
@@ -51,12 +51,6 @@ SUPPORTED_POD_MODIFIED_EVENT_PHASES = {
     "Succeeded",
     "Unknown",
 }
-REFRESH_EXECUTOR_STATE_THREAD_GRACE: int = int(
-    os.getenv("TASK_PROCESSING_REFRESH_EXECUTOR_STATE_THREAD_GRACE", 300))
-REFRESH_EXECUTOR_STATE_THREAD_INTERVAL: int = int(
-    os.getenv("TASK_PROCESSING_REFRESH_EXECUTOR_STATE_THREAD_INTERVAL", 120))
-ENABLE_RECONCILIATION: bool = strtobool(
-    os.getenv("TASK_PROCESSING_RECONCILIATION_ENABLE", "True"))
 
 
 class KubernetesPodExecutor(TaskExecutor):
@@ -69,7 +63,9 @@ class KubernetesPodExecutor(TaskExecutor):
         kubeconfig_path: Optional[str] = None,
         task_configs: Optional[Collection[KubernetesTaskConfig]] = [],
         emit_events_without_state_transitions: bool = False,
-
+        refresh_reconciliation_thread_grace: int = 300,
+        refresh_reconciliation_thread_interval: int = 120,
+        enable_reconciliation: bool = False
     ) -> None:
         if not version:
             version = "unknown_task_processing"
@@ -117,7 +113,12 @@ class KubernetesPodExecutor(TaskExecutor):
         )
         self.pending_event_processing_thread.start()
 
-        if ENABLE_RECONCILIATION:
+        # Seconds to wait before starting reconciliation
+        self.refresh_reconciliation_thread_grace = refresh_reconciliation_thread_grace
+        self.refresh_reconciliation_thread_interval = refresh_reconciliation_thread_interval
+        self.enable_reconciliation = enable_reconciliation
+
+        if self.enable_reconciliation:
             self.reconciliation_task_thread = threading.Thread(
                 target=self._reconcile_task_loop,
                 daemon=True,
@@ -439,11 +440,13 @@ class KubernetesPodExecutor(TaskExecutor):
         """
         Run in a thread to reconcile task_metadata from k8s.
         """
-        logger.info(f'Waiting {REFRESH_EXECUTOR_STATE_THREAD_GRACE}s before doing work')
-        sleep(REFRESH_EXECUTOR_STATE_THREAD_GRACE)
+        logger.info(f'Waiting {self.refresh_reconciliation_thread_grace}s before doing work')
+        sleep(self.refresh_reconciliation_thread_grace)
         logger.debug("Starting Pod task config reconciliation.")
         while not self.is_stopping:
             try:
+                # fetch all pods in the target namespace in one request so that we
+                # don't block on making N serial requests to the Kubernetes API
                 pods = self.kube_client.get_pods(namespace=self.namespace)
             except Exception:
                 logger.exception(
@@ -451,15 +454,19 @@ class KubernetesPodExecutor(TaskExecutor):
                 pods = None
 
             if pods is not None:
-                # returns a list of tuples containing (list[tuple[KubernetesTaskConfig, V1Pod]])
-                # if the pod is already in task_metadata
-                task_configs_pods = [
+                # we've previously bulk-fetched all the pods running in the target
+                # namespace - we'll now filter these by the tasks down to only
+                # those we know about so that we only reconcile the state for what
+                # we actually need and not any other cruft that may exist.
+                task_configs_pods: List[Tuple[KubernetesTaskConfig, V1Pod]] = [
                     (self.task_metadata[pod.metadata.name].task_config, pod)
-                    for pod in pods if pod.metadata.name in self.task_metadata]
-                for task_metadata, pod in task_configs_pods:
-                    self.reconcile(task_metadata, pod)
-            logger.info(f'Sleeping for {REFRESH_EXECUTOR_STATE_THREAD_INTERVAL}s')
-            sleep(REFRESH_EXECUTOR_STATE_THREAD_INTERVAL)
+                    for pod in pods
+                    if pod.metadata.name in self.task_metadata
+                ]
+            for task_metadata, pod in task_configs_pods:
+                self.reconcile(task_metadata, pod)
+            logger.info(f'Sleeping for {self.refresh_reconciliation_thread_interval}s')
+            sleep(self.refresh_reconciliation_thread_interval)
         logger.debug("Exiting Pod task config reconciliation - stop requested.")
 
     def _create_container_definition(
@@ -665,8 +672,9 @@ class KubernetesPodExecutor(TaskExecutor):
         # but in that case we can be reasonably sure that we're not dropping any data.
         self.pod_event_watch_thread.join(timeout=POD_WATCH_THREAD_JOIN_TIMEOUT_S)
 
-        logger.debug("Signaling reconciliation task to stop.")
-        self.reconciliation_task_thread.join()
+        if self.enable_reconciliation:
+            logger.debug("Signaling reconciliation task to stop.")
+            self.reconciliation_task_thread.join()
 
         logger.debug("Waiting for all pending PodEvents to be processed...")
         # once we've stopped updating the pending events queue, we then wait until we're done

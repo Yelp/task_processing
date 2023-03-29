@@ -6,8 +6,8 @@ mock
 mypy
 pre-commit
 pytest
+pytest-bdd
 pytest-cov
 pytest-mock
-pytest_bdd
 types-pyyaml
 types-requests
