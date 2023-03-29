@@ -187,6 +187,21 @@ class KubernetesPodExecutor(TaskExecutor):
                         "Exception encountered while watching Pod events - restarting watch!")
         logger.debug("Exiting Pod event watcher - stop requested.")
 
+    def _filter_task_configs_in_pods(
+            self,
+            pods: List[V1Pod]
+    ) -> List[Tuple[KubernetesTaskConfig, V1Pod]]:
+        """
+        Called during reconciliation task loop in order to filter the task_configs/pods
+        that are in task_metadata.
+        """
+        task_config_pods = []
+        for pod in pods:
+            if pod.metadata.name in self.task_metadata:
+                task_config_pod = (self.task_metadata[pod.metadata.name].task_config, pod)
+                task_config_pods.append(task_config_pod)
+        return task_config_pods
+
     def __handle_deleted_pod_event(self, event: PodEvent) -> None:
         pod = event["object"]
         pod_name = pod.metadata.name
@@ -443,7 +458,7 @@ class KubernetesPodExecutor(TaskExecutor):
         logger.info(f'Waiting {self.refresh_reconciliation_thread_grace}s before doing work')
         sleep(self.refresh_reconciliation_thread_grace)
         logger.debug("Starting Pod task config reconciliation.")
-        while not self.is_stopping:
+        while not self.stopping:
             try:
                 # fetch all pods in the target namespace in one request so that we
                 # don't block on making N serial requests to the Kubernetes API
@@ -452,19 +467,17 @@ class KubernetesPodExecutor(TaskExecutor):
                 logger.exception(
                     f"Hit an exception attempting to fetch pods in namespace {self.namespace}")
                 pods = None
+                continue
 
             if pods is not None:
                 # we've previously bulk-fetched all the pods running in the target
                 # namespace - we'll now filter these by the tasks down to only
                 # those we know about so that we only reconcile the state for what
                 # we actually need and not any other cruft that may exist.
-                task_configs_pods: List[Tuple[KubernetesTaskConfig, V1Pod]] = [
-                    (self.task_metadata[pod.metadata.name].task_config, pod)
-                    for pod in pods
-                    if pod.metadata.name in self.task_metadata
-                ]
-            for task_metadata, pod in task_configs_pods:
-                self.reconcile(task_metadata, pod)
+                task_configs_pods = self._filter_task_configs_in_pods(pods)
+                if task_configs_pods:
+                    for task_metadata, pod in task_configs_pods:
+                        self.reconcile(task_metadata, pod)
             logger.info(f'Sleeping for {self.refresh_reconciliation_thread_interval}s')
             sleep(self.refresh_reconciliation_thread_interval)
         logger.debug("Exiting Pod task config reconciliation - stop requested.")
@@ -689,11 +702,3 @@ class KubernetesPodExecutor(TaskExecutor):
 
     def get_event_queue(self) -> "Queue[Event]":
         return self.event_queue
-
-    @property
-    def is_stopping(self):
-        return self.stopping
-
-    @is_stopping.setter
-    def is_stopping(self, val):
-        self.stopping = val

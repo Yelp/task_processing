@@ -321,7 +321,7 @@ def test_pending_event_processing_loop_processes_remaining_events_after_stop(k8s
     assert k8s_executor.pending_events.qsize() == 0
 
 
-def test_reconcile_task_loop_reconcile_existing_pods_only(k8s_executor, mock_task_configs):
+def test__filter_task_configs_in_pods_existing_pods_only(k8s_executor, mock_task_configs):
     mock_pods = []
     test_phases = ['Unknown', 'Succeeded', 'Failed', 'Running']
     task_metadata = {}
@@ -338,28 +338,21 @@ def test_reconcile_task_loop_reconcile_existing_pods_only(k8s_executor, mock_tas
             task_state=KubernetesTaskState.TASK_RUNNING,
             task_state_history=v(),
         )
-    # Keep only 3 task_configs in task_metadata
+    # We want to test to see if we have 4 V1Pods in mock_pods coming from Kubernetes and
+    # only 3 in task_metadata that the function would only return the 3 tuples for reconciliation
+    # We should pop one of the tasks in order to remove a task associated with one of the V1Pods
     task_metadata.popitem()
     k8s_executor.task_metadata = pmap(task_metadata)
 
     with mock.patch.object(
         k8s_executor,
-        "reconcile",
-        autospec=True,
-    ) as mock_reconcile_task, mock.patch.object(
-        k8s_executor,
         "kube_client",
         autospec=True
-    ) as mock_kube_client, mock.patch(
-        "task_processing.plugins.kubernetes.kubernetes_pod_executor.KubernetesPodExecutor.is_stopping",  # noqa
-        new_callable=mock.PropertyMock,
-        side_effect=[False, True]
-    ):
+    ) as mock_kube_client:
         mock_kube_client.get_pods.return_value = mock_pods
-        k8s_executor._reconcile_task_loop()
+        task_config_pods = k8s_executor._filter_task_configs_in_pods(mock_pods)
 
-    mock_reconcile_task.assert_called()
-    assert mock_reconcile_task.call_count == 3
+    assert len(task_config_pods) == 3
 
 
 def test_process_event_enqueues_task_processing_events_deleted(
