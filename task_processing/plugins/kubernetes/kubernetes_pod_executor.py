@@ -190,7 +190,7 @@ class KubernetesPodExecutor(TaskExecutor):
     def _group_pod_task_configs(
         self,
         pods: List[V1Pod]
-    ) -> List[Tuple[KubernetesTaskConfig, V1Pod]]:
+    ) -> List[Tuple[KubernetesTaskConfig, Optional[V1Pod]]]:
         """
         Called during reconciliation task loop in order to filter the task_configs/pods
         that are in task_metadata.
@@ -207,7 +207,7 @@ class KubernetesPodExecutor(TaskExecutor):
     def _filter_task_configs_pods_to_reconcile(
         self,
         task_configs_pods: List[Tuple[KubernetesTaskConfig, V1Pod]]
-    ) -> List[Tuple[KubernetesTaskConfig, V1Pod]]:
+    ) -> List[Tuple[KubernetesTaskConfig, Optional[V1Pod]]]:
         """
         Called during reconciliation task loop in order to filter the task_configs/pods
         that are mismatched in task_metadata.
@@ -222,6 +222,10 @@ class KubernetesPodExecutor(TaskExecutor):
         }
 
         for task_config, pod in task_configs_pods:
+            # If the pod is not returned then we must set the task_metadata to lost state
+            if pod is None:
+                task_configs_pods_to_reconcile.append((task_config, pod))
+                continue
             pod_name = pod.metadata.name
             pod_phase = pod.status.phase
             task_metadata = self.task_metadata[pod_name]
@@ -238,7 +242,6 @@ class KubernetesPodExecutor(TaskExecutor):
                     f"task_metadata: {task_metadata}"
                 )
                 task_configs_pods_to_reconcile.append((task_config, pod))
-
         return task_configs_pods_to_reconcile
 
     def __handle_deleted_pod_event(self, event: PodEvent) -> None:
