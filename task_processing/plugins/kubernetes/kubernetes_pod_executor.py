@@ -195,11 +195,14 @@ class KubernetesPodExecutor(TaskExecutor):
         Called during reconciliation task loop in order to filter the task_configs/pods
         that are in task_metadata.
         """
+        v1pods = {pod.metadata.name: pod for pod in pods}
         task_config_pods = []
-        for pod in pods:
-            if pod.metadata.name in self.task_metadata:
-                task_config_pod = (self.task_metadata[pod.metadata.name].task_config, pod)
+
+        for pod_name, task_metadata in self.task_metadata.items():
+            if pod_name in v1pods:
+                task_config_pod = (task_metadata.task_config, v1pods[pod_name])
                 task_config_pods.append(task_config_pod)
+
         return task_config_pods
 
     def __handle_deleted_pod_event(self, event: PodEvent) -> None:
@@ -467,7 +470,6 @@ class KubernetesPodExecutor(TaskExecutor):
                 logger.exception(
                     f"Hit an exception attempting to fetch pods in namespace {self.namespace}")
                 pods = None
-                continue
 
             if pods is not None:
                 # we've previously bulk-fetched all the pods running in the target
