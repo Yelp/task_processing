@@ -222,7 +222,9 @@ class KubernetesPodExecutor(TaskExecutor):
         }
 
         for task_config, pod in task_configs_pods:
-            # If the pod is not returned then we must set the task_metadata to lost state - if k8s no longer knows about this pod/task, then there's no way for us to figure out it's final state in an automated fashion
+            # If the pod is not returned then we must set the task_metadata to lost state
+            # if k8s no longer knows about this pod/task, then there's no way for us to
+            # figure out it's final state in an automated fashion
             if pod is None:
                 task_configs_pods_to_reconcile.append((task_config, pod))
                 continue
