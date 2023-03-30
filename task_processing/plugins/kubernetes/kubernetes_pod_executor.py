@@ -226,13 +226,19 @@ class KubernetesPodExecutor(TaskExecutor):
             for task_config, pod in task_configs_pods:
                 pod_name = pod.metadata.name
                 pod_phase = pod.status.phase
-                task_metadata_state = self.task_metadata[pod_name].task_state
+                task_metadata = self.task_metadata[pod_name]
+                task_metadata_state = task_metadata.task_state
                 if pod_phase not in phase_task_state_map:
                     logger.debug(
                         f"Got a MODIFIED event for {pod_name} for unhandled phase: "
                         f"{pod_phase} - ignoring."
                     )
                 if phase_task_state_map[pod_phase] is not task_metadata_state:
+                    logger.debug(
+                        f"Mismatched event found for {pod_name} during reconciliation."
+                        f"pod_phase: {pod_phase} vs task_metadata_state: {task_metadata_state}"
+                        f"task_metadata{task_metadata}"
+                    )
                     task_configs_pods_to_reconcile.append((task_config, pod))
 
         return task_configs_pods_to_reconcile
