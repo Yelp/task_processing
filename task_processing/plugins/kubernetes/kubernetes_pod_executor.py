@@ -206,7 +206,7 @@ class KubernetesPodExecutor(TaskExecutor):
 
     def _filter_task_configs_pods_to_reconcile(
         self,
-        task_configs_pods: List[Tuple[KubernetesTaskConfig, V1Pod]]
+        task_configs_pods: List[Tuple[KubernetesTaskConfig, Optional[V1Pod]]]
     ) -> List[Tuple[KubernetesTaskConfig, Optional[V1Pod]]]:
         """
         Called during reconciliation task loop in order to filter the task_configs/pods
