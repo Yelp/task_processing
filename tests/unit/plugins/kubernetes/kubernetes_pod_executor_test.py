@@ -333,9 +333,10 @@ def test__filter_task_configs_in_pods_existing_pods_only(k8s_executor, mock_task
         mock_pod.status.host_ip = '1.2.3.4'
         mock_pod.spec.node_name = 'kubenode'
         mock_pods.append(mock_pod)
+        # Set all task_metadata to failed state
         task_metadata[taskconf.pod_name] = KubernetesTaskMetadata(
             task_config=taskconf,
-            task_state=KubernetesTaskState.TASK_RUNNING,
+            task_state=KubernetesTaskState.TASK_FAILED,
             task_state_history=v(),
         )
     # We want to test to see if we have 4 V1Pods in mock_pods coming from Kubernetes and
@@ -353,6 +354,39 @@ def test__filter_task_configs_in_pods_existing_pods_only(k8s_executor, mock_task
         task_config_pods = k8s_executor._filter_task_configs_in_pods(mock_pods)
 
     assert len(task_config_pods) == 3
+
+
+def test__filter_task_configs_pods_to_reconcile_running_state(k8s_executor, mock_task_configs):
+    mock_pods = []
+    test_phases = ['Unknown', 'Succeeded', 'Failed', 'Running']
+    task_metadata = {}
+
+    for taskconf, phase in zip(mock_task_configs, test_phases):
+        mock_pod = mock.Mock(spec=V1Pod)
+        mock_pod.metadata.name = taskconf.pod_name
+        mock_pod.status.phase = phase
+        mock_pod.status.host_ip = '1.2.3.4'
+        mock_pod.spec.node_name = 'kubenode'
+        mock_pods.append(mock_pod)
+        # Set all task_metadata to running state
+        task_metadata[taskconf.pod_name] = KubernetesTaskMetadata(
+            task_config=taskconf,
+            task_state=KubernetesTaskState.TASK_RUNNING,
+            task_state_history=v(),
+        )
+    k8s_executor.task_metadata = pmap(task_metadata)
+
+    with mock.patch.object(
+        k8s_executor,
+        "kube_client",
+        autospec=True
+    ) as mock_kube_client:
+        mock_kube_client.get_pods.return_value = mock_pods
+        task_config_pods = k8s_executor._filter_task_configs_in_pods(mock_pods)
+        task_config_pods_filtered = k8s_executor._filter_task_configs_pods_to_reconcile(
+            task_config_pods)
+
+    assert len(task_config_pods_filtered) == 3
 
 
 def test_process_event_enqueues_task_processing_events_deleted(
