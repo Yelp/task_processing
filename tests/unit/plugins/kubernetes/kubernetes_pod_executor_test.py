@@ -351,7 +351,7 @@ def test__filter_task_configs_in_pods_existing_pods_only(k8s_executor, mock_task
         autospec=True
     ) as mock_kube_client:
         mock_kube_client.get_pods.return_value = mock_pods
-        task_config_pods = k8s_executor._filter_task_configs_in_pods(mock_pods)
+        task_config_pods = k8s_executor._group_pod_task_configs(mock_pods)
 
     assert len(task_config_pods) == 3
 
@@ -382,7 +382,7 @@ def test__filter_task_configs_pods_to_reconcile_running_state(k8s_executor, mock
         autospec=True
     ) as mock_kube_client:
         mock_kube_client.get_pods.return_value = mock_pods
-        task_config_pods = k8s_executor._filter_task_configs_in_pods(mock_pods)
+        task_config_pods = k8s_executor._group_pod_task_configs(mock_pods)
         task_config_pods_filtered = k8s_executor._filter_task_configs_pods_to_reconcile(
             task_config_pods)
 

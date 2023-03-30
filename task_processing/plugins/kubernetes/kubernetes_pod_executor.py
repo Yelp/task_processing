@@ -187,21 +187,20 @@ class KubernetesPodExecutor(TaskExecutor):
                         "Exception encountered while watching Pod events - restarting watch!")
         logger.debug("Exiting Pod event watcher - stop requested.")
 
-    def _filter_task_configs_in_pods(
-            self,
-            pods: List[V1Pod]
+    def _group_pod_task_configs(
+        self,
+        pods: List[V1Pod]
     ) -> List[Tuple[KubernetesTaskConfig, V1Pod]]:
         """
         Called during reconciliation task loop in order to filter the task_configs/pods
         that are in task_metadata.
         """
-        v1pods = {pod.metadata.name: pod for pod in pods}
+        pods_seen = {pod.metadata.name: pod for pod in pods}
         task_config_pods = []
 
         for pod_name, task_metadata in self.task_metadata.items():
-            if pod_name in v1pods:
-                task_config_pod = (task_metadata.task_config, v1pods[pod_name])
-                task_config_pods.append(task_config_pod)
+            task_config_pod = (task_metadata.task_config, pods_seen.get(pod_name))
+            task_config_pods.append(task_config_pod)
 
         return task_config_pods
 
@@ -214,7 +213,7 @@ class KubernetesPodExecutor(TaskExecutor):
         that are mismatched in task_metadata.
         """
         task_configs_pods_to_reconcile = []
-        phase_task_state_map = {
+        phase_to_task_state = {
             "Succeeded": KubernetesTaskState.TASK_FINISHED,
             "Failed": KubernetesTaskState.TASK_FAILED,
             "Running": KubernetesTaskState.TASK_RUNNING,
@@ -222,24 +221,23 @@ class KubernetesPodExecutor(TaskExecutor):
             "Unknown": KubernetesTaskState.TASK_LOST
         }
 
-        if task_configs_pods:
-            for task_config, pod in task_configs_pods:
-                pod_name = pod.metadata.name
-                pod_phase = pod.status.phase
-                task_metadata = self.task_metadata[pod_name]
-                task_metadata_state = task_metadata.task_state
-                if pod_phase not in phase_task_state_map:
-                    logger.debug(
-                        f"Got a MODIFIED event for {pod_name} for unhandled phase: "
-                        f"{pod_phase} - ignoring."
-                    )
-                if phase_task_state_map[pod_phase] is not task_metadata_state:
-                    logger.debug(
-                        f"Mismatched event found for {pod_name} during reconciliation."
-                        f"pod_phase: {pod_phase} vs task_metadata_state: {task_metadata_state}"
-                        f"task_metadata{task_metadata}"
-                    )
-                    task_configs_pods_to_reconcile.append((task_config, pod))
+        for task_config, pod in task_configs_pods:
+            pod_name = pod.metadata.name
+            pod_phase = pod.status.phase
+            task_metadata = self.task_metadata[pod_name]
+            task_state = task_metadata.task_state
+            if pod_phase not in phase_to_task_state:
+                logger.debug(
+                    f"Got a MODIFIED event for {pod_name} for unhandled phase: "
+                    f"{pod_phase} - ignoring."
+                )
+            if phase_to_task_state[pod_phase] is not task_state:
+                logger.debug(
+                    f"Mismatched event found for {pod_name} during reconciliation. "
+                    f"pod_phase: {pod_phase} - task_state: {task_state} - "
+                    f"task_metadata: {task_metadata}"
+                )
+                task_configs_pods_to_reconcile.append((task_config, pod))
 
         return task_configs_pods_to_reconcile
 
@@ -514,13 +512,12 @@ class KubernetesPodExecutor(TaskExecutor):
                 # namespace - we'll now filter these by the tasks down to only
                 # those we know about so that we only reconcile the state for what
                 # we actually need and not any other cruft that may exist.
-                task_configs_pods = self._filter_task_configs_in_pods(pods)
+                task_configs_pods = self._group_pod_task_configs(pods)
                 # Filter for pods with mismatched states between K8s and task_metadata
                 task_configs_pods_to_reconcile = self._filter_task_configs_pods_to_reconcile(
                     task_configs_pods)
-                if task_configs_pods_to_reconcile:
-                    for task_config, pod in task_configs_pods_to_reconcile:
-                        self.reconcile(task_config, pod)
+                for task_config, pod in task_configs_pods_to_reconcile:
+                    self.reconcile(task_config, pod)
             logger.info(f'Sleeping for {self.refresh_reconciliation_thread_interval}s')
             sleep(self.refresh_reconciliation_thread_interval)
         logger.debug("Exiting Pod task config reconciliation - stop requested.")
