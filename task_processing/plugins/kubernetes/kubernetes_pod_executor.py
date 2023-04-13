@@ -4,7 +4,9 @@ import threading
 import time
 from queue import Queue
 from typing import Collection
+from typing import Dict
 from typing import Optional
+from typing import Union
 
 from kubernetes import watch
 from kubernetes.client import V1Affinity
@@ -442,19 +444,38 @@ class KubernetesPodExecutor(TaskExecutor):
                 privileged=task_config.privileged,
             )
 
+        # Set any optional requests
+        requests: Dict[str, Union[str, float]] = {}
+        if 'request_cpus' in task_config and task_config.request_cpus:
+            requests['cpus'] = task_config.request_cpus
+        if 'request_memory' in task_config and task_config.request_memory:
+            requests['memory'] = f"{task_config.request_memory}Mi"
+        if 'request_disk' in task_config and task_config.request_disk:
+            requests['ephemeral-storage'] = f"{task_config.request_disk}Mi"
+
+        limits = {
+            "cpu": task_config.cpus,
+            "memory": f"{task_config.memory}Mi",
+            "ephemeral-storage": f"{task_config.disk}Mi",
+        }
+
+        if not requests:
+            resources = V1ResourceRequirements(
+                limits=limits,
+            )
+        else:
+            resources = V1ResourceRequirements(
+                limits=limits,
+                requests=requests,
+            )
+
         return V1Container(
             image=task_config.image,
             name=name,
             command=["/bin/sh", "-c"],
             args=[task_config.command],
             security_context=security_context,
-            resources=V1ResourceRequirements(
-                limits={
-                    "cpu": task_config.cpus,
-                    "memory": f"{task_config.memory}Mi",
-                    "ephemeral-storage": f"{task_config.disk}Mi",
-                }
-            ),
+            resources=resources,
             env=get_kubernetes_env_vars(
                 environment=task_config.environment,
                 secret_environment=task_config.secret_environment,

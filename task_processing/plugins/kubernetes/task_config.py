@@ -304,6 +304,17 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         initial=10.0,
         factory=float,
         invariant=lambda d: (d > 0, 'disk > 0'))
+
+    request_cpus = field(
+        type=float,
+        factory=float)
+    request_memory = field(
+        type=float,
+        factory=float)
+    request_disk = field(
+        type=float,
+        factory=float)
+
     environment = field(
         type=PMap if not TYPE_CHECKING else PMap[str, str],
         initial=m(),
