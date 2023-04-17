@@ -107,8 +107,8 @@ def test_run(mock_get_node_affinity, k8s_executor):
         command="fake_command",
         cpus=1,
         memory=1024,
+        memory_request=768.0,
         disk=1024,
-        request_memory=768,
         volumes=[{"host_path": "/a", "container_path": "/b", "mode": "RO"}],
         node_selectors={"hello": "world"},
         node_affinities=[dict(key="a_label", operator="In", value=[])],
@@ -139,6 +139,7 @@ def test_run(mock_get_node_affinity, k8s_executor):
                 "ephemeral-storage": "1024.0Mi",
             },
             requests={
+                "cpu": None,
                 "memory": "768.0Mi",
             }
         ),

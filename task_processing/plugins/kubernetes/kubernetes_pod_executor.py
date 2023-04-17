@@ -4,9 +4,7 @@ import threading
 import time
 from queue import Queue
 from typing import Collection
-from typing import Dict
 from typing import Optional
-from typing import Union
 
 from kubernetes import watch
 from kubernetes.client import V1Affinity
@@ -444,30 +442,19 @@ class KubernetesPodExecutor(TaskExecutor):
                 privileged=task_config.privileged,
             )
 
-        # Set any optional requests
-        requests: Dict[str, Union[str, float]] = {}
-        if 'request_cpus' in task_config and task_config.request_cpus:
-            requests['cpus'] = task_config.request_cpus
-        if 'request_memory' in task_config and task_config.request_memory:
-            requests['memory'] = f"{task_config.request_memory}Mi"
-        if 'request_disk' in task_config and task_config.request_disk:
-            requests['ephemeral-storage'] = f"{task_config.request_disk}Mi"
-
+        requests = {
+            "cpu": task_config.cpus_request if task_config.cpus_request else None,
+            "memory": f"{task_config.memory_request}Mi" if task_config.memory_request else None,
+        }
         limits = {
             "cpu": task_config.cpus,
             "memory": f"{task_config.memory}Mi",
             "ephemeral-storage": f"{task_config.disk}Mi",
         }
-
-        if not requests:
-            resources = V1ResourceRequirements(
-                limits=limits,
-            )
-        else:
-            resources = V1ResourceRequirements(
-                limits=limits,
-                requests=requests,
-            )
+        resources = V1ResourceRequirements(
+            limits=limits,
+            requests=requests,
+        )
 
         return V1Container(
             image=task_config.image,
