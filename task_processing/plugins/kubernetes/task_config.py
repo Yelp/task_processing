@@ -238,6 +238,12 @@ def _valid_service_account_name(
     )
 
 
+def _float_or_none(str: Optional[str]) -> Optional[float]:
+    if str:
+        return float(str)
+    return None
+
+
 class KubernetesTaskConfig(DefaultTaskConfigInterface):
     def __invariant__(self) -> Tuple[Tuple[bool, str], ...]:
         valid_length = len(self.pod_name) <= MAX_POD_NAME_LENGTH
@@ -296,6 +302,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         invariant=lambda c: (c > 0, 'cpus > 0'))
     cpus_request = field(
         type=(float, type(None)),
+        factory=_float_or_none,
         initial=None)
 
     memory = field(
@@ -305,6 +312,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         invariant=lambda m: (m >= 32, 'mem is >= 32'))
     memory_request = field(
         type=(float, type(None)),
+        factory=_float_or_none,
         initial=None)
 
     disk = field(

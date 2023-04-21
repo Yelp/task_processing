@@ -107,7 +107,7 @@ def test_run(mock_get_node_affinity, k8s_executor):
         command="fake_command",
         cpus=1,
         memory=1024,
-        memory_request=768.0,
+        memory_request=768,
         disk=1024,
         volumes=[{"host_path": "/a", "container_path": "/b", "mode": "RO"}],
         node_selectors={"hello": "world"},
