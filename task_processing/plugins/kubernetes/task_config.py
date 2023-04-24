@@ -238,10 +238,8 @@ def _valid_service_account_name(
     )
 
 
-def _float_or_none(str: Optional[str]) -> Optional[float]:
-    if str:
-        return float(str)
-    return None
+def _float_or_none(val: Any) -> Optional[float]:
+    return float(val) if val is not None else None
 
 
 class KubernetesTaskConfig(DefaultTaskConfigInterface):
