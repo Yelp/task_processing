@@ -2,6 +2,7 @@ import re
 import secrets
 import string
 from itertools import chain
+from typing import Any
 from typing import Mapping
 from typing import Optional
 from typing import Sequence
@@ -301,6 +302,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
     cpus_request = field(
         type=(float, type(None)),
         factory=_float_or_none,
+        invariant=lambda c: (c is None or c > 0, 'cpus_request > 0'),
         initial=None)
 
     memory = field(
@@ -311,6 +313,7 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
     memory_request = field(
         type=(float, type(None)),
         factory=_float_or_none,
+        invariant=lambda m: (m is None or m >= 32, 'mem_request >= 32'),
         initial=None)
 
     disk = field(
