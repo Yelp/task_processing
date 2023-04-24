@@ -2,6 +2,7 @@ import re
 import secrets
 import string
 from itertools import chain
+from typing import Any
 from typing import Mapping
 from typing import Optional
 from typing import Sequence
@@ -238,6 +239,10 @@ def _valid_service_account_name(
     )
 
 
+def _float_or_none(val: Any) -> Optional[float]:
+    return float(val) if val is not None else None
+
+
 class KubernetesTaskConfig(DefaultTaskConfigInterface):
     def __invariant__(self) -> Tuple[Tuple[bool, str], ...]:
         valid_length = len(self.pod_name) <= MAX_POD_NAME_LENGTH
@@ -294,16 +299,29 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         initial=0.1,
         factory=float,
         invariant=lambda c: (c > 0, 'cpus > 0'))
+    cpus_request = field(
+        type=(float, type(None)),
+        factory=_float_or_none,
+        invariant=lambda c: (c is None or c > 0, 'cpus_request > 0'),
+        initial=None)
+
     memory = field(
         type=float,
         initial=128.0,
         factory=float,
         invariant=lambda m: (m >= 32, 'mem is >= 32'))
+    memory_request = field(
+        type=(float, type(None)),
+        factory=_float_or_none,
+        invariant=lambda m: (m is None or m >= 32, 'mem_request >= 32'),
+        initial=None)
+
     disk = field(
         type=float,
         initial=10.0,
         factory=float,
         invariant=lambda d: (d > 0, 'disk > 0'))
+
     environment = field(
         type=PMap if not TYPE_CHECKING else PMap[str, str],
         initial=m(),

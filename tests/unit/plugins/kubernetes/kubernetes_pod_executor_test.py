@@ -16,6 +16,7 @@ from kubernetes.client import V1ResourceRequirements
 from kubernetes.client import V1SecurityContext
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
+from pyrsistent import InvariantException
 from pyrsistent import pmap
 from pyrsistent import pvector
 from pyrsistent import v
@@ -107,6 +108,7 @@ def test_run(mock_get_node_affinity, k8s_executor):
         command="fake_command",
         cpus=1,
         memory=1024,
+        memory_request=768,
         disk=1024,
         volumes=[{"host_path": "/a", "container_path": "/b", "mode": "RO"}],
         node_selectors={"hello": "world"},
@@ -136,6 +138,10 @@ def test_run(mock_get_node_affinity, k8s_executor):
                 "cpu": 1.0,
                 "memory": "1024.0Mi",
                 "ephemeral-storage": "1024.0Mi",
+            },
+            requests={
+                "cpu": None,
+                "memory": "768.0Mi",
             }
         ),
         env=[],
@@ -185,6 +191,30 @@ def test_run(mock_get_node_affinity, k8s_executor):
     assert mock_get_node_affinity.call_args_list == [
         mock.call(pvector([dict(key="a_label", operator="In", value=[])])),
     ]
+
+
+def test_run_bad_memory_request(k8s_executor):
+    with pytest.raises(InvariantException):
+        KubernetesTaskConfig(
+            name="fake_task_name",
+            uuid="fake_id",
+            image="fake_docker_image",
+            command="fake_command",
+            memory=1024,
+            memory_request=24,
+        )
+
+
+def test_run_bad_cpu_request(k8s_executor):
+    with pytest.raises(InvariantException):
+        KubernetesTaskConfig(
+            name="fake_task_name",
+            uuid="fake_id",
+            image="fake_docker_image",
+            command="fake_command",
+            cpus=1.0,
+            cpus_request="0.0",
+        )
 
 
 def test_run_failed_exception(k8s_executor):
