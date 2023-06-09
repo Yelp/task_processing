@@ -32,9 +32,11 @@ from task_processing.plugins.kubernetes.types import PodEvent
 from task_processing.plugins.kubernetes.utils import get_capabilities_for_capability_changes
 from task_processing.plugins.kubernetes.utils import get_kubernetes_empty_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_kubernetes_env_vars
+from task_processing.plugins.kubernetes.utils import get_kubernetes_secret_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_kubernetes_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_node_affinity
 from task_processing.plugins.kubernetes.utils import get_pod_empty_volumes
+from task_processing.plugins.kubernetes.utils import get_pod_secret_volumes
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 
@@ -428,6 +430,7 @@ class KubernetesPodExecutor(TaskExecutor):
         volume_mounts = (
             get_kubernetes_volume_mounts(task_config.volumes)
             + get_kubernetes_empty_volume_mounts(task_config.empty_volumes)
+            + get_kubernetes_secret_volume_mounts(task_config.secret_volumes)
         )
 
         capabilities = get_capabilities_for_capability_changes(
@@ -492,6 +495,7 @@ class KubernetesPodExecutor(TaskExecutor):
             volumes = (
                 get_pod_volumes(task_config.volumes)
                 + get_pod_empty_volumes(task_config.empty_volumes)
+                + get_pod_secret_volumes(task_config.secret_volumes)
             )
 
             pod = V1Pod(

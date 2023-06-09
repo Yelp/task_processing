@@ -10,12 +10,14 @@ from kubernetes.client import V1EmptyDirVolumeSource
 from kubernetes.client import V1EnvVar
 from kubernetes.client import V1EnvVarSource
 from kubernetes.client import V1HostPathVolumeSource
+from kubernetes.client import V1KeyToPath
 from kubernetes.client import V1NodeAffinity
 from kubernetes.client import V1NodeSelector
 from kubernetes.client import V1NodeSelectorRequirement
 from kubernetes.client import V1NodeSelectorTerm
 from kubernetes.client import V1ObjectFieldSelector
 from kubernetes.client import V1SecretKeySelector
+from kubernetes.client import V1SecretVolumeSource
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
 from pyrsistent.typing import PMap
@@ -24,6 +26,7 @@ from pyrsistent.typing import PVector
 from task_processing.plugins.kubernetes.types import NodeAffinityOperator
 if TYPE_CHECKING:
     from task_processing.plugins.kubernetes.types import EmptyVolume
+    from task_processing.plugins.kubernetes.types import SecretVolume
     from task_processing.plugins.kubernetes.types import DockerVolume
     from task_processing.plugins.kubernetes.types import NodeAffinity
     from task_processing.plugins.kubernetes.types import SecretEnvSource
@@ -169,6 +172,75 @@ def get_kubernetes_volume_mounts(volumes: PVector['DockerVolume']) -> List[V1Vol
             read_only=volume.get("mode", "RO") == "RO",
         )
         for volume in volumes
+    ]
+
+
+def get_kubernetes_secret_volume_mounts(volumes: PVector['SecretVolume']) -> List[V1VolumeMount]:
+    """
+    Given a list of secret volume mounts, return a list corresponding to the Kubernetes objects
+    representing these mounts.
+    """
+    return [
+        V1VolumeMount(
+            mount_path=volume["container_path"],
+            name=get_sanitised_volume_name(f"secret--{volume['secret_name']}", length_limit=63),
+            read_only=True,
+        )
+        for volume in volumes
+    ]
+
+
+def mode_to_int(mode: Optional[str]) -> Optional[int]:
+    """
+    Convert an octal number (in string form) to a base-10 integer.
+    """
+    return int(mode, base=8) if mode else None
+
+
+def _get_items_for_secret_volume(secret_volume: 'SecretVolume') -> Optional[List[V1KeyToPath]]:
+    """
+    Helper get all items to be stored in a secret volume and turn them into the Kubernetes
+    representation.
+    """
+    if secret_volume["items"]:
+        return [
+            V1KeyToPath(
+                key=item["key"],
+                mode=mode_to_int(item.get("mode")),
+                path=item["path"],
+            )
+            for item in secret_volume["items"]
+        ]
+
+    return None
+
+
+def get_pod_secret_volumes(secret_volumes: PVector['SecretVolume']) -> List[V1Volume]:
+    """
+    Given a list of secret volume mounts, return a list corresponding to the Kubernetes objects
+    needed to tie the mounts to a Pod (and have Kubernetes insert the actual secret contents)
+    """
+    unique_volumes: Dict[str, 'SecretVolume'] = {
+        get_sanitised_volume_name(f"secret--{volume['secret_name']}", length_limit=63): volume
+        for volume in secret_volumes
+    }
+
+    return [
+        V1Volume(
+            name=name,
+            secret=V1SecretVolumeSource(
+                # we're expecting to be passed the full name here as we can't really
+                # reconstruct it without adding even more information in something like
+                # a `type` field. the format here is `paasta-secret-{service}-{secret_name}`
+                # but for boto volumes, the format is `paasta-secret-boto-keys-{secret_name}`.
+                # rather than do this, we'll just make the caller give us the actual name of
+                # the volume (which is maybe something we should have done for all the other names?)
+                secret_name=volume["secret_volume_name"],
+                default_mode=mode_to_int(volume.get("default_mode")),
+                items=_get_items_for_secret_volume(volume),
+            ),
+        )
+        for name, volume in unique_volumes.items()
     ]
 
 

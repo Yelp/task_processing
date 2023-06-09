@@ -192,6 +192,105 @@ def test_volume_valid_specification(volumes):
 
 
 @pytest.mark.parametrize(
+    "volumes", (
+        # missing required keys
+        [{"host_path": "/a"}],
+        [{"containerPath": "/b"}],
+        [
+            {
+                "container_path": "/b",
+                "secret_volume_name": "secretvolumename",
+                "secret_name": "secret",
+                # non-str mode
+                "default_mode": 755,
+                "items": None,
+            },
+        ],
+        [
+            {
+                "container_path": "/b",
+                "secret_volume_name": "secretvolumename",
+                "secret_name": "secret",
+                "default_mode": "755",
+                "items": None,
+            },
+            {
+                "container_path": "/b",
+                "secret_volume_name": "secretvolumename",
+                "secret_name": "secret",
+                # non-str mode
+                "default_mode": 755,
+                "items": None,
+            },
+        ],
+        [
+            {
+                "container_path": "/b",
+                "secret_volume_name": "secretvolumename",
+                "secret_name": "secret",
+                "default_mode": "755",
+                "items": [
+                    {
+                        "key": "key",
+                        "path": "path",
+                        # non-str mode
+                        "mode": 755,
+                    }
+                ],
+            },
+        ],
+    )
+)
+def test_secret_volume_rejects_invalid_specification(volumes):
+    with pytest.raises(InvariantException):
+        KubernetesTaskConfig(
+            name="fake--task--name",
+            uuid="fake--id",
+            image="fake_docker_image",
+            command="fake_command",
+            secret_volumes=volumes
+        )
+
+
+@pytest.mark.parametrize(
+    "volumes", (
+        (
+            {
+                "container_path": "/b",
+                "secret_volume_name": "secretvolumename",
+                "secret_name": "secret",
+                "default_mode": "755",
+                "items": None,
+            },
+            {
+                "container_path": "/b",
+                "secret_volume_name": "secretvolumename",
+                "secret_name": "secret",
+                "default_mode": "755",
+                "items": [
+                    {
+                        "key": "key",
+                        "path": "path",
+                        "mode": "755",
+                    }
+                ],
+            },
+        ),
+    )
+)
+def test_secret_volume_valid_specification(volumes):
+    task_config = KubernetesTaskConfig(
+        name="fake--task--name",
+        uuid="fake--id",
+        image="fake_docker_image",
+        command="fake_command",
+        secret_volumes=volumes
+    )
+
+    assert tuple(task_config.secret_volumes) == volumes
+
+
+@pytest.mark.parametrize(
     "empty_volumes", (
         ({"medium": None},),
         ({"medium": "Memory"},),
