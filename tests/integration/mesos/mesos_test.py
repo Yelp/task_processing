@@ -6,24 +6,24 @@ from task_processing.plugins.mesos.mesos_executor import MesosExecutor
 from task_processing.runners.sync import Sync
 
 
-@given('mesos executor with {runner} runner')
+@given("mesos executor with {runner} runner")
 def mesos_executor_runner(runner):
-    executor = MesosExecutor(role='mock-role')
+    executor = MesosExecutor(role="mock-role")
 
-    if runner == 'sync':
+    if runner == "sync":
         runner_instance = Sync(executor=executor)
     else:
         raise "unknown runner: {}".format(runner)
 
-    return {'executor': executor, 'runner': runner_instance}
+    return {"executor": executor, "runner": runner_instance}
 
 
-@when('I launch a task')
+@when("I launch a task")
 def launch_task(mesos_executor_runner):
     print(mesos_executor_runner)
     return
 
 
-@then('it should block until finished')
+@then("it should block until finished")
 def block_until_finished():
     return

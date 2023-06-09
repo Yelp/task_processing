@@ -26,9 +26,8 @@ class Sync(Runner):
         while True:
             event = event_queue.get()
 
-            if event.kind == 'control' and \
-               event.message == 'stop':
-                log.info('Stop event received: {}'.format(event))
+            if event.kind == "control" and event.message == "stop":
+                log.info("Stop event received: {}".format(event))
                 return event
 
             if event.task_id != task_config.task_id:

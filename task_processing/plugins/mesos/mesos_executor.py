@@ -18,7 +18,7 @@ from task_processing.plugins.mesos.task_config import MesosTaskConfig
 class MesosExecutorCallbacks(NamedTuple):
     get_tasks_for_offer: Callable[
         [List[MesosTaskConfig], ResourceSet, dict, str],
-        Tuple[List[addict.Dict], List[MesosTaskConfig]]
+        Tuple[List[addict.Dict], List[MesosTaskConfig]],
     ]
     handle_status_update: Callable[
         [addict.Dict, MesosTaskConfig],
@@ -36,11 +36,11 @@ class MesosExecutor(TaskExecutor):
         role: str,
         callbacks: MesosExecutorCallbacks,
         pool=None,
-        principal='taskproc',
+        principal="taskproc",
         secret=None,
-        mesos_address='127.0.0.1:5050',
+        mesos_address="127.0.0.1:5050",
         initial_decline_delay=1.0,
-        framework_name='taskproc-default',
+        framework_name="taskproc-default",
         framework_staging_timeout=240,
         framework_id=None,
         failover=False,
@@ -80,15 +80,14 @@ class MesosExecutor(TaskExecutor):
 
         # start driver thread immediately
         self.stopping = False
-        self.driver_thread = threading.Thread(
-            target=self._run_driver, args=())
+        self.driver_thread = threading.Thread(target=self._run_driver, args=())
         self.driver_thread.daemon = True
         self.driver_thread.start()
 
     def _run_driver(self):
         while not self.stopping:
             self.driver.run()
-            self.logger.warning('Driver stopped, starting again')
+            self.logger.warning("Driver stopped, starting again")
 
     def run(self, task_config):
         self.execution_framework.enqueue_task(task_config)

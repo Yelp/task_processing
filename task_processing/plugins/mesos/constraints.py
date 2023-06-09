@@ -21,12 +21,12 @@ def unlike_op(re_pattern, actual_value):
 
 
 OPERATORS = {
-    'EQUALS': equals_op,
-    '==': equals_op,
-    'NOTEQUALS': notequals_op,
-    '!=': notequals_op,
-    'LIKE': like_op,
-    'UNLIKE': unlike_op,
+    "EQUALS": equals_op,
+    "==": equals_op,
+    "NOTEQUALS": notequals_op,
+    "!=": notequals_op,
+    "LIKE": like_op,
+    "UNLIKE": unlike_op,
 }
 
 
@@ -47,16 +47,16 @@ def attributes_match_constraints(attributes, constraints):
     if constraints is None:
         return True
 
-    return all(_attributes_match_constraint(attributes, c)
-               for c in constraints)
+    return all(_attributes_match_constraint(attributes, c) for c in constraints)
 
 
 def valid_constraint_operator_name(name):
     operators_names = OPERATORS.keys()
-    return (name in operators_names,
-            '{operator} is not a valid operator, valid operators are '
-            '{operators}.'.format(operator=name,
-                                  operators=operators_names))
+    return (
+        name in operators_names,
+        "{operator} is not a valid operator, valid operators are "
+        "{operators}.".format(operator=name, operators=operators_names),
+    )
 
 
 class Constraint(PRecord):

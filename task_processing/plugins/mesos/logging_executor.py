@@ -22,22 +22,22 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 # Read task log in 4K chunks
 TASK_LOG_CHUNK_LEN = 4096
-DEFAULT_FORMAT = '{task_id}[{container_id}@{agent}]: {line}'
+DEFAULT_FORMAT = "{task_id}[{container_id}@{agent}]: {line}"
 LOG_REQUEST_TIMEOUT = 5  # seconds
 
 
 class LogMetadata(PRecord):
-    log_url = field(type=str, initial='')
-    log_path = field(type=str, initial='')
-    log_offsets = field(type=PMap,
-                        factory=pmap,
-                        initial=pmap({'stdout': 0, 'stderr': 0}))
-    container_id = field(type=str, initial='')
-    executor_id = field(type=str, initial='')
+    log_url = field(type=str, initial="")
+    log_path = field(type=str, initial="")
+    log_offsets = field(
+        type=PMap, factory=pmap, initial=pmap({"stdout": 0, "stderr": 0})
+    )
+    container_id = field(type=str, initial="")
+    executor_id = field(type=str, initial="")
 
 
 def standard_handler(task_id, message, stream):
-    print(message, file=sys.stderr if stream == 'stderr' else sys.stdout)
+    print(message, file=sys.stderr if stream == "stderr" else sys.stdout)
 
 
 class MesosLoggingExecutor(TaskExecutor):
@@ -87,7 +87,7 @@ class MesosLoggingExecutor(TaskExecutor):
             return
         try:
             response = requests.get(
-                log_md.log_url + '/files/debug',
+                log_md.log_url + "/files/debug",
                 timeout=LOG_REQUEST_TIMEOUT,
             ).json()
         except Exception as e:
@@ -113,30 +113,30 @@ class MesosLoggingExecutor(TaskExecutor):
             return
 
         offsets = {
-            'stdout': log_md.log_offsets['stdout'],
-            'stderr': log_md.log_offsets['stderr']
+            "stdout": log_md.log_offsets["stdout"],
+            "stderr": log_md.log_offsets["stderr"],
         }
         agent = urlparse(log_md.log_url).hostname
 
-        for f in ['stdout', 'stderr']:
+        for f in ["stdout", "stderr"]:
             offset = offsets[f]
             log_path = log_md.log_path + "/" + f
             while True:
                 payload = {
-                    'path': log_path,
-                    'length': str(TASK_LOG_CHUNK_LEN),
-                    'offset': str(offset)
+                    "path": log_path,
+                    "length": str(TASK_LOG_CHUNK_LEN),
+                    "offset": str(offset),
                 }
 
                 try:
                     response = requests.get(
-                        log_md.log_url + '/files/read',
+                        log_md.log_url + "/files/read",
                         params=payload,
                         timeout=LOG_REQUEST_TIMEOUT,
                     ).json()
 
-                    log_length = len(response['data'])
-                    for line in response['data'].splitlines():
+                    log_length = len(response["data"])
+                    for line in response["data"].splitlines():
                         self.log_line(
                             stream=f,
                             line=line,
@@ -145,9 +145,11 @@ class MesosLoggingExecutor(TaskExecutor):
                             agent=agent,
                         )
                 except Exception as e:
-                    log.error("Failed to get {path}@{agent} {error}".format(
-                        path=log_path, agent=agent, error=e
-                    ))
+                    log.error(
+                        "Failed to get {path}@{agent} {error}".format(
+                            path=log_path, agent=agent, error=e
+                        )
+                    )
                     break
 
                 offset = offset + log_length
@@ -173,16 +175,15 @@ class MesosLoggingExecutor(TaskExecutor):
                 self.src_queue.task_done()
 
                 # Record the base log url
-                if e.kind == 'task' and e.platform_type == 'staging':
+                if e.kind == "task" and e.platform_type == "staging":
                     if e.task_id in self.staging_tasks:
                         continue
                     url = extract_url_from_offer(e.raw.offer)
                     self.staging_tasks = self.staging_tasks.set(e.task_id, url)
 
-                if e.kind == 'task' and e.platform_type == 'running':
+                if e.kind == "task" and e.platform_type == "running":
                     if e.task_id not in self.staging_tasks:
-                        log.info(
-                            f"Task {e.task_id} already running, not fetching logs")
+                        log.info(f"Task {e.task_id} already running, not fetching logs")
                         continue
 
                     url = self.staging_tasks[e.task_id]
@@ -198,12 +199,12 @@ class MesosLoggingExecutor(TaskExecutor):
                             LogMetadata(
                                 log_url=url,
                                 container_id=container_id,
-                                executor_id=executor_id
-                            )
+                                executor_id=executor_id,
+                            ),
                         )
 
                 # Fetch the last log and remove the entry if the task is active
-                if e.kind == 'task' and e.terminal:
+                if e.kind == "task" and e.terminal:
                     with self.task_lock:
                         if e.task_id in self.running_tasks:
                             self.done_tasks = self.done_tasks.append(e.task_id)
@@ -252,9 +253,13 @@ class MesosLoggingExecutor(TaskExecutor):
 
 def extract_url_from_offer(offer):
     try:
-        url = offer.url.scheme + '://' + \
-            offer.url.address.ip + ':' + \
-            str(offer.url.address.port)
+        url = (
+            offer.url.scheme
+            + "://"
+            + offer.url.address.ip
+            + ":"
+            + str(offer.url.address.port)
+        )
     except Exception as exc:
         log.error(
             f"Error decoding the url for this offer: {offer.url}. "

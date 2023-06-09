@@ -7,16 +7,16 @@ from task_processing.plugins.mesos.mesos_task_executor import get_tasks_for_offe
 @pytest.fixture
 def resource_patches():
     with mock.patch(
-        'task_processing.plugins.mesos.mesos_task_executor.task_fits',
+        "task_processing.plugins.mesos.mesos_task_executor.task_fits",
     ) as mock_fits, mock.patch(
-        'task_processing.plugins.mesos.mesos_task_executor.attributes_match_constraints',
+        "task_processing.plugins.mesos.mesos_task_executor.attributes_match_constraints",
     ) as mock_constraints, mock.patch(
-        'task_processing.plugins.mesos.mesos_task_executor.allocate_task_resources',
+        "task_processing.plugins.mesos.mesos_task_executor.allocate_task_resources",
     ) as mock_allocate:
         yield mock_fits, mock_constraints, mock_allocate
 
 
-@pytest.mark.parametrize('fits,constraints', [(False, True), (True, False)])
+@pytest.mark.parametrize("fits,constraints", [(False, True), (True, False)])
 def test_get_tasks_for_offer_doesnt_fit(resource_patches, fits, constraints):
     mock_fits, mock_constraints, mock_allocate = resource_patches
     mock_fits.return_value = fits
@@ -25,7 +25,7 @@ def test_get_tasks_for_offer_doesnt_fit(resource_patches, fits, constraints):
         [mock.Mock()],
         mock.Mock(),
         mock.Mock(),
-        'role',
+        "role",
     )
 
     assert mock_allocate.call_count == 0
@@ -40,7 +40,7 @@ def test_get_tasks_for_offer(resource_patches):
         [mock.Mock()],
         mock.Mock(),
         mock.Mock(),
-        'role',
+        "role",
     )
 
     assert mock_allocate.call_count == 1

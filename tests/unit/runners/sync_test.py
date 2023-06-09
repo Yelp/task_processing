@@ -19,7 +19,7 @@ def fake_runner(fake_executor):
 
 
 def test_run(fake_runner, fake_executor):
-    task_id = 'some_task'
+    task_id = "some_task"
     event = mock.Mock(
         task_id=task_id,
         terminal=True,
@@ -30,10 +30,10 @@ def test_run(fake_runner, fake_executor):
 
 
 def test_run_stop_event(fake_runner, fake_executor):
-    task_id = 'some_task'
+    task_id = "some_task"
     event = mock.Mock(
-        kind='control',
-        message='stop',
+        kind="control",
+        message="stop",
     )
     fake_executor.get_event_queue.return_value.get.return_value = event
     assert fake_runner.run(mock.Mock(task_id=task_id)) == event
@@ -41,9 +41,9 @@ def test_run_stop_event(fake_runner, fake_executor):
 
 
 def test_run_other_task(fake_runner, fake_executor):
-    task_id = 'some_task'
+    task_id = "some_task"
     incorrect_event = mock.Mock(
-        task_id='other',
+        task_id="other",
         terminal=True,
     )
     correct_event = mock.Mock(
@@ -64,7 +64,7 @@ def test_reconcile(fake_runner, fake_executor):
 
 
 def test_kill(fake_runner, fake_executor):
-    result = fake_runner.kill('some_id')
+    result = fake_runner.kill("some_id")
     assert result == fake_executor.kill.return_value
     assert fake_executor.kill.call_count == 1
 

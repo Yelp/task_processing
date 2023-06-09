@@ -9,17 +9,14 @@ log = logging.getLogger(__name__)
 
 
 class StatefulTaskExecutor(TaskExecutor):
-    """
-    """
+    """ """
 
     def __init__(self, downstream_executor, persister):
         self.downstream_executor = downstream_executor
         self.writer_queue = Queue()
         self.queue_for_processed_events = Queue()
         self.persister = persister
-        worker_thread = threading.Thread(
-            target=self.subscribe_to_updates_for_task
-        )
+        worker_thread = threading.Thread(target=self.subscribe_to_updates_for_task)
         worker_thread.daemon = True
         worker_thread.start()
 
@@ -33,10 +30,7 @@ class StatefulTaskExecutor(TaskExecutor):
         return self.downstream_executor.kill(task_id)
 
     def status(self, task_id):
-        return sorted(
-            self.persister.read(task_id),
-            key=lambda x: x['timestamp']
-        )
+        return sorted(self.persister.read(task_id), key=lambda x: x["timestamp"])
 
     def stop(self):
         return self.downstream_executor.stop()

@@ -9,7 +9,7 @@ from task_processing.interfaces.task_executor import TaskExecutor
 
 log = logging.getLogger(__name__)
 
-TaskEntry = collections.namedtuple('TaskEntry', ['task_id', 'deadline'])
+TaskEntry = collections.namedtuple("TaskEntry", ["task_id", "deadline"])
 
 
 class TimeoutExecutor(TaskExecutor):
@@ -37,11 +37,13 @@ class TimeoutExecutor(TaskExecutor):
                 e = self.src_queue.get()
                 self.dest_queue.put(e)
 
-                if not e.kind == 'task':
+                if not e.kind == "task":
                     continue
                 elif not e.terminal:
                     with self.tasks_lock:
-                        if e.task_id not in [entry.task_id for entry in self.running_tasks]:
+                        if e.task_id not in [
+                            entry.task_id for entry in self.running_tasks
+                        ]:
                             # No record of e's task_id in self.running_tasks,
                             # so we need to add it back in. We lack access to
                             # the original time the task was started, so to set
@@ -67,8 +69,7 @@ class TimeoutExecutor(TaskExecutor):
                 delete_idx = None
                 for idx, entry in enumerate(self.running_tasks):
                     if entry.deadline < current_time:
-                        log.info(
-                            'Killing task {}: timed out'.format(entry.task_id))
+                        log.info("Killing task {}: timed out".format(entry.task_id))
                         self.downstream_executor.kill(entry.task_id)
                         self.killed_tasks.append(entry.task_id)
                         delete_idx = idx
@@ -77,7 +78,7 @@ class TimeoutExecutor(TaskExecutor):
                     else:
                         break
                 if delete_idx is not None:
-                    self.running_tasks = self.running_tasks[delete_idx + 1:]
+                    self.running_tasks = self.running_tasks[delete_idx + 1 :]
 
             if self.stopping:
                 return
@@ -93,8 +94,7 @@ class TimeoutExecutor(TaskExecutor):
         # framework to check for duplicated tasks. The duplicate task check does
         # NOT happen here.
         new_entry = TaskEntry(
-            task_id=task_config.task_id,
-            deadline=task_config.timeout + time.time()
+            task_id=task_config.task_id, deadline=task_config.timeout + time.time()
         )
         with self.tasks_lock:
             self._insert_new_running_task_entry(new_entry)
@@ -108,7 +108,7 @@ class TimeoutExecutor(TaskExecutor):
         with self.tasks_lock:
             for idx, entry in enumerate(self.running_tasks):
                 if task_id == entry.task_id:
-                    log.info('Killing task {}: requested'.format(task_id))
+                    log.info("Killing task {}: requested".format(task_id))
                     result = self.downstream_executor.kill(task_id)
                     if result is not False:
                         self.running_tasks.pop(idx)
