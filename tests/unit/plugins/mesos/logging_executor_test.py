@@ -10,7 +10,7 @@ from task_processing.plugins.mesos.task_config import MesosTaskConfig
 
 @pytest.fixture
 def mock_Thread():
-    with mock.patch('task_processing.plugins.mesos.logging_executor.Thread'):
+    with mock.patch("task_processing.plugins.mesos.logging_executor.Thread"):
         yield
 
 
@@ -32,7 +32,7 @@ def mock_logging_executor(mock_Thread, mock_downstream):
 
 
 def test_run(mock_logging_executor, mock_downstream):
-    mock_config = MesosTaskConfig(image='fake', cmd='cat')
+    mock_config = MesosTaskConfig(image="fake", cmd="cat")
     mock_logging_executor.run(mock_config)
     assert mock_downstream.run.call_count == 1
 
@@ -55,21 +55,23 @@ def test_stop(mock_logging_executor, mock_downstream):
 
 
 def test_event_loop_stores_staging_event(mock_logging_executor, source_queue):
-    raw = Dict({
-        'offer': {
-            'url': {
-                'scheme': 'http',
-                'address': {
-                    'ip': '1.2.3.4',
-                    'port': 5051,
+    raw = Dict(
+        {
+            "offer": {
+                "url": {
+                    "scheme": "http",
+                    "address": {
+                        "ip": "1.2.3.4",
+                        "port": 5051,
+                    },
                 },
             },
-        },
-    })
+        }
+    )
     mock_event = mock.Mock(
-        kind='task',
-        platform_type='staging',
-        task_id='my_task',
+        kind="task",
+        platform_type="staging",
+        task_id="my_task",
         raw=raw,
     )
 
@@ -77,23 +79,27 @@ def test_event_loop_stores_staging_event(mock_logging_executor, source_queue):
     source_queue.put(mock_event)
 
     mock_logging_executor.event_loop()
-    task_data = mock_logging_executor.staging_tasks['my_task']
-    assert task_data == 'http://1.2.3.4:5051'
+    task_data = mock_logging_executor.staging_tasks["my_task"]
+    assert task_data == "http://1.2.3.4:5051"
 
 
-def test_event_loop_stores_staging_event_with_bogus_url(mock_logging_executor, source_queue):
-    raw = Dict({
-        'offer': {
-            'url': {
-                'scheme': None,
-                'address': {},
+def test_event_loop_stores_staging_event_with_bogus_url(
+    mock_logging_executor, source_queue
+):
+    raw = Dict(
+        {
+            "offer": {
+                "url": {
+                    "scheme": None,
+                    "address": {},
+                },
             },
-        },
-    })
+        }
+    )
     mock_event = mock.Mock(
-        kind='task',
-        platform_type='staging',
-        task_id='my_task',
+        kind="task",
+        platform_type="staging",
+        task_id="my_task",
         raw=raw,
     )
 
@@ -101,20 +107,20 @@ def test_event_loop_stores_staging_event_with_bogus_url(mock_logging_executor, s
     source_queue.put(mock_event)
 
     mock_logging_executor.event_loop()
-    task_data = mock_logging_executor.staging_tasks['my_task']
+    task_data = mock_logging_executor.staging_tasks["my_task"]
     assert task_data is None
 
 
 def test_event_loop_continues_after_unknown_task(mock_logging_executor, source_queue):
     unknown_event = mock.Mock(
-        kind='task',
-        platform_type='running',
-        task_id='new_task',
+        kind="task",
+        platform_type="running",
+        task_id="new_task",
     )
     other_event = mock.Mock(
-        kind='task',
-        platform_type='something',
-        task_id='other_task',
+        kind="task",
+        platform_type="something",
+        task_id="other_task",
     )
 
     mock_logging_executor.stopping = True
@@ -129,47 +135,51 @@ def test_event_loop_continues_after_unknown_task(mock_logging_executor, source_q
 
 
 def test_event_loop_running_event(mock_logging_executor, source_queue):
-    raw = Dict({
-        'container_status': {
-            'container_id': {
-                'value': 'cid',
+    raw = Dict(
+        {
+            "container_status": {
+                "container_id": {
+                    "value": "cid",
+                },
             },
-        },
-        'executor_id': {
-            'value': 'eid',
-        },
-    })
+            "executor_id": {
+                "value": "eid",
+            },
+        }
+    )
     mock_event = mock.Mock(
-        kind='task',
-        platform_type='running',
-        task_id='my_task',
+        kind="task",
+        platform_type="running",
+        task_id="my_task",
         raw=raw,
     )
 
     mock_logging_executor.stopping = True
     source_queue.put(mock_event)
     mock_logging_executor.staging_tasks = mock_logging_executor.staging_tasks.set(
-        'my_task', 'my_log_url')
+        "my_task", "my_log_url"
+    )
 
     mock_logging_executor.event_loop()
-    assert 'my_task' in mock_logging_executor.running_tasks
-    assert 'my_task' not in mock_logging_executor.staging_tasks
+    assert "my_task" in mock_logging_executor.running_tasks
+    assert "my_task" not in mock_logging_executor.staging_tasks
 
 
 def test_event_loop_terminal_event(mock_logging_executor, source_queue):
     mock_event = mock.Mock(
-        kind='task',
-        platform_type='finished',
-        task_id='my_task',
+        kind="task",
+        platform_type="finished",
+        task_id="my_task",
         terminal=True,
     )
 
     mock_logging_executor.stopping = True
     source_queue.put(mock_event)
     mock_logging_executor.running_tasks = mock_logging_executor.running_tasks.set(
-        'my_task', mock.Mock())
+        "my_task", mock.Mock()
+    )
 
     mock_logging_executor.event_loop()
 
-    assert 'my_task' in mock_logging_executor.running_tasks
-    assert 'my_task' in mock_logging_executor.done_tasks
+    assert "my_task" in mock_logging_executor.running_tasks
+    assert "my_task" in mock_logging_executor.done_tasks

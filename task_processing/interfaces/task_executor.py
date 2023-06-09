@@ -7,7 +7,7 @@ from pyrsistent import PRecord
 
 class DefaultTaskConfigInterface(PRecord):
     uuid = field(type=uuid.UUID, initial=uuid.uuid4)
-    name = field(type=str, initial='default')
+    name = field(type=str, initial="default")
 
 
 class TaskExecutor(metaclass=abc.ABCMeta):
@@ -52,8 +52,7 @@ class TaskExecutor(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def stop(self):
-        """Stop the executor stack
-        """
+        """Stop the executor stack"""
         pass
 
     @abc.abstractmethod

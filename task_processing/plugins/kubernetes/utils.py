@@ -24,6 +24,7 @@ from pyrsistent.typing import PMap
 from pyrsistent.typing import PVector
 
 from task_processing.plugins.kubernetes.types import NodeAffinityOperator
+
 if TYPE_CHECKING:
     from task_processing.plugins.kubernetes.types import EmptyVolume
     from task_processing.plugins.kubernetes.types import SecretVolume
@@ -45,23 +46,23 @@ def get_capabilities_for_capability_changes(
     """
     caps = {
         capability_type: capabilities
-        for (capability_type, capabilities)
-        in [("add", list(cap_add)), ("drop", list(cap_drop))]
+        for (capability_type, capabilities) in [
+            ("add", list(cap_add)),
+            ("drop", list(cap_drop)),
+        ]
         if capabilities
     }
     if caps:
         return V1Capabilities(**caps)
 
-    logger.info(
-        "No capabilities found, not creating a capabilities object"
-    )
+    logger.info("No capabilities found, not creating a capabilities object")
     return None
 
 
 def get_kubernetes_env_vars(
     environment: PMap[str, str],
-    secret_environment: PMap[str, 'SecretEnvSource'],
-    field_selector_environment: PMap[str, 'ObjectFieldSelectorSource'],
+    secret_environment: PMap[str, "SecretEnvSource"],
+    field_selector_environment: PMap[str, "ObjectFieldSelectorSource"],
 ) -> List[V1EnvVar]:
     """
     Given a dict of environment variables, transform them into the corresponding Kubernetes
@@ -69,21 +70,23 @@ def get_kubernetes_env_vars(
     the actual secret.
     """
     env_vars = [
-        V1EnvVar(name=key, value=value) for key, value
-        in environment.items() if key not in secret_environment.keys()
+        V1EnvVar(name=key, value=value)
+        for key, value in environment.items()
+        if key not in secret_environment.keys()
     ]
 
     secret_env_vars = [
-        V1EnvVar(name=key, value_from=V1EnvVarSource(
-            secret_key_ref=V1SecretKeySelector(
-                name=value["secret_name"],
-                key=value["key"],
-                optional=False,
+        V1EnvVar(
+            name=key,
+            value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(
+                    name=value["secret_name"],
+                    key=value["key"],
+                    optional=False,
+                ),
             ),
-        ),
         )
-        for key, value
-        in secret_environment.items()
+        for key, value in secret_environment.items()
     ]
 
     field_selector_env_vars = [
@@ -95,8 +98,7 @@ def get_kubernetes_env_vars(
                 )
             ),
         )
-        for key, value
-        in field_selector_environment.items()
+        for key, value in field_selector_environment.items()
     ]
 
     return env_vars + secret_env_vars + field_selector_env_vars
@@ -134,7 +136,7 @@ def get_sanitised_kubernetes_name(
         # -- (2 characters) and then a 4 character hash (which should help ensure uniqueness
         # after truncation).
         name = (
-            name[0:length_limit - 6]
+            name[0 : length_limit - 6]
             + "--"
             + hashlib.md5(name.encode("ascii")).hexdigest()[:4]
         )
@@ -157,7 +159,9 @@ def get_sanitised_volume_name(volume_name: str, length_limit: int = 0) -> str:
     )
 
 
-def get_kubernetes_volume_mounts(volumes: PVector['DockerVolume']) -> List[V1VolumeMount]:
+def get_kubernetes_volume_mounts(
+    volumes: PVector["DockerVolume"],
+) -> List[V1VolumeMount]:
     """
     Given a list of volume mounts, return a list corresponding to the Kubernetes objects
     representing these mounts.
@@ -166,8 +170,7 @@ def get_kubernetes_volume_mounts(volumes: PVector['DockerVolume']) -> List[V1Vol
         V1VolumeMount(
             mount_path=volume["container_path"],
             name=get_sanitised_volume_name(
-                f"host--{volume['host_path']}",
-                length_limit=63
+                f"host--{volume['host_path']}", length_limit=63
             ),
             read_only=volume.get("mode", "RO") == "RO",
         )
@@ -175,7 +178,9 @@ def get_kubernetes_volume_mounts(volumes: PVector['DockerVolume']) -> List[V1Vol
     ]
 
 
-def get_kubernetes_secret_volume_mounts(volumes: PVector['SecretVolume']) -> List[V1VolumeMount]:
+def get_kubernetes_secret_volume_mounts(
+    volumes: PVector["SecretVolume"],
+) -> List[V1VolumeMount]:
     """
     Given a list of secret volume mounts, return a list corresponding to the Kubernetes objects
     representing these mounts.
@@ -183,7 +188,9 @@ def get_kubernetes_secret_volume_mounts(volumes: PVector['SecretVolume']) -> Lis
     return [
         V1VolumeMount(
             mount_path=volume["container_path"],
-            name=get_sanitised_volume_name(f"secret--{volume['secret_name']}", length_limit=63),
+            name=get_sanitised_volume_name(
+                f"secret--{volume['secret_name']}", length_limit=63
+            ),
             read_only=True,
         )
         for volume in volumes
@@ -197,7 +204,9 @@ def mode_to_int(mode: Optional[str]) -> Optional[int]:
     return int(mode, base=8) if mode else None
 
 
-def _get_items_for_secret_volume(secret_volume: 'SecretVolume') -> Optional[List[V1KeyToPath]]:
+def _get_items_for_secret_volume(
+    secret_volume: "SecretVolume",
+) -> Optional[List[V1KeyToPath]]:
     """
     Helper get all items to be stored in a secret volume and turn them into the Kubernetes
     representation.
@@ -215,13 +224,15 @@ def _get_items_for_secret_volume(secret_volume: 'SecretVolume') -> Optional[List
     return None
 
 
-def get_pod_secret_volumes(secret_volumes: PVector['SecretVolume']) -> List[V1Volume]:
+def get_pod_secret_volumes(secret_volumes: PVector["SecretVolume"]) -> List[V1Volume]:
     """
     Given a list of secret volume mounts, return a list corresponding to the Kubernetes objects
     needed to tie the mounts to a Pod (and have Kubernetes insert the actual secret contents)
     """
-    unique_volumes: Dict[str, 'SecretVolume'] = {
-        get_sanitised_volume_name(f"secret--{volume['secret_name']}", length_limit=63): volume
+    unique_volumes: Dict[str, "SecretVolume"] = {
+        get_sanitised_volume_name(
+            f"secret--{volume['secret_name']}", length_limit=63
+        ): volume
         for volume in secret_volumes
     }
 
@@ -244,13 +255,15 @@ def get_pod_secret_volumes(secret_volumes: PVector['SecretVolume']) -> List[V1Vo
     ]
 
 
-def get_pod_volumes(volumes: PVector['DockerVolume']) -> List[V1Volume]:
+def get_pod_volumes(volumes: PVector["DockerVolume"]) -> List[V1Volume]:
     """
     Given a list of volume mounts, return a list corresponding to the Kubernetes objects needed to
     tie the mounts to a Pod.
     """
-    unique_volumes: Dict[str, 'DockerVolume'] = {
-        get_sanitised_volume_name(f"host--{volume['host_path']}", length_limit=63): volume
+    unique_volumes: Dict[str, "DockerVolume"] = {
+        get_sanitised_volume_name(
+            f"host--{volume['host_path']}", length_limit=63
+        ): volume
         for volume in volumes
     }
 
@@ -264,7 +277,7 @@ def get_pod_volumes(volumes: PVector['DockerVolume']) -> List[V1Volume]:
 
 
 def get_kubernetes_empty_volume_mounts(
-    empty_volumes: PVector['EmptyVolume']
+    empty_volumes: PVector["EmptyVolume"],
 ) -> List[V1VolumeMount]:
     """
     Given a list of empty volume mounts, return a list corresponding to
@@ -274,23 +287,22 @@ def get_kubernetes_empty_volume_mounts(
         V1VolumeMount(
             mount_path=volume["container_path"],
             name=get_sanitised_volume_name(
-                f"empty--{volume['container_path']}",
-                length_limit=63
+                f"empty--{volume['container_path']}", length_limit=63
             ),
         )
         for volume in empty_volumes
     ]
 
 
-def get_pod_empty_volumes(
-    empty_volumes: PVector['EmptyVolume']
-) -> List[V1Volume]:
+def get_pod_empty_volumes(empty_volumes: PVector["EmptyVolume"]) -> List[V1Volume]:
     """
     Given a list of empty volume mounts, return a list corresponding to
     the Kubernetes objects needed to tie the mounts to a Pod.
     """
-    unique_volumes: Dict[str, 'EmptyVolume'] = {
-        get_sanitised_volume_name(f"empty--{volume['container_path']}", length_limit=63): volume
+    unique_volumes: Dict[str, "EmptyVolume"] = {
+        get_sanitised_volume_name(
+            f"empty--{volume['container_path']}", length_limit=63
+        ): volume
         for volume in empty_volumes
     }
 
@@ -298,8 +310,8 @@ def get_pod_empty_volumes(
         V1Volume(
             name=name,
             empty_dir=V1EmptyDirVolumeSource(
-                medium=volume['medium'],
-                size_limit=volume['size'],
+                medium=volume["medium"],
+                size_limit=volume["size"],
             ),
         )
         for name, volume in unique_volumes.items()
@@ -333,6 +345,8 @@ def get_node_affinity(affinities: PVector["NodeAffinity"]) -> Optional[V1NodeAff
         # this means that the selectors are only used during scheduling.
         # changing it while the pod is running will not cause an eviction.
         required_during_scheduling_ignored_during_execution=V1NodeSelector(
-            node_selector_terms=[V1NodeSelectorTerm(match_expressions=match_expressions)],
+            node_selector_terms=[
+                V1NodeSelectorTerm(match_expressions=match_expressions)
+            ],
         ),
     )

@@ -17,9 +17,9 @@ NUMERIC_RESOURCE = field(
     type=float,
     initial=0.0,
     factory=float,
-    invariant=lambda x: (x >= 0, 'resource < 0'),
+    invariant=lambda x: (x >= 0, "resource < 0"),
 )
-_NUMERIC_RESOURCES = frozenset(['cpus', 'mem', 'disk', 'gpus'])
+_NUMERIC_RESOURCES = frozenset(["cpus", "mem", "disk", "gpus"])
 
 
 class ResourceSet(PRecord):
@@ -27,13 +27,13 @@ class ResourceSet(PRecord):
     mem = NUMERIC_RESOURCE
     disk = NUMERIC_RESOURCE
     gpus = NUMERIC_RESOURCE
-    ports = field(type=(PVector[PMap] if TYPE_CHECKING else PVector),
-                  initial=v(),
-                  factory=pvector)
+    ports = field(
+        type=(PVector[PMap] if TYPE_CHECKING else PVector), initial=v(), factory=pvector
+    )
 
 
 def get_offer_resources(offer: addict.Dict, role: str) -> ResourceSet:
-    """ Get the resources from a Mesos offer
+    """Get the resources from a Mesos offer
 
     :param offer: the payload from a Mesos resourceOffer call
     :param role: the Mesos role we want to get resources for
@@ -46,8 +46,8 @@ def get_offer_resources(offer: addict.Dict, role: str) -> ResourceSet:
 
         if resource.name in _NUMERIC_RESOURCES:
             res = res.set(resource.name, resource.scalar.value)
-        elif resource.name == 'ports':
-            res = res.set('ports', [pmap(r) for r in resource.ranges.range])
+        elif resource.name == "ports":
+            res = res.set("ports", [pmap(r) for r in resource.ranges.range])
     return res
 
 
@@ -55,7 +55,7 @@ def allocate_task_resources(
     task_config: MesosTaskConfig,
     offer_resources: ResourceSet,
 ) -> Tuple[MesosTaskConfig, ResourceSet]:
-    """ Allocate a task's resources to a Mesos offer
+    """Allocate a task's resources to a Mesos offer
 
     :param task: the specification for the task to allocate
     :param offer_resources: a mapping of resource name -> available resources
@@ -69,19 +69,19 @@ def allocate_task_resources(
             continue
         offer_resources = offer_resources.set(res, val - task_config[res])
 
-    port = offer_resources.ports[0]['begin']
-    if offer_resources.ports[0]['begin'] == offer_resources.ports[0]['end']:
+    port = offer_resources.ports[0]["begin"]
+    if offer_resources.ports[0]["begin"] == offer_resources.ports[0]["end"]:
         avail_ports = offer_resources.ports[1:]
     else:
-        new_port_range = offer_resources.ports[0].set('begin', port + 1)
+        new_port_range = offer_resources.ports[0].set("begin", port + 1)
         avail_ports = offer_resources.ports.set(0, new_port_range)
-    offer_resources = offer_resources.set('ports', avail_ports)
-    task_config = task_config.set('ports', v(m(begin=port, end=port)))
+    offer_resources = offer_resources.set("ports", avail_ports)
+    task_config = task_config.set("ports", v(m(begin=port, end=port)))
     return task_config, offer_resources
 
 
 def task_fits(task: MesosTaskConfig, offer_resources: ResourceSet) -> bool:
-    """ Check to see if a task fits a given offer's resources
+    """Check to see if a task fits a given offer's resources
 
     :param task: the task specification to check
     :param offer_resources: a mapping of resource name -> available resources
@@ -91,7 +91,7 @@ def task_fits(task: MesosTaskConfig, offer_resources: ResourceSet) -> bool:
     for rname, value in offer_resources.items():
         if rname in _NUMERIC_RESOURCES and task[rname] > value:
             return False
-        elif rname == 'ports' and len(value) == 0:  # TODO validate port ranges
+        elif rname == "ports" and len(value) == 0:  # TODO validate port ranges
             return False
 
     return True

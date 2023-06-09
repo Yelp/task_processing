@@ -18,12 +18,12 @@ def get_tasks_for_offer(
     offer_attributes: dict,
     role: str,
 ) -> Tuple[List[MesosTaskConfig], List[MesosTaskConfig]]:
-
     tasks_to_launch, tasks_to_defer = [], []
 
     for task_config in task_configs:
-        if (task_fits(task_config, offer_resources) and
-                attributes_match_constraints(offer_attributes, task_config.constraints)):
+        if task_fits(task_config, offer_resources) and attributes_match_constraints(
+            offer_attributes, task_config.constraints
+        ):
             prepared_task_config, offer_resources = allocate_task_resources(
                 task_config,
                 offer_resources,

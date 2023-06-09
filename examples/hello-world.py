@@ -10,29 +10,29 @@ from task_processing.task_processor import TaskProcessor
 
 def main():
     # get address of the Mesos cluster
-    mesos_address = os.getenv('MESOS', 'mesosmaster:5050')
+    mesos_address = os.getenv("MESOS", "mesosmaster:5050")
 
     # read in secret, this is used to authenticate the taskproc scheduler with
     # Mesos
-    with open('./examples/cluster/secret') as f:
+    with open("./examples/cluster/secret") as f:
         secret = f.read().strip()
 
     # create a processor instance
     processor = TaskProcessor()
 
     # configure plugins
-    processor.load_plugin(provider_module='task_processing.plugins.mesos')
+    processor.load_plugin(provider_module="task_processing.plugins.mesos")
 
     # create an executor (taskproc executor NOT to be confused with a Mesos
     # executor) using this defined configuration. this config can also be used
     # to specify other Mesos properties, such as which role to use
     executor = processor.executor_from_config(
-        provider='mesos_task',
+        provider="mesos_task",
         provider_config={
-            'secret': secret,
-            'mesos_address': mesos_address,
-            'role': 'taskproc',
-        }
+            "secret": secret,
+            "mesos_address": mesos_address,
+            "role": "taskproc",
+        },
     )
 
     # creates a new Sync runner that will synchronously execute tasks
@@ -55,5 +55,5 @@ def main():
     return 0 if result.success else 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     exit(main())

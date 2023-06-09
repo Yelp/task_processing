@@ -34,20 +34,20 @@ log = logging.getLogger(__name__)
 
 
 class TaskMetadata(PRecord):
-    agent_id = field(type=str, initial='')
+    agent_id = field(type=str, initial="")
     task_config = field(type=PRecord, mandatory=True)
     task_state = field(type=str, mandatory=True)
     task_state_history = field(type=PMap, factory=pmap, mandatory=True)
 
 
 class ExecutionFramework(Scheduler):
-    callbacks: 'MesosExecutorCallbacks'
+    callbacks: "MesosExecutorCallbacks"
 
     def __init__(
         self,
         name,
         role,
-        callbacks: 'MesosExecutorCallbacks',
+        callbacks: "MesosExecutorCallbacks",
         task_staging_timeout_s,
         pool=None,
         slave_blacklist_timeout_s=900,
@@ -69,14 +69,14 @@ class ExecutionFramework(Scheduler):
 
         # TODO: why does this need to be root, can it be "mesos plz figure out"
         self.framework_info = Dict(
-            user='root',
+            user="root",
             name=self.name,
             checkpoint=True,
             role=self.role,
             failover_timeout=failover_timeout,
         )
         if framework_id:
-            self.framework_info['id'] = {'value': framework_id}
+            self.framework_info["id"] = {"value": framework_id}
 
         self.task_queue: Queue = Queue()
         self.event_queue: Queue = Queue()
@@ -85,8 +85,7 @@ class ExecutionFramework(Scheduler):
         self.suppress_after = int(time.time()) + suppress_delay
         self.decline_after = time.time() + initial_decline_delay
         self._task_reconciliation_delay = task_reconciliation_delay
-        self._reconcile_tasks_at = time.time() + \
-            self._task_reconciliation_delay
+        self._reconcile_tasks_at = time.time() + self._task_reconciliation_delay
 
         self.offer_decline_filter = Dict(refuse_seconds=self.offer_backoff)
         self._lock = threading.RLock()
@@ -96,66 +95,63 @@ class ExecutionFramework(Scheduler):
         self._initialize_metrics()
         self._last_offer_time: Optional[float] = None
         self._terminal_task_counts = {
-            'TASK_FINISHED': metrics.TASK_FINISHED_COUNT,
-            'TASK_LOST': metrics.TASK_LOST_COUNT,
-            'TASK_KILLED': metrics.TASK_KILLED_COUNT,
-            'TASK_FAILED': metrics.TASK_FAILED_COUNT,
-            'TASK_ERROR': metrics.TASK_ERROR_COUNT,
-            'TASK_OFFER_TIMEOUT': metrics.TASK_OFFER_TIMEOUT,
+            "TASK_FINISHED": metrics.TASK_FINISHED_COUNT,
+            "TASK_LOST": metrics.TASK_LOST_COUNT,
+            "TASK_KILLED": metrics.TASK_KILLED_COUNT,
+            "TASK_FAILED": metrics.TASK_FAILED_COUNT,
+            "TASK_ERROR": metrics.TASK_ERROR_COUNT,
+            "TASK_OFFER_TIMEOUT": metrics.TASK_OFFER_TIMEOUT,
         }
 
         self.driver_error = object()
 
         self.stopping = False
-        task_kill_thread = threading.Thread(
-            target=self._background_check, args=())
+        task_kill_thread = threading.Thread(target=self._background_check, args=())
         task_kill_thread.daemon = True
         task_kill_thread.start()
 
     def call_driver(self, method, *args, **kwargs):
         if not self._driver:
-            log.error(f'{method} failed: No driver')
+            log.error(f"{method} failed: No driver")
             return self.driver_error
 
         try:
             return getattr(self._driver, method)(*args, **kwargs)
         except (socket.timeout, Exception) as e:
-            log.warning(f'{method} failed: {str(e)}')
+            log.warning(f"{method} failed: {str(e)}")
             return self.driver_error
 
     def _background_check_task(self, time_now, tasks_to_reconcile, task_id, md):
-        if md.task_state != 'TASK_INITED':
+        if md.task_state != "TASK_INITED":
             tasks_to_reconcile.append(task_id)
 
-        if md.task_state == 'TASK_INITED':
+        if md.task_state == "TASK_INITED":
             # give up if the task hasn't launched after
             # offer_timeout
-            inited_at = md.task_state_history['TASK_INITED']
+            inited_at = md.task_state_history["TASK_INITED"]
             offer_timeout = md.task_config.offer_timeout
             expires_at = inited_at + offer_timeout
             if time_now >= expires_at:
                 log.warning(
-                    f'Task {task_id} has been waiting for offers '
-                    'for longer than configured timeout '
-                    f'{offer_timeout}. Giving up and removing the '
-                    'task from the task queue.'
+                    f"Task {task_id} has been waiting for offers "
+                    "for longer than configured timeout "
+                    f"{offer_timeout}. Giving up and removing the "
+                    "task from the task queue."
                 )
                 # killing the task will also remove them from the queue
                 self.kill_task(task_id)
                 # we are not expecting mesos to send terminal update
                 # for this task, so cleaning it up manually
-                self.task_metadata = self.task_metadata.discard(
-                    task_id
-                )
+                self.task_metadata = self.task_metadata.discard(task_id)
                 self.event_queue.put(
                     task_event(
                         task_id=task_id,
                         terminal=True,
                         timestamp=time_now,
                         success=False,
-                        message='stop',
+                        message="stop",
                         task_config=md.task_config,
-                        raw='Failed due to offer timeout',
+                        raw="Failed due to offer timeout",
                     )
                 )
                 get_metric(metrics.TASK_OFFER_TIMEOUT).count(1)
@@ -165,37 +161,37 @@ class ExecutionFramework(Scheduler):
         if time_now < in_current_state_since + self.task_staging_timeout_s:
             return
 
-        if md.task_state == 'UNKNOWN':
+        if md.task_state == "UNKNOWN":
             log.warning(
-                f'Re-enqueuing task {task_id} in unknown state for '
-                f'longer than {self.task_staging_timeout_s}'
+                f"Re-enqueuing task {task_id} in unknown state for "
+                f"longer than {self.task_staging_timeout_s}"
             )
             # Re-enqueue task
             self.enqueue_task(md.task_config)
-            get_metric(
-                metrics.TASK_FAILED_TO_LAUNCH_COUNT).count(1)
-        elif md.task_state == 'TASK_STAGING':
-            log.warning(f'Killing stuck task {task_id}')
+            get_metric(metrics.TASK_FAILED_TO_LAUNCH_COUNT).count(1)
+        elif md.task_state == "TASK_STAGING":
+            log.warning(f"Killing stuck task {task_id}")
             self.kill_task(task_id)
             self.task_metadata = self.task_metadata.set(
                 task_id,
                 md.set(
-                    task_state='TASK_STUCK',
+                    task_state="TASK_STUCK",
                     task_state_history=md.task_state_history.set(
-                        'TASK_STUCK', time_now),
-                )
+                        "TASK_STUCK", time_now
+                    ),
+                ),
             )
             self.blacklist_slave(
                 agent_id=self.task_metadata[task_id].agent_id,
                 timeout=self.slave_blacklist_timeout_s,
             )
             get_metric(metrics.TASK_STUCK_COUNT).count(1)
-        elif md.task_state == 'TASK_STUCK':
+        elif md.task_state == "TASK_STUCK":
             t = time.time()
             # 10s since last iteration + time we spent in current one
             time_delta = 10 + t - time_now
             # seconds since task was put in TASK_STUCK state
-            time_stuck = t - md.task_state_history['TASK_STUCK']
+            time_stuck = t - md.task_state_history["TASK_STUCK"]
             # seconds since `time_stuck` crossed another hour
             # boundary
             hour_rolled = time_stuck % 3600
@@ -205,8 +201,8 @@ class ExecutionFramework(Scheduler):
             if hour_rolled < time_delta:
                 hours_stuck = time_stuck // 3600
                 log.warning(
-                    f'Task {task_id} is stuck, waiting for terminal '
-                    f'state for {hours_stuck}h, sending another kill'
+                    f"Task {task_id} is stuck, waiting for terminal "
+                    f"state for {hours_stuck}h, sending another kill"
                 )
                 self.kill_task(task_id)
 
@@ -227,11 +223,13 @@ class ExecutionFramework(Scheduler):
                     )
 
             self._reconcile_tasks(
-                [Dict({'task_id': Dict({'value': task_id})}) for
-                    task_id in tasks_to_reconcile]
+                [
+                    Dict({"task_id": Dict({"value": task_id})})
+                    for task_id in tasks_to_reconcile
+                ]
             )
             elapsed = time.time() - time_now
-            log.info(f'background check done in {elapsed}s')
+            log.info(f"background check done in {elapsed}s")
             get_metric(metrics.BGCHECK_TIME_TIMER).record(elapsed)
             time.sleep(10)
 
@@ -243,33 +241,32 @@ class ExecutionFramework(Scheduler):
                 self.task_metadata = self.task_metadata.set(
                     task_id,
                     md.set(
-                        task_state='TASK_RECONCILING',
+                        task_state="TASK_RECONCILING",
                         task_state_history=md.task_state_history.set(
-                            'TASK_RECONCILING', time.time()),
-                    )
+                            "TASK_RECONCILING", time.time()
+                        ),
+                    ),
                 )
             else:
-                log.info(f'Adding {task_id} to metadata for reconciliation')
+                log.info(f"Adding {task_id} to metadata for reconciliation")
                 self.task_metadata = self.task_metadata.set(
                     task_id,
                     TaskMetadata(
                         task_config=task_config,
-                        task_state='TASK_RECONCILING',
+                        task_state="TASK_RECONCILING",
                         task_state_history=m(TASK_RECONCILING=time.time()),
                     ),
                 )
-        self._reconcile_tasks([
-            Dict({'task_id': Dict({'value': task_id})})
-        ])
+        self._reconcile_tasks([Dict({"task_id": Dict({"value": task_id})})])
 
     def _reconcile_tasks(self, tasks_to_reconcile):
         if time.time() < self._reconcile_tasks_at:
             return
 
-        log.info(f'Reconciling following tasks {tasks_to_reconcile}')
+        log.info(f"Reconciling following tasks {tasks_to_reconcile}")
 
         if len(tasks_to_reconcile) > 0:
-            self.call_driver('reconcileTasks', tasks_to_reconcile)
+            self.call_driver("reconcileTasks", tasks_to_reconcile)
 
         self._reconcile_tasks_at += self._task_reconciliation_delay
 
@@ -300,7 +297,7 @@ class ExecutionFramework(Scheduler):
                 self.task_queue.put(t)
 
         if flag is False:
-            if self.call_driver('killTask', Dict(value=task_id)) is self.driver_error:
+            if self.call_driver("killTask", Dict(value=task_id)) is self.driver_error:
                 return False
 
         return True
@@ -309,22 +306,20 @@ class ExecutionFramework(Scheduler):
         with self._lock:
             # A new entry is appended even if the agent is being blacklisted.
             # This is equivalent to restarting the blacklist timer.
-            log.info(f'Blacklisting slave: {agent_id} for {timeout} seconds.')
+            log.info(f"Blacklisting slave: {agent_id} for {timeout} seconds.")
             self.blacklisted_slaves = self.blacklisted_slaves.append(agent_id)
             get_metric(metrics.BLACKLISTED_AGENTS_COUNT).count(1)
 
         unblacklist_thread = threading.Thread(
             target=self.unblacklist_slave,
-            kwargs={'timeout': timeout, 'agent_id': agent_id},
+            kwargs={"timeout": timeout, "agent_id": agent_id},
         )
         unblacklist_thread.daemon = True
         unblacklist_thread.start()
 
     def unblacklist_slave(self, agent_id, timeout):
         time.sleep(timeout)
-        log.info(
-            f'Unblacklisting slave: {agent_id}'
-        )
+        log.info(f"Unblacklisting slave: {agent_id}")
         with self._lock:
             self.blacklisted_slaves = self.blacklisted_slaves.remove(agent_id)
 
@@ -336,25 +331,26 @@ class ExecutionFramework(Scheduler):
                 task_config.task_id,
                 TaskMetadata(
                     task_config=task_config,
-                    task_state='TASK_INITED',
+                    task_state="TASK_INITED",
                     task_state_history=m(TASK_INITED=time.time()),
-                )
+                ),
             )
             # Need to lock on task_queue to prevent enqueues when getting
             # tasks to launch
             self.task_queue.put(task_config)
 
             if self.are_offers_suppressed:
-                if self.call_driver('reviveOffers') is not self.driver_error:
+                if self.call_driver("reviveOffers") is not self.driver_error:
                     self.are_offers_suppressed = False
-                    log.info('Reviving offers because we have tasks to run.')
+                    log.info("Reviving offers because we have tasks to run.")
 
         get_metric(metrics.TASK_ENQUEUED_COUNT).count(1)
 
     def launch_tasks_for_offer(self, offer, tasks_to_launch) -> bool:
         mesos_protobuf_tasks = [
             self.callbacks.make_mesos_protobuf(
-                task_config, offer.agent_id.value, self.role)
+                task_config, offer.agent_id.value, self.role
+            )
             for task_config in tasks_to_launch
             if task_config.task_id in self.task_metadata
         ]
@@ -363,23 +359,25 @@ class ExecutionFramework(Scheduler):
 
         launched = True
         launch_time = time.time()
-        if self.call_driver('launchTasks', offer.id, mesos_protobuf_tasks) is self.driver_error:
-            tasks = ', '.join(task.task_id for task in tasks_to_launch)
-            log.warning(
-                f'Failed to launch: {tasks}, moving them to UNKNOWN state')
+        if (
+            self.call_driver("launchTasks", offer.id, mesos_protobuf_tasks)
+            is self.driver_error
+        ):
+            tasks = ", ".join(task.task_id for task in tasks_to_launch)
+            log.warning(f"Failed to launch: {tasks}, moving them to UNKNOWN state")
             get_metric(metrics.TASK_LAUNCH_FAILED_COUNT).count(1)
             launched = False
 
         # 'UNKNOWN' state is for internal tracking. It will not be
         # propogated to users.
-        current_task_state = 'TASK_STAGING' if launched else 'UNKNOWN'
+        current_task_state = "TASK_STAGING" if launched else "UNKNOWN"
 
         for task in tasks_to_launch:
             md = self.task_metadata.get(task.task_id)
             if not md:
                 log.warning(
-                    f'trying to launch task {task.task_id}, but it is not in task metadata.'
-                    f'current keys in task_metadata: {self.task_metadata.keys()}'
+                    f"trying to launch task {task.task_id}, but it is not in task metadata."
+                    f"current keys in task_metadata: {self.task_metadata.keys()}"
                 )
                 continue
             self.task_metadata = self.task_metadata.set(
@@ -387,20 +385,21 @@ class ExecutionFramework(Scheduler):
                 md.set(
                     task_state=current_task_state,
                     task_state_history=md.task_state_history.set(
-                        current_task_state, launch_time),
+                        current_task_state, launch_time
+                    ),
                     agent_id=str(offer.agent_id.value),
-                )
+                ),
             )
 
             get_metric(metrics.TASK_QUEUED_TIME_TIMER).record(
-                launch_time - md.task_state_history['TASK_INITED']
+                launch_time - md.task_state_history["TASK_INITED"]
             )
 
             # Emit the staging event for successful launches
             if launched:
                 self.event_queue.put(
                     self.callbacks.handle_status_update(
-                        Dict(state='TASK_STAGING', offer=offer),
+                        Dict(state="TASK_STAGING", offer=offer),
                         md.task_config,
                     )
                 )
@@ -414,26 +413,33 @@ class ExecutionFramework(Scheduler):
     # TODO: add mesos cluster dimension when available
     def _initialize_metrics(self):
         default_dimensions = {
-            'framework_name': '.'.join(self.name.split()[:2]),
-            'framework_role': self.role
+            "framework_name": ".".join(self.name.split()[:2]),
+            "framework_role": self.role,
         }
 
         counters = [
-            metrics.TASK_LAUNCHED_COUNT,                 metrics.TASK_FINISHED_COUNT,
-            metrics.TASK_FAILED_COUNT,                   metrics.TASK_KILLED_COUNT,
-            metrics.TASK_LOST_COUNT,                     metrics.TASK_ERROR_COUNT,
-            metrics.TASK_ENQUEUED_COUNT,                 metrics.TASK_INSUFFICIENT_OFFER_COUNT,
-            metrics.TASK_STUCK_COUNT,                    metrics.BLACKLISTED_AGENTS_COUNT,
+            metrics.TASK_LAUNCHED_COUNT,
+            metrics.TASK_FINISHED_COUNT,
+            metrics.TASK_FAILED_COUNT,
+            metrics.TASK_KILLED_COUNT,
+            metrics.TASK_LOST_COUNT,
+            metrics.TASK_ERROR_COUNT,
+            metrics.TASK_ENQUEUED_COUNT,
+            metrics.TASK_INSUFFICIENT_OFFER_COUNT,
+            metrics.TASK_STUCK_COUNT,
+            metrics.BLACKLISTED_AGENTS_COUNT,
             metrics.TASK_LOST_DUE_TO_INVALID_OFFER_COUNT,
-            metrics.TASK_LAUNCH_FAILED_COUNT,            metrics.TASK_FAILED_TO_LAUNCH_COUNT,
+            metrics.TASK_LAUNCH_FAILED_COUNT,
+            metrics.TASK_FAILED_TO_LAUNCH_COUNT,
             metrics.TASK_OFFER_TIMEOUT,
         ]
         for cnt in counters:
             create_counter(cnt, default_dimensions)
 
         timers = [
-            metrics.OFFER_DELAY_TIMER, metrics.TASK_QUEUED_TIME_TIMER,
-            metrics.BGCHECK_TIME_TIMER
+            metrics.OFFER_DELAY_TIMER,
+            metrics.TASK_QUEUED_TIME_TIMER,
+            metrics.BGCHECK_TIME_TIMER,
         ]
         for tmr in timers:
             create_timer(tmr, default_dimensions)
@@ -443,16 +449,16 @@ class ExecutionFramework(Scheduler):
     ####################################################################
     def offerRescinded(self, driver, offerId):
         # TODO(sagarp): Executor should be able to deal with this.
-        log.warning(f'Offer {offerId} rescinded')
+        log.warning(f"Offer {offerId} rescinded")
 
     def error(self, driver, message):
         event = control_event(raw=message)
 
         # TODO: have a mapper function similar to translator of task events
-        if message == 'Framework has been removed':
-            event = event.set(message='stop')
+        if message == "Framework has been removed":
+            event = event.set(message="stop")
         else:
-            event = event.set(message='unknown')
+            event = event.set(message="unknown")
 
         self.event_queue.put(event)
 
@@ -463,10 +469,10 @@ class ExecutionFramework(Scheduler):
         self._driver = driver
         event = control_event(
             raw={
-                'master_info': masterInfo,
-                'framework_id': frameworkId,
+                "master_info": masterInfo,
+                "framework_id": frameworkId,
             },
-            message='registered',
+            message="registered",
         )
         self.event_queue.put(event)
         log.info(
@@ -498,29 +504,28 @@ class ExecutionFramework(Scheduler):
         with self._lock:
             if self.task_queue.empty():
                 # Always suppress offers when there is nothing to run
-                if self.call_driver('suppressOffers') is not self.driver_error:
+                if self.call_driver("suppressOffers") is not self.driver_error:
                     self.are_offers_suppressed = True
                     log.info("Suppressing offers, no more tasks to run.")
 
                 for offer in offers:
-                    declined['no tasks'].append(offer.id.value)
+                    declined["no tasks"].append(offer.id.value)
                     declined_offer_ids.append(offer.id)
 
                 self.call_driver(
-                    'declineOffer', declined_offer_ids, self.offer_decline_filter)
+                    "declineOffer", declined_offer_ids, self.offer_decline_filter
+                )
                 log.info(
-                    f"Offers declined because of no tasks: {','.join(declined['no tasks'])}")
+                    f"Offers declined because of no tasks: {','.join(declined['no tasks'])}"
+                )
                 return
 
-        with_maintenance_window = [
-            offer for offer in offers if offer.unavailability
-        ]
+        with_maintenance_window = [offer for offer in offers if offer.unavailability]
 
         for offer in with_maintenance_window:
-            start_time = offer.unavailability.start['nanoseconds']
+            start_time = offer.unavailability.start["nanoseconds"]
             completion_time = int(
-                (start_time + offer.unavailability.duration['nanoseconds'])
-                / 1000000000
+                (start_time + offer.unavailability.duration["nanoseconds"]) / 1000000000
             )
             now = int(time.time())
             duration = completion_time - now
@@ -536,8 +541,8 @@ class ExecutionFramework(Scheduler):
         for offer in without_maintenance_window:
             with self._lock:
                 if offer.agent_id.value in self.blacklisted_slaves:
-                    declined['blacklisted'].append(
-                        f'offer {offer.id.value} agent {offer.agent_id.value}'
+                    declined["blacklisted"].append(
+                        f"offer {offer.id.value} agent {offer.agent_id.value}"
                     )
                     declined_offer_ids.append(offer.id)
                     continue
@@ -548,7 +553,7 @@ class ExecutionFramework(Scheduler):
                     f"Declining offer {offer.id.value}, required pool "
                     f"{self.pool} doesn't match offered pool {offer_pool}"
                 )
-                declined['bad pool'].append(offer.id.value)
+                declined["bad pool"].append(offer.id.value)
                 declined_offer_ids.append(offer.id)
                 continue
 
@@ -566,7 +571,8 @@ class ExecutionFramework(Scheduler):
                     for attribute in offer.attributes
                 }
                 log.info(
-                    f'Received offer {offer.id.value} for role {self.role}: {offer_resources}')
+                    f"Received offer {offer.id.value} for role {self.role}: {offer_resources}"
+                )
                 tasks_to_launch, tasks_to_defer = self.callbacks.get_tasks_for_offer(
                     task_configs,
                     offer_resources,
@@ -576,21 +582,22 @@ class ExecutionFramework(Scheduler):
 
                 for task in tasks_to_defer:
                     self.task_queue.put(task)
-                get_metric(metrics.TASK_INSUFFICIENT_OFFER_COUNT).count(len(tasks_to_defer))
+                get_metric(metrics.TASK_INSUFFICIENT_OFFER_COUNT).count(
+                    len(tasks_to_defer)
+                )
 
                 if len(tasks_to_launch) == 0:
-                    declined['bad resources'].append(offer.id.value)
+                    declined["bad resources"].append(offer.id.value)
                     declined_offer_ids.append(offer.id)
                     continue
 
-                ignored_tasks = ','.join(
+                ignored_tasks = ",".join(
                     task_config.task_id
                     for task_config in tasks_to_launch
                     if task_config.task_id not in self.task_metadata
                 )
                 if ignored_tasks:
-                    log.warning(
-                        f'ignoring tasks not in metadata: {ignored_tasks}')
+                    log.warning(f"ignoring tasks not in metadata: {ignored_tasks}")
 
                 tasks_to_launch = [
                     task_config
@@ -599,21 +606,21 @@ class ExecutionFramework(Scheduler):
                 ]
 
                 if len(tasks_to_launch) == 0:
-                    declined['nothing to launch'].append(offer.id.value)
+                    declined["nothing to launch"].append(offer.id.value)
                     declined_offer_ids.append(offer.id)
                 elif not self.launch_tasks_for_offer(offer, tasks_to_launch):
-                    declined['launch failed'].append(offer.id.value)
+                    declined["launch failed"].append(offer.id.value)
                     declined_offer_ids.append(offer.id)
                 else:
                     accepted.append(
-                        f'offer: {offer.id.value} '
-                        f'agent: {offer.agent_id.value} '
-                        f'tasks: {len(tasks_to_launch)}'
+                        f"offer: {offer.id.value} "
+                        f"agent: {offer.agent_id.value} "
+                        f"tasks: {len(tasks_to_launch)}"
                     )
 
         if len(declined_offer_ids) > 0:
             self.call_driver(
-                'declineOffer', declined_offer_ids, self.offer_decline_filter
+                "declineOffer", declined_offer_ids, self.offer_decline_filter
             )
         for reason, items in declined.items():
             log.info(f"Offers declined because {reason}: {', '.join(items)}")
@@ -630,9 +637,11 @@ class ExecutionFramework(Scheduler):
         if task_id not in self.task_metadata:
             # We assume that a terminal status update has been
             # received for this task already.
-            log.info('Ignoring this status update because a terminal status '
-                     'update has been received for this task already.')
-            self.call_driver('acknowledgeStatusUpdate', update)
+            log.info(
+                "Ignoring this status update because a terminal status "
+                "update has been received for this task already."
+            )
+            self.call_driver("acknowledgeStatusUpdate", update)
             return
 
         md = self.task_metadata[task_id]
@@ -641,18 +650,19 @@ class ExecutionFramework(Scheduler):
         # master for some reason such as offer has been rescinded or we
         # have exceeded offer_timeout, then we will get TASK_LOST status
         # update back from mesos master.
-        if task_state == 'TASK_LOST' and str(update.reason) == \
-                'REASON_INVALID_OFFERS':
+        if task_state == "TASK_LOST" and str(update.reason) == "REASON_INVALID_OFFERS":
             # This task has not been launched. Therefore, we are going to
             # reenqueue it. We are not propogating any event up to the
             # application.
-            log.warning('Received TASK_LOST from mesos master because we '
-                        'attempted to accept an invalid offer. Going to '
-                        f're-enqueue this task {task_id}')
+            log.warning(
+                "Received TASK_LOST from mesos master because we "
+                "attempted to accept an invalid offer. Going to "
+                f"re-enqueue this task {task_id}"
+            )
             # Re-enqueue task
             self.enqueue_task(md.task_config)
             get_metric(metrics.TASK_LOST_DUE_TO_INVALID_OFFER_COUNT).count(1)
-            self.call_driver('acknowledgeStatusUpdate', update)
+            self.call_driver("acknowledgeStatusUpdate", update)
             return
 
         # Record state changes, send a new event and emit metrics only if the
@@ -664,8 +674,9 @@ class ExecutionFramework(Scheduler):
                     md.set(
                         task_state=task_state,
                         task_state_history=md.task_state_history.set(
-                            task_state, time.time()),
-                    )
+                            task_state, time.time()
+                        ),
+                    ),
                 )
 
             self.event_queue.put(
@@ -679,4 +690,4 @@ class ExecutionFramework(Scheduler):
 
         # We have to do this because we are not using implicit
         # acknowledgements.
-        self.call_driver('acknowledgeStatusUpdate', update)
+        self.call_driver("acknowledgeStatusUpdate", update)

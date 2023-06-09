@@ -24,7 +24,7 @@ class KubernetesTaskState(AutoEnum):
 
 class KubernetesTaskMetadata(PRecord):
     # what box this task/Pod was scheduled onto
-    node_name: str = field(type=str, initial='')
+    node_name: str = field(type=str, initial="")
 
     # the config used to launch this task/Pod
     task_config: KubernetesTaskConfig = field(type=KubernetesTaskConfig, mandatory=True)
@@ -32,4 +32,5 @@ class KubernetesTaskMetadata(PRecord):
     task_state: KubernetesTaskState = field(type=KubernetesTaskState, mandatory=True)
     # List of state to when that state was entered (stored as a timestamp)
     task_state_history: PVectorType[Tuple[KubernetesTaskState, float]] = field(
-        type=PVector, factory=pvector, mandatory=True)
+        type=PVector, factory=pvector, mandatory=True
+    )

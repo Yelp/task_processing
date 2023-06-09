@@ -30,7 +30,7 @@ def test_reconcile(fake_runner, fake_executor):
 
 
 def test_kill(fake_runner, fake_executor):
-    result = fake_runner.kill('some_id')
+    result = fake_runner.kill("some_id")
     assert result == fake_executor.kill.return_value
     assert fake_executor.kill.call_count == 1
 

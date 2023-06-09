@@ -38,14 +38,12 @@ class DummyTaskExecutor2(TaskExecutor):
         pass
 
 
-TASK_PROCESSING_PLUGIN = 'mock_plugin'
+TASK_PROCESSING_PLUGIN = "mock_plugin"
 
 
 def register_plugin(registry):
     registration = registry.register_task_executor(
-        'dummy', DummyTaskExecutor
-    ).register_task_executor(
-        'dummy2', DummyTaskExecutor2
-    )
+        "dummy", DummyTaskExecutor
+    ).register_task_executor("dummy2", DummyTaskExecutor2)
 
     return registration

@@ -29,7 +29,9 @@ from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 from task_processing.plugins.kubernetes.task_metadata import KubernetesTaskMetadata
 from task_processing.plugins.kubernetes.task_metadata import KubernetesTaskState
 from task_processing.plugins.kubernetes.types import PodEvent
-from task_processing.plugins.kubernetes.utils import get_capabilities_for_capability_changes
+from task_processing.plugins.kubernetes.utils import (
+    get_capabilities_for_capability_changes,
+)
 from task_processing.plugins.kubernetes.utils import get_kubernetes_empty_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_kubernetes_env_vars
 from task_processing.plugins.kubernetes.utils import get_kubernetes_secret_volume_mounts
@@ -63,18 +65,21 @@ class KubernetesPodExecutor(TaskExecutor):
         kubeconfig_path: Optional[str] = None,
         task_configs: Optional[Collection[KubernetesTaskConfig]] = [],
         emit_events_without_state_transitions: bool = False,
-
     ) -> None:
         if not version:
             version = "unknown_task_processing"
         user_agent = f"{namespace}/v{version}"
-        self.kube_client = KubeClient(kubeconfig_path=kubeconfig_path, user_agent=user_agent)
+        self.kube_client = KubeClient(
+            kubeconfig_path=kubeconfig_path, user_agent=user_agent
+        )
         self.namespace = namespace
 
         # Pod modified events that did not result in a pod state transition are usually not
         # forwarded, but some consumers are interested in container state changes. This
         # variable controls whether such additional pod modified events are forwarded.
-        self.emit_events_without_state_transitions = emit_events_without_state_transitions
+        self.emit_events_without_state_transitions = (
+            emit_events_without_state_transitions
+        )
 
         self.stopping = False
         self.task_metadata: PMap[str, KubernetesTaskMetadata] = pmap()
@@ -112,12 +117,10 @@ class KubernetesPodExecutor(TaskExecutor):
         self.pending_event_processing_thread.start()
 
     def _initialize_existing_task(self, task_config: KubernetesTaskConfig) -> None:
-        """ Generates task_metadata in UNKNOWN state for an existing KubernetesTaskConfig.
-            Used during initialization or recovery for a task"""
+        """Generates task_metadata in UNKNOWN state for an existing KubernetesTaskConfig.
+        Used during initialization or recovery for a task"""
         pod_name = task_config.pod_name
-        logger.debug(
-            f"Initializing task metadata for known pod {pod_name}"
-        )
+        logger.debug(f"Initializing task metadata for known pod {pod_name}")
         # We are initiating with UNKNOWN state on initial load, then leave
         # matching tasks to running/completed pods in reconcile()
         with self.task_metadata_lock:
@@ -125,12 +128,12 @@ class KubernetesPodExecutor(TaskExecutor):
                 pod_name,
                 KubernetesTaskMetadata(
                     task_config=task_config,
-                    node_name='UNKNOWN',
+                    node_name="UNKNOWN",
                     task_state=KubernetesTaskState.TASK_UNKNOWN,
                     task_state_history=v(
                         (KubernetesTaskState.TASK_UNKNOWN, time.time())
                     ),
-                )
+                ),
             )
 
     def _pod_event_watch_loop(self) -> None:
@@ -146,8 +149,7 @@ class KubernetesPodExecutor(TaskExecutor):
         while not self.stopping:
             try:
                 for pod_event in self.watch.stream(
-                    self.kube_client.core.list_namespaced_pod,
-                    self.namespace
+                    self.kube_client.core.list_namespaced_pod, self.namespace
                 ):
                     # it's possible that we've received an event after we've already set the stop
                     # flag since Watch streams block forever, so re-check if we've stopped before
@@ -170,14 +172,15 @@ class KubernetesPodExecutor(TaskExecutor):
                 # but the Watch is still blocking and eventually gets disconnected)
                 if not self.stopping:
                     logger.exception(
-                        "Exception encountered while watching Pod events - restarting watch!")
+                        "Exception encountered while watching Pod events - restarting watch!"
+                    )
         logger.debug("Exiting Pod event watcher - stop requested.")
 
     def __handle_deleted_pod_event(self, event: PodEvent) -> None:
         pod = event["object"]
         pod_name = pod.metadata.name
         task_metadata = self.task_metadata[pod_name]
-        raw_event = event['raw_object']
+        raw_event = event["raw_object"]
 
         logger.info(f"Removing {pod_name} from state and emitting 'killed' event.")
 
@@ -190,7 +193,7 @@ class KubernetesPodExecutor(TaskExecutor):
                 timestamp=time.time(),
                 raw=raw_event,
                 task_config=task_metadata.task_config,
-                platform_type="killed"
+                platform_type="killed",
             )
         )
 
@@ -199,11 +202,11 @@ class KubernetesPodExecutor(TaskExecutor):
         self.__update_modified_pod(pod=pod, event=event)
 
     def __update_modified_pod(self, pod: V1Pod, event: Optional[PodEvent]) -> None:
-        """ Called during reconciliation and normal event handling """
+        """Called during reconciliation and normal event handling"""
         pod_name = pod.metadata.name
         task_metadata = self.task_metadata[pod_name]
 
-        raw_event = event['raw_object'] if event else None
+        raw_event = event["raw_object"] if event else None
 
         if pod.status.phase not in SUPPORTED_POD_MODIFIED_EVENT_PHASES:
             logger.debug(
@@ -227,8 +230,8 @@ class KubernetesPodExecutor(TaskExecutor):
                     task_state=KubernetesTaskState.TASK_RUNNING,
                     task_state_history=task_metadata.task_state_history.append(
                         (KubernetesTaskState.TASK_RUNNING, time.time()),
-                    )
-                )
+                    ),
+                ),
             )
             self.event_queue.put(
                 task_event(
@@ -237,7 +240,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     timestamp=time.time(),
                     raw=raw_event,
                     task_config=task_metadata.task_config,
-                    platform_type="running"
+                    platform_type="running",
                 )
             )
 
@@ -257,7 +260,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     timestamp=time.time(),
                     raw=raw_event,
                     task_config=task_metadata.task_config,
-                    platform_type="finished"
+                    platform_type="finished",
                 )
             )
             return
@@ -276,7 +279,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     timestamp=time.time(),
                     raw=raw_event,
                     task_config=task_metadata.task_config,
-                    platform_type="failed"
+                    platform_type="failed",
                 )
             )
             return
@@ -293,8 +296,8 @@ class KubernetesPodExecutor(TaskExecutor):
                     task_state=KubernetesTaskState.TASK_RUNNING,
                     task_state_history=task_metadata.task_state_history.append(
                         (KubernetesTaskState.TASK_RUNNING, time.time()),
-                    )
-                )
+                    ),
+                ),
             )
             self.event_queue.put(
                 task_event(
@@ -303,7 +306,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     timestamp=time.time(),
                     raw=raw_event,
                     task_config=task_metadata.task_config,
-                    platform_type="running"
+                    platform_type="running",
                 )
             )
             return
@@ -326,8 +329,8 @@ class KubernetesPodExecutor(TaskExecutor):
                     task_state=KubernetesTaskState.TASK_LOST,
                     task_state_history=task_metadata.task_state_history.append(
                         (KubernetesTaskState.TASK_LOST, time.time()),
-                    )
-                )
+                    ),
+                ),
             )
             self.event_queue.put(
                 task_event(
@@ -336,7 +339,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     timestamp=time.time(),
                     raw=raw_event,
                     task_config=task_metadata.task_config,
-                    platform_type="lost"
+                    platform_type="lost",
                 )
             )
             return
@@ -374,7 +377,9 @@ class KubernetesPodExecutor(TaskExecutor):
         pod_name = pod.metadata.name
         with self.task_metadata_lock:
             if pod_name not in self.task_metadata:
-                logger.info(f"Ignoring event for {pod_name} - Pod not tracked by task_processing.")
+                logger.info(
+                    f"Ignoring event for {pod_name} - Pod not tracked by task_processing."
+                )
                 return None
 
             # this should only ever be run for Pods that were killed either by operator
@@ -387,7 +392,9 @@ class KubernetesPodExecutor(TaskExecutor):
                 self.__handle_modified_pod_event(event)
 
             else:
-                logger.warning(f"Got unknown event type for {pod_name}: {event['type']}")
+                logger.warning(
+                    f"Got unknown event type for {pod_name}: {event['type']}"
+                )
 
     def _pending_event_processing_loop(self) -> None:
         """
@@ -418,7 +425,9 @@ class KubernetesPodExecutor(TaskExecutor):
                 # this should never happen since the only codepath that should ever get
                 # here is after a successful get() - but just in case, we don't want to
                 # have this thread die because of this
-                logger.error("task_done() called on pending events queue too many times!")
+                logger.error(
+                    "task_done() called on pending events queue too many times!"
+                )
 
         logger.debug("Exiting Pod event processing - stop requested.")
 
@@ -447,7 +456,9 @@ class KubernetesPodExecutor(TaskExecutor):
 
         requests = {
             "cpu": task_config.cpus_request if task_config.cpus_request else None,
-            "memory": f"{task_config.memory_request}Mi" if task_config.memory_request else None,
+            "memory": f"{task_config.memory_request}Mi"
+            if task_config.memory_request
+            else None,
         }
         limits = {
             "cpu": task_config.cpus,
@@ -487,10 +498,12 @@ class KubernetesPodExecutor(TaskExecutor):
             containers = [self._create_container_definition("main", task_config)]
 
             for name, nested_config in task_config.extra_containers.items():
-                containers.append(self._create_container_definition(
-                    get_sanitised_kubernetes_name(name, length_limit=63),
-                    nested_config,
-                ))
+                containers.append(
+                    self._create_container_definition(
+                        get_sanitised_kubernetes_name(name, length_limit=63),
+                        nested_config,
+                    )
+                )
 
             volumes = (
                 get_pod_volumes(task_config.volumes)
@@ -570,10 +583,7 @@ class KubernetesPodExecutor(TaskExecutor):
         with self.task_metadata_lock:
             task_metadata = self.task_metadata[pod_name]
             self.task_metadata = self.task_metadata.set(
-                pod_name,
-                task_metadata.set(
-                    task_config=task_config
-                )
+                pod_name, task_metadata.set(task_config=task_config)
             )
 
             if not pod:
@@ -588,8 +598,8 @@ class KubernetesPodExecutor(TaskExecutor):
                         task_state=KubernetesTaskState.TASK_LOST,
                         task_state_history=task_metadata.task_state_history.append(
                             (KubernetesTaskState.TASK_LOST, time.time()),
-                        )
-                    )
+                        ),
+                    ),
                 )
                 self.event_queue.put(
                     task_event(
@@ -598,7 +608,7 @@ class KubernetesPodExecutor(TaskExecutor):
                         timestamp=time.time(),
                         raw=None,
                         task_config=task_metadata.task_config,
-                        platform_type="lost"
+                        platform_type="lost",
                     )
                 )
             else:
@@ -641,7 +651,9 @@ class KubernetesPodExecutor(TaskExecutor):
         self.pending_events.join()
         logger.debug("All pending PodEvents have been processed.")
         # and then give ourselves time to do any post-stop cleanup
-        self.pending_event_processing_thread.join(timeout=POD_EVENT_THREAD_JOIN_TIMEOUT_S)
+        self.pending_event_processing_thread.join(
+            timeout=POD_EVENT_THREAD_JOIN_TIMEOUT_S
+        )
 
         logger.debug("Done stopping KubernetesPodExecutor!")
 

@@ -12,10 +12,9 @@ log = logging.getLogger(__name__)
 
 
 class RetryingExecutor(TaskExecutor):
-    def __init__(self,
-                 downstream_executor,
-                 retry_pred=lambda e: not e.success,
-                 retries=3):
+    def __init__(
+        self, downstream_executor, retry_pred=lambda e: not e.success, retries=3
+    ):
         self.executor = downstream_executor
         self.retries = retries
         self.retry_pred = retry_pred
@@ -33,11 +32,8 @@ class RetryingExecutor(TaskExecutor):
 
     def event_with_retries(self, event):
         return event.transform(
-            ('extensions', 'RetryingExecutor/tries'),
-            "{}/{}".format(
-                self.task_retries[event.task_id],
-                self.retries
-            )
+            ("extensions", "RetryingExecutor/tries"),
+            "{}/{}".format(self.task_retries[event.task_id], self.retries),
         )
 
     def retry(self, event):
@@ -47,16 +43,17 @@ class RetryingExecutor(TaskExecutor):
 
         total_retries = self._task_or_executor_retries(event.task_config)
         log.info(
-            'Retrying task {}, {} of {}, fail event: {}'.format(
-                event.task_config.name, total_retries - retries_remaining + 1,
-                total_retries, event.raw
+            "Retrying task {}, {} of {}, fail event: {}".format(
+                event.task_config.name,
+                total_retries - retries_remaining + 1,
+                total_retries,
+                event.raw,
             )
         )
 
         with self.task_retries_lock:
             self.task_retries = self.task_retries.set(
-                event.task_id,
-                retries_remaining - 1
+                event.task_id, retries_remaining - 1
             )
         self.run(event.task_config)
 
@@ -67,13 +64,14 @@ class RetryingExecutor(TaskExecutor):
             while not self.src_queue.empty():
                 e = self.src_queue.get()
 
-                if e.kind != 'task':
+                if e.kind != "task":
                     self.dest_queue.put(e)
                     continue
 
                 # This is to remove trailing '-retry*'
-                original_task_id = '-'.join([item for item in
-                                             e.task_id.split('-')[:-1]])
+                original_task_id = "-".join(
+                    [item for item in e.task_id.split("-")[:-1]]
+                )
 
                 # Check if the update is for current attempt. Discard if
                 # it is not.
@@ -91,8 +89,7 @@ class RetryingExecutor(TaskExecutor):
                             continue
 
                     with self.task_retries_lock:
-                        self.task_retries = \
-                            self.task_retries.remove(e.task_id)
+                        self.task_retries = self.task_retries.remove(e.task_id)
 
                 self.dest_queue.put(e)
 
@@ -105,8 +102,7 @@ class RetryingExecutor(TaskExecutor):
         if task_config.task_id not in self.task_retries:
             with self.task_retries_lock:
                 self.task_retries = self.task_retries.set(
-                    task_config.task_id,
-                    self._task_or_executor_retries(task_config)
+                    task_config.task_id, self._task_or_executor_retries(task_config)
                 )
         self.executor.run(self._task_config_with_retry(task_config))
 
@@ -116,10 +112,7 @@ class RetryingExecutor(TaskExecutor):
     def kill(self, task_id):
         # retries = -1 so that manually killed tasks can be distinguished
         with self.task_retries_lock:
-            self.task_retries = self.task_retries.set(
-                task_id,
-                -1
-            )
+            self.task_retries = self.task_retries.set(task_id, -1)
         return self.executor.kill(task_id)
 
     def stop(self):
@@ -131,15 +124,16 @@ class RetryingExecutor(TaskExecutor):
         return self.dest_queue
 
     def _task_config_with_retry(self, task_config):
-        return task_config.set(uuid='{id}-retry{attempt}'.format(
-            id=task_config.uuid,
-            attempt=self.task_retries[task_config.task_id]
-        ))
+        return task_config.set(
+            uuid="{id}-retry{attempt}".format(
+                id=task_config.uuid, attempt=self.task_retries[task_config.task_id]
+            )
+        )
 
     def _restore_task_id(self, e, original_task_id):
-        task_config = e.task_config.set(uuid='-'.join(
-            [item for item in str(e.task_config.uuid).split('-')[:-1]]
-        ))
+        task_config = e.task_config.set(
+            uuid="-".join([item for item in str(e.task_config.uuid).split("-")[:-1]])
+        )
 
         # Set the task id back to original task_id
         return e.set(
@@ -148,8 +142,7 @@ class RetryingExecutor(TaskExecutor):
         )
 
     def _is_current_attempt(self, e, original_task_id):
-        retry_suffix = '-'.join([item for item in
-                                 e.task_id.split('-')[-1:]])
+        retry_suffix = "-".join([item for item in e.task_id.split("-")[-1:]])
 
         # This is to extract retry attempt from retry_suffix
         # eg: if retry_suffix= 'retry2', then attempt==2
@@ -171,5 +164,4 @@ class RetryingExecutor(TaskExecutor):
         return False
 
     def _task_or_executor_retries(self, task_config):
-        return task_config.retries \
-            if 'retries' in task_config else self.retries
+        return task_config.retries if "retries" in task_config else self.retries

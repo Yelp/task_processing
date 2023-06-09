@@ -7,7 +7,7 @@ from threading import Thread
 
 from task_processing.interfaces.runner import Runner
 
-EventHandler = namedtuple('EventHandler', ['predicate', 'cb'])
+EventHandler = namedtuple("EventHandler", ["predicate", "cb"])
 
 log = logging.getLogger(__name__)
 
@@ -54,8 +54,7 @@ class Async(Runner):
 
                 # TODO: have a default callback? raise exception when this
                 # event is ignored?
-                if event.kind == 'control' and \
-                   event.message == 'stop':
+                if event.kind == "control" and event.message == "stop":
                     self.stopping = True
                     continue
 

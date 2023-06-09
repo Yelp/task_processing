@@ -7,18 +7,16 @@ from task_processing.plugins.mesos.mesos_executor import MesosExecutorCallbacks
 
 @pytest.fixture
 def mock_callbacks():
-    return MesosExecutorCallbacks(mock.Mock(), mock.Mock(), mock.Mock()),
+    return (MesosExecutorCallbacks(mock.Mock(), mock.Mock(), mock.Mock()),)
 
 
 @pytest.fixture
 def mesos_executor(request, mock_callbacks, mock_Thread, mock_fw_and_driver):
-    dummy_executor = MesosExecutor(
-        'role',
-        callbacks=mock_callbacks
-    )
+    dummy_executor = MesosExecutor("role", callbacks=mock_callbacks)
 
     def mesos_executor_teardown():
         dummy_executor.stop()
+
     request.addfinalizer(mesos_executor_teardown)
 
     return dummy_executor
@@ -47,23 +45,23 @@ def test_creates_execution_framework_and_driver(
         sched=execution_framework.return_value,
         framework=execution_framework.return_value.framework_info,
         use_addict=True,
-        master_uri='127.0.0.1:5050',
+        master_uri="127.0.0.1:5050",
         implicit_acknowledgements=False,
-        principal='taskproc',
+        principal="taskproc",
         secret=None,
         failover=False,
     )
 
     assert mock_Thread.call_args == mock.call(
-        target=mesos_executor._run_driver,
-        args=()
+        target=mesos_executor._run_driver, args=()
     )
 
 
 def test_run_passes_task_to_execution_framework(mesos_executor):
     mesos_executor.run("task")
-    assert mesos_executor.execution_framework.enqueue_task.call_args ==\
-        mock.call("task")
+    assert mesos_executor.execution_framework.enqueue_task.call_args == mock.call(
+        "task"
+    )
 
 
 def test_stop_shuts_down_properly(mesos_executor):
@@ -82,11 +80,11 @@ def test_event_queue(mocker, mesos_executor):
 def test_kill_returns(mesos_executor):
     result = mesos_executor.kill("task")
     assert result == mesos_executor.execution_framework.kill_task.return_value
-    assert mesos_executor.execution_framework.kill_task.call_args ==\
-        mock.call("task")
+    assert mesos_executor.execution_framework.kill_task.call_args == mock.call("task")
 
 
 def test_reconcile(mesos_executor):
     mesos_executor.reconcile("task")
-    assert mesos_executor.execution_framework.reconcile_task.call_args ==\
-        mock.call("task")
+    assert mesos_executor.execution_framework.reconcile_task.call_args == mock.call(
+        "task"
+    )

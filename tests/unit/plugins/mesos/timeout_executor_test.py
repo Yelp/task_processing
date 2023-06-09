@@ -11,7 +11,7 @@ from task_processing.plugins.mesos.timeout_executor import TimeoutExecutor
 
 @pytest.fixture
 def mock_Thread():
-    with mock.patch('task_processing.plugins.mesos.timeout_executor.Thread'):
+    with mock.patch("task_processing.plugins.mesos.timeout_executor.Thread"):
         yield
 
 
@@ -35,10 +35,10 @@ def mock_timeout_executor(mock_Thread, mock_downstream):
 @pytest.fixture
 def mock_task_config():
     return MesosTaskConfig(
-        uuid='mock_uuid',
-        name='mock_name',
-        image='mock_image',
-        cmd='mock_cmd',
+        uuid="mock_uuid",
+        name="mock_name",
+        image="mock_image",
+        cmd="mock_cmd",
         timeout=1000,
     )
 
@@ -54,14 +54,14 @@ def mock_entry(mock_task_config):
 @pytest.fixture
 def mock_event(mock_task_config):
     return Event(
-        kind='task',
+        kind="task",
         timestamp=1234.5678,
         terminal=True,
         task_id=mock_task_config.task_id,
-        platform_type='mesos',
-        message='mock_message',
+        platform_type="mesos",
+        message="mock_message",
         task_config=mock_task_config,
-        raw='raw_event',
+        raw="raw_event",
     )
 
 
@@ -70,13 +70,13 @@ def test_timeout_loop_nontask(
     mock_timeout_executor,
     mock_event,
 ):
-    mock_event = mock_event.set('kind', 'control')
-    mock_entry = TaskEntry('different_id', deadline=1234)
+    mock_event = mock_event.set("kind", "control")
+    mock_entry = TaskEntry("different_id", deadline=1234)
     mock_timeout_executor.stopping = True
     mock_timeout_executor.src_queue.put(mock_event)
     mock_timeout_executor.running_tasks.append(mock_entry)
 
-    with mock.patch('time.time', mock.Mock(return_value=0)):
+    with mock.patch("time.time", mock.Mock(return_value=0)):
         mock_timeout_executor.timeout_loop()
 
     assert len(mock_timeout_executor.running_tasks) == 1
@@ -105,17 +105,18 @@ def test_timeout_loop_existing_nonterminal_task(
     mock_event,
     mock_entry,
 ):
-    mock_event = mock_event.set('terminal', False)
+    mock_event = mock_event.set("terminal", False)
     mock_timeout_executor.stopping = True
     mock_timeout_executor.src_queue.put(mock_event)
     mock_timeout_executor.running_tasks.append(mock_entry)
     mock_timeout_executor.downstream_executor.kill = mock.Mock()
 
-    with mock.patch('time.time', mock.Mock(return_value=10000)):
+    with mock.patch("time.time", mock.Mock(return_value=10000)):
         mock_timeout_executor.timeout_loop()
 
-    assert mock_timeout_executor.downstream_executor.kill.call_args ==\
-        mock.call(mock_entry.task_id)
+    assert mock_timeout_executor.downstream_executor.kill.call_args == mock.call(
+        mock_entry.task_id
+    )
     assert len(mock_timeout_executor.running_tasks) == 0
     assert len(mock_timeout_executor.killed_tasks) == 1
 
@@ -125,23 +126,24 @@ def test_timeout_loop_nonexistent_nonterminal_task(
     mock_event,
     mock_entry,
 ):
-    mock_event = mock_event.set('terminal', False)
+    mock_event = mock_event.set("terminal", False)
     mock_timeout_executor.stopping = True
     mock_timeout_executor.src_queue.put(mock_event)
     mock_timeout_executor.downstream_executor.kill = mock.Mock()
 
-    with mock.patch('time.time', mock.Mock(return_value=10000)):
+    with mock.patch("time.time", mock.Mock(return_value=10000)):
         mock_timeout_executor.timeout_loop()
 
-    assert mock_timeout_executor.downstream_executor.kill.call_args ==\
-        mock.call(mock_entry.task_id)
+    assert mock_timeout_executor.downstream_executor.kill.call_args == mock.call(
+        mock_entry.task_id
+    )
     assert len(mock_timeout_executor.running_tasks) == 0
     assert len(mock_timeout_executor.killed_tasks) == 1
 
 
 # run ####################################################################
 def test_run(mock_timeout_executor, mock_downstream):
-    mock_config = MesosTaskConfig(image='fake', cmd='cat', timeout=60)
+    mock_config = MesosTaskConfig(image="fake", cmd="cat", timeout=60)
     mock_timeout_executor.run(mock_config)
     assert mock_downstream.run.call_count == 1
 
@@ -157,8 +159,7 @@ def test_reconcile(mock_timeout_executor, mock_downstream):
 # kill ###################################################################
 def test_kill_existing_task(mock_timeout_executor, mock_downstream):
     mock_timeout_executor.running_tasks = [TaskEntry("task", 10)]
-    mock_timeout_executor.downstream_executor.kill = mock.Mock(
-        return_value=True)
+    mock_timeout_executor.downstream_executor.kill = mock.Mock(return_value=True)
 
     result = mock_timeout_executor.kill("task")
 
@@ -177,26 +178,32 @@ def test_stop(mock_timeout_executor, mock_downstream):
 
 # _insert_new_running_task_entry #########################################
 def test_insert_new_running_task_entry_enumerate(mock_timeout_executor):
-    mock_entry_one = TaskEntry('fake_entry_one', 1)
-    mock_entry_two = TaskEntry('fake_entry_two', 2)
-    mock_entry_three = TaskEntry('fake_entry_three', 3)
+    mock_entry_one = TaskEntry("fake_entry_one", 1)
+    mock_entry_two = TaskEntry("fake_entry_two", 2)
+    mock_entry_three = TaskEntry("fake_entry_three", 3)
     mock_timeout_executor.running_tasks.append(mock_entry_one)
     mock_timeout_executor.running_tasks.append(mock_entry_three)
 
     mock_timeout_executor._insert_new_running_task_entry(mock_entry_two)
 
-    assert [entry.deadline for entry in mock_timeout_executor.running_tasks] ==\
-        [1, 2, 3]
+    assert [entry.deadline for entry in mock_timeout_executor.running_tasks] == [
+        1,
+        2,
+        3,
+    ]
 
 
 def test_insert_new_running_task_entry_append(mock_timeout_executor):
-    mock_entry_one = TaskEntry('fake_entry_one', 1)
-    mock_entry_two = TaskEntry('fake_entry_two', 2)
-    mock_entry_three = TaskEntry('fake_entry_three', 3)
+    mock_entry_one = TaskEntry("fake_entry_one", 1)
+    mock_entry_two = TaskEntry("fake_entry_two", 2)
+    mock_entry_three = TaskEntry("fake_entry_three", 3)
     mock_timeout_executor.running_tasks.append(mock_entry_one)
     mock_timeout_executor.running_tasks.append(mock_entry_two)
 
     mock_timeout_executor._insert_new_running_task_entry(mock_entry_three)
 
-    assert [entry.deadline for entry in mock_timeout_executor.running_tasks] ==\
-        [1, 2, 3]
+    assert [entry.deadline for entry in mock_timeout_executor.running_tasks] == [
+        1,
+        2,
+        3,
+    ]

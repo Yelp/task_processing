@@ -21,5 +21,5 @@ def test_task_executor():
             pass
 
     t = TaskExecutorImpl()
-    assert t.run('foo') == 'foo'
-    assert t.kill('mock')
+    assert t.run("foo") == "foo"
+    assert t.kill("mock")

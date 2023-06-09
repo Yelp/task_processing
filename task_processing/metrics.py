@@ -1,5 +1,6 @@
 try:
     import yelp_meteorite
+
     METRICS_ENABLED = True
 except Exception:
     METRICS_ENABLED = False
@@ -9,6 +10,7 @@ class _DummyMetricType:
     """
     Emulates a yelp_meteorite counter, gauge, or timer
     """
+
     def count(*args, **kwargs):
         pass
 
@@ -27,8 +29,7 @@ def create_counter(name, dimensions={}):
         return
 
     if name not in _registered_metrics:
-        counter = yelp_meteorite.create_counter(
-            name, default_dimensions=dimensions)
+        counter = yelp_meteorite.create_counter(name, default_dimensions=dimensions)
         _registered_metrics[name] = counter
 
 
@@ -37,8 +38,7 @@ def create_timer(name, dimensions={}):
         return
 
     if name not in _registered_metrics:
-        timer = yelp_meteorite.create_timer(
-            name, default_dimensions=dimensions)
+        timer = yelp_meteorite.create_timer(name, default_dimensions=dimensions)
         _registered_metrics[name] = timer
 
 

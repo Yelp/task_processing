@@ -22,22 +22,22 @@ def ef(mock_Thread):
 
 @pytest.fixture
 def mock_driver():
-    with mock.patch('pymesos.MesosSchedulerDriver', autospec=True) as m:
-        m.id = 'mock_driver'
+    with mock.patch("pymesos.MesosSchedulerDriver", autospec=True) as m:
+        m.id = "mock_driver"
         yield m
 
 
 @pytest.fixture
 def mock_get_metric():
     with mock.patch(
-        'task_processing.plugins.mesos.execution_framework.get_metric',
+        "task_processing.plugins.mesos.execution_framework.get_metric",
     ) as mock_get_metric:
         yield mock_get_metric
 
 
 @pytest.fixture
 def mock_time():
-    with mock.patch.object(time, 'time') as mock_time:
+    with mock.patch.object(time, "time") as mock_time:
         yield mock_time
 
 
@@ -46,29 +46,23 @@ def mock_sleep(ef):
     def stop_killing(task_id):
         ef.stopping = True
 
-    with mock.patch.object(time, 'sleep', side_effect=stop_killing) as mock_sleep:
+    with mock.patch.object(time, "sleep", side_effect=stop_killing) as mock_sleep:
         yield mock_sleep
 
 
-def test_ef_kills_stuck_tasks(
-    ef,
-    fake_task,
-    mock_sleep,
-    mock_get_metric
-):
+def test_ef_kills_stuck_tasks(ef, fake_task, mock_sleep, mock_get_metric):
     task_id = fake_task.task_id
     task_metadata = TaskMetadata(
-        agent_id='fake_agent_id',
+        agent_id="fake_agent_id",
         task_config=fake_task,
-        task_state='TASK_STAGING',
+        task_state="TASK_STAGING",
         task_state_history=m(TASK_STAGING=0.0),
     )
     ef.task_staging_timeout_s = 0
     ef.kill_task = mock.Mock()
     ef.blacklist_slave = mock.Mock()
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
-    ef.callbacks = MesosExecutorCallbacks(
-        mock.Mock(), mock.Mock(), mock.Mock())
+    ef.callbacks = MesosExecutorCallbacks(mock.Mock(), mock.Mock(), mock.Mock())
 
     ef._background_check()
 
@@ -76,8 +70,7 @@ def test_ef_kills_stuck_tasks(
     assert ef.kill_task.call_args == mock.call(task_id)
     assert ef.blacklist_slave.call_count == 1
     assert ef.blacklist_slave.call_args == mock.call(
-        agent_id='fake_agent_id',
-        timeout=900
+        agent_id="fake_agent_id", timeout=900
     )
     assert mock_get_metric.call_count == 2
     assert mock_get_metric.call_args_list == [
@@ -89,16 +82,13 @@ def test_ef_kills_stuck_tasks(
 
 
 def test_reenqueue_tasks_stuck_in_unknown_state(
-    ef,
-    fake_task,
-    mock_sleep,
-    mock_get_metric
+    ef, fake_task, mock_sleep, mock_get_metric
 ):
     task_id = fake_task.task_id
     task_metadata = TaskMetadata(
-        agent_id='fake_agent_id',
+        agent_id="fake_agent_id",
         task_config=fake_task,
-        task_state='UNKNOWN',
+        task_state="UNKNOWN",
         task_state_history=m(UNKNOWN=0.0),
     )
     ef.task_staging_timeout_s = 0
@@ -110,9 +100,7 @@ def test_reenqueue_tasks_stuck_in_unknown_state(
     ef._background_check()
 
     assert ef.enqueue_task.call_count == 1
-    assert ef.enqueue_task.call_args == mock.call(
-        ef.task_metadata[task_id].task_config
-    )
+    assert ef.enqueue_task.call_args == mock.call(ef.task_metadata[task_id].task_config)
     assert mock_get_metric.call_count == 2
     assert mock_get_metric.call_args_list == [
         mock.call(metrics.TASK_FAILED_TO_LAUNCH_COUNT),
@@ -128,14 +116,14 @@ def test_offer_matches_pool_no_pool(ef, fake_offer):
 
 
 def test_offer_matches_pool_match(ef, fake_offer):
-    ef.pool = 'fake_pool_text'
+    ef.pool = "fake_pool_text"
     match, _ = ef.offer_matches_pool(fake_offer)
 
     assert match
 
 
 def test_offer_matches_pool_no_match(ef, fake_offer):
-    ef.pool = 'fake_other_pool_text'
+    ef.pool = "fake_other_pool_text"
     match, _ = ef.offer_matches_pool(fake_offer)
 
     assert not match
@@ -143,19 +131,21 @@ def test_offer_matches_pool_no_match(ef, fake_offer):
 
 def test_offer_matches_constraints_no_constraints(ef, fake_task, fake_offer):
     attributes = {
-        attribute.name: attribute.value for attribute in fake_offer.attributes}
+        attribute.name: attribute.value for attribute in fake_offer.attributes
+    }
     match = attributes_match_constraints(attributes, fake_task.constraints)
     assert match
 
 
 def test_offer_matches_constraints_match(ef, fake_offer):
     attributes = {
-        attribute.name: attribute.text.value for attribute in fake_offer.attributes}
+        attribute.name: attribute.text.value for attribute in fake_offer.attributes
+    }
     fake_task = MesosTaskConfig(
-        image='fake_image',
+        image="fake_image",
         cmd='echo "fake"',
         constraints=[
-            ['region', '==', 'fake_region_text'],
+            ["region", "==", "fake_region_text"],
         ],
     )
     match = attributes_match_constraints(attributes, fake_task.constraints)
@@ -164,12 +154,13 @@ def test_offer_matches_constraints_match(ef, fake_offer):
 
 def test_offer_matches_constraints_no_match(ef, fake_offer):
     attributes = {
-        attribute.name: attribute.text.value for attribute in fake_offer.attributes}
+        attribute.name: attribute.text.value for attribute in fake_offer.attributes
+    }
     fake_task = MesosTaskConfig(
-        image='fake_image',
+        image="fake_image",
         cmd='echo "fake"',
         constraints=[
-            ['region', '==', 'another_fake_region_text'],
+            ["region", "==", "another_fake_region_text"],
         ],
     )
     match = attributes_match_constraints(attributes, fake_task.constraints)
@@ -179,32 +170,26 @@ def test_offer_matches_constraints_no_match(ef, fake_offer):
 def test_kill_task(ef, mock_driver):
     ef._driver = mock_driver
 
-    ef.kill_task('fake_task_id')
+    ef.kill_task("fake_task_id")
 
     assert mock_driver.killTask.call_count == 1
-    assert mock_driver.killTask.call_args == mock.call(
-        Dict(value='fake_task_id')
-    )
+    assert mock_driver.killTask.call_args == mock.call(Dict(value="fake_task_id"))
 
 
 def test_kill_task_from_task_queue(ef, mock_driver):
     ef.driver = mock_driver
     ef.task_queue = Queue()
-    ef.task_queue.put(mock.Mock(task_id='fake_task_id'))
-    ef.task_queue.put(mock.Mock(task_id='fake_task_id1'))
+    ef.task_queue.put(mock.Mock(task_id="fake_task_id"))
+    ef.task_queue.put(mock.Mock(task_id="fake_task_id1"))
 
-    ef.kill_task('fake_task_id')
+    ef.kill_task("fake_task_id")
 
     assert mock_driver.killTask.call_count == 0
     assert ef.task_queue.qsize() == 1
 
 
-def test_blacklist_slave(
-    ef,
-    mock_get_metric,
-    mock_time
-):
-    agent_id = 'fake_agent_id'
+def test_blacklist_slave(ef, mock_get_metric, mock_time):
+    agent_id = "fake_agent_id"
     mock_time.return_value = 2.0
 
     ef.blacklisted_slaves = ef.blacklisted_slaves.append(agent_id)
@@ -212,18 +197,13 @@ def test_blacklist_slave(
 
     assert agent_id in ef.blacklisted_slaves
     assert mock_get_metric.call_count == 1
-    assert mock_get_metric.call_args == mock.call(
-        metrics.BLACKLISTED_AGENTS_COUNT)
+    assert mock_get_metric.call_args == mock.call(metrics.BLACKLISTED_AGENTS_COUNT)
     assert mock_get_metric.return_value.count.call_count == 1
     assert mock_get_metric.return_value.count.call_args == mock.call(1)
 
 
-def test_unblacklist_slave(
-    ef,
-    mock_time,
-    mock_sleep
-):
-    agent_id = 'fake_agent_id'
+def test_unblacklist_slave(ef, mock_time, mock_sleep):
+    agent_id = "fake_agent_id"
 
     ef.blacklisted_slaves = ef.blacklisted_slaves.append(agent_id)
     ef.unblacklist_slave(agent_id, timeout=0.0)
@@ -231,18 +211,13 @@ def test_unblacklist_slave(
     assert agent_id not in ef.blacklisted_slaves
 
 
-def test_enqueue_task(
-    ef,
-    fake_task,
-    mock_driver,
-    mock_get_metric
-):
+def test_enqueue_task(ef, fake_task, mock_driver, mock_get_metric):
     ef.are_offers_suppressed = True
     ef._driver = mock_driver
 
     ef.enqueue_task(fake_task)
 
-    assert ef.task_metadata[fake_task.task_id].task_state == 'TASK_INITED'
+    assert ef.task_metadata[fake_task.task_id].task_state == "TASK_INITED"
     assert not ef.task_queue.empty()
     assert mock_driver.reviveOffers.call_count == 1
     assert not ef.are_offers_suppressed
@@ -259,14 +234,11 @@ def test_stop(ef):
 
 
 def test_initialize_metrics(ef):
-    default_dimensions = {
-        'framework_name': 'fake_name',
-        'framework_role': 'fake_role'
-    }
+    default_dimensions = {"framework_name": "fake_name", "framework_role": "fake_role"}
     with mock.patch(
-        'task_processing.plugins.mesos.execution_framework.create_counter',
+        "task_processing.plugins.mesos.execution_framework.create_counter",
     ) as mock_create_counter, mock.patch(
-        'task_processing.plugins.mesos.execution_framework.create_timer',
+        "task_processing.plugins.mesos.execution_framework.create_timer",
     ) as mock_create_timer:
         ef._initialize_metrics()
 
@@ -301,34 +273,22 @@ def test_initialize_metrics(ef):
 
 
 def test_slave_lost(ef, mock_driver):
-    ef.slaveLost(mock_driver, 'fake_slave_id')
+    ef.slaveLost(mock_driver, "fake_slave_id")
 
 
 def test_registered(ef, mock_driver):
-    ef.registered(
-        mock_driver,
-        Dict(value='fake_framework_id'),
-        'fake_master_info'
-    )
+    ef.registered(mock_driver, Dict(value="fake_framework_id"), "fake_master_info")
 
     assert ef._driver == mock_driver
     assert ef.event_queue.qsize() == 1
 
 
 def test_reregistered(ef, mock_driver):
-    ef.reregistered(
-        mock_driver,
-        'fake_master_info'
-    )
+    ef.reregistered(mock_driver, "fake_master_info")
 
 
 def test_resource_offers_launch(
-    ef,
-    fake_task,
-    fake_offer,
-    mock_driver,
-    mock_get_metric,
-    mock_time
+    ef, fake_task, fake_offer, mock_driver, mock_get_metric, mock_time
 ):
     task_id = fake_task.task_id
     ef.driver = mock_driver
@@ -338,19 +298,20 @@ def test_resource_offers_launch(
     ef.offer_matches_pool = mock.Mock(return_value=(True, None))
     task_metadata = TaskMetadata(
         task_config=fake_task,
-        task_state='fake_state',
-        task_state_history=m(fake_state=time.time(), TASK_INITED=time.time())
+        task_state="fake_state",
+        task_state_history=m(fake_state=time.time(), TASK_INITED=time.time()),
     )
     fake_task_2 = mock.Mock()
     ef.callbacks.get_tasks_for_offer = mock.Mock(
-        return_value=([fake_task], [fake_task_2]))
+        return_value=([fake_task], [fake_task_2])
+    )
 
     ef.task_queue.put(fake_task)
     ef.task_queue.put(fake_task_2)
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef.resourceOffers(ef.driver, [fake_offer])
 
-    assert ef.task_metadata[task_id].agent_id == 'fake_agent_id'
+    assert ef.task_metadata[task_id].agent_id == "fake_agent_id"
     assert mock_driver.suppressOffers.call_count == 0
     assert not ef.are_offers_suppressed
     assert mock_driver.declineOffer.call_count == 0
@@ -365,12 +326,7 @@ def test_resource_offers_launch(
 
 
 def test_resource_offers_launch_tasks_failed(
-    ef,
-    fake_task,
-    fake_offer,
-    mock_driver,
-    mock_get_metric,
-    mock_time
+    ef, fake_task, fake_offer, mock_driver, mock_get_metric, mock_time
 ):
     task_id = fake_task.task_id
     ef.driver = mock_driver
@@ -381,11 +337,10 @@ def test_resource_offers_launch_tasks_failed(
     ef.offer_matches_pool = mock.Mock(return_value=(True, None))
     task_metadata = TaskMetadata(
         task_config=fake_task,
-        task_state='fake_state',
-        task_state_history=m(fake_state=time.time(), TASK_INITED=time.time())
+        task_state="fake_state",
+        task_state_history=m(fake_state=time.time(), TASK_INITED=time.time()),
     )
-    ef.callbacks.get_tasks_for_offer = mock.Mock(
-        return_value=([fake_task], []))
+    ef.callbacks.get_tasks_for_offer = mock.Mock(return_value=([fake_task], []))
     ef.task_queue.put(fake_task)
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef.resourceOffers(ef.driver, [fake_offer])
@@ -395,22 +350,18 @@ def test_resource_offers_launch_tasks_failed(
     assert mock_driver.declineOffer.call_count == 1
     assert mock_driver.launchTasks.call_count == 1
     assert mock_get_metric.call_count == 3
-    assert ef.task_metadata[task_id].task_state == 'UNKNOWN'
+    assert ef.task_metadata[task_id].task_state == "UNKNOWN"
 
 
 def test_resource_offers_no_tasks_to_launch(
-    ef,
-    fake_offer,
-    mock_driver,
-    mock_get_metric
+    ef, fake_offer, mock_driver, mock_get_metric
 ):
     ef.suppress_after = 0.0
 
     ef.resourceOffers(mock_driver, [fake_offer])
 
     assert mock_driver.declineOffer.call_args == mock.call(
-        [fake_offer.id],
-        ef.offer_decline_filter
+        [fake_offer.id], ef.offer_decline_filter
     )
     assert mock_driver.suppressOffers.call_count == 1
     assert ef.are_offers_suppressed
@@ -420,11 +371,7 @@ def test_resource_offers_no_tasks_to_launch(
 
 
 def test_resource_offers_blacklisted_offer(
-    ef,
-    fake_task,
-    fake_offer,
-    mock_driver,
-    mock_get_metric
+    ef, fake_task, fake_offer, mock_driver, mock_get_metric
 ):
     ef.blacklisted_slaves = ef.blacklisted_slaves.append(
         fake_offer.agent_id.value,
@@ -434,8 +381,7 @@ def test_resource_offers_blacklisted_offer(
 
     assert mock_driver.declineOffer.call_count == 1
     assert mock_driver.declineOffer.call_args == mock.call(
-        [fake_offer.id],
-        ef.offer_decline_filter
+        [fake_offer.id], ef.offer_decline_filter
     )
     assert mock_driver.launchTasks.call_count == 0
     assert mock_get_metric.call_count == 0
@@ -443,11 +389,7 @@ def test_resource_offers_blacklisted_offer(
 
 
 def test_resource_offers_not_for_pool(
-    ef,
-    fake_task,
-    fake_offer,
-    mock_driver,
-    mock_get_metric
+    ef, fake_task, fake_offer, mock_driver, mock_get_metric
 ):
     ef.offer_matches_pool = mock.Mock(return_value=(False, None))
 
@@ -458,8 +400,7 @@ def test_resource_offers_not_for_pool(
     assert ef.offer_matches_pool.call_args == mock.call(fake_offer)
     assert mock_driver.declineOffer.call_count == 1
     assert mock_driver.declineOffer.call_args == mock.call(
-        [fake_offer.id],
-        ef.offer_decline_filter
+        [fake_offer.id], ef.offer_decline_filter
     )
     assert mock_driver.launchTasks.call_count == 0
     assert mock_get_metric.call_count == 0
@@ -467,22 +408,16 @@ def test_resource_offers_not_for_pool(
 
 
 def test_resource_offers_unmet_reqs(
-    ef,
-    fake_task,
-    fake_offer,
-    mock_driver,
-    mock_get_metric
+    ef, fake_task, fake_offer, mock_driver, mock_get_metric
 ):
-    ef.callbacks.get_tasks_for_offer = mock.Mock(
-        return_value=([], [fake_task]))
+    ef.callbacks.get_tasks_for_offer = mock.Mock(return_value=([], [fake_task]))
 
     ef.task_queue.put(fake_task)
     ef.resourceOffers(mock_driver, [fake_offer])
 
     assert mock_driver.declineOffer.call_count == 1
     assert mock_driver.declineOffer.call_args == mock.call(
-        [fake_offer.id],
-        ef.offer_decline_filter
+        [fake_offer.id], ef.offer_decline_filter
     )
     assert mock_driver.launchTasks.call_count == 0
     assert mock_get_metric.call_count == 1
@@ -490,48 +425,36 @@ def test_resource_offers_unmet_reqs(
     assert mock_get_metric.return_value.count.call_count == 1
 
 
-def status_update_test_prep(state, reason=''):
-    task = MesosTaskConfig(
-        cmd='/bin/true', name='fake_name', image='fake_image')
+def status_update_test_prep(state, reason=""):
+    task = MesosTaskConfig(cmd="/bin/true", name="fake_name", image="fake_image")
     task_id = task.task_id
-    update = Dict(
-        task_id=Dict(value=task_id),
-        state=state,
-        reason=reason
-    )
+    update = Dict(task_id=Dict(value=task_id), state=state, reason=reason)
     task_metadata = TaskMetadata(
         task_config=task,
-        task_state='TASK_INITED',
+        task_state="TASK_INITED",
         task_state_history=m(TASK_INITED=time.time()),
     )
 
     return update, task_id, task_metadata
 
 
-def test_status_update_record_only(
-    ef,
-    mock_driver
-):
-    update, task_id, task_metadata = status_update_test_prep('fake_state1')
+def test_status_update_record_only(ef, mock_driver):
+    update, task_id, task_metadata = status_update_test_prep("fake_state1")
     ef.translator = mock.Mock()
     ef._driver = mock_driver
 
     ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef.statusUpdate(mock_driver, update)
 
-    assert ef.task_metadata[task_id].task_state == 'fake_state1'
+    assert ef.task_metadata[task_id].task_state == "fake_state1"
     assert len(ef.task_metadata[task_id].task_state_history) == 2
     assert mock_driver.acknowledgeStatusUpdate.call_count == 1
     assert mock_driver.acknowledgeStatusUpdate.call_args == mock.call(update)
 
 
-def test_status_update_finished(
-    ef,
-    mock_driver,
-    mock_get_metric
-):
+def test_status_update_finished(ef, mock_driver, mock_get_metric):
     # finished task does same thing as other states
-    update, task_id, task_metadata = status_update_test_prep('TASK_FINISHED')
+    update, task_id, task_metadata = status_update_test_prep("TASK_FINISHED")
     ef.translator = mock.Mock()
     ef._driver = mock_driver
 
@@ -547,12 +470,8 @@ def test_status_update_finished(
     assert mock_driver.acknowledgeStatusUpdate.call_args == mock.call(update)
 
 
-def test_ignore_status_update(
-    ef,
-    mock_driver,
-    mock_get_metric
-):
-    update, task_id, task_metadata = status_update_test_prep('TASK_FINISHED')
+def test_ignore_status_update(ef, mock_driver, mock_get_metric):
+    update, task_id, task_metadata = status_update_test_prep("TASK_FINISHED")
     ef.translator = mock.Mock()
     ef._driver = mock_driver
 
@@ -564,19 +483,11 @@ def test_ignore_status_update(
     assert mock_driver.acknowledgeStatusUpdate.call_count == 1
 
 
-def test_task_lost_due_to_invalid_offers(
-    ef,
-    mock_driver,
-    mock_get_metric
-):
+def test_task_lost_due_to_invalid_offers(ef, mock_driver, mock_get_metric):
     update, task_id, task_metadata = status_update_test_prep(
-        state='TASK_LOST',
-        reason='REASON_INVALID_OFFERS'
+        state="TASK_LOST", reason="REASON_INVALID_OFFERS"
     )
-    ef.task_metadata = ef.task_metadata.set(
-        task_id,
-        task_metadata
-    )
+    ef.task_metadata = ef.task_metadata.set(task_id, task_metadata)
     ef._driver = mock_driver
 
     ef.statusUpdate(mock_driver, update)
@@ -597,13 +508,11 @@ def test_background_thread_removes_offer_timeout(
 ):
     mock_time.return_value = 2.0
     task_id = fake_task.task_id
-    fake_task = fake_task.set(
-        offer_timeout=1
-    )
+    fake_task = fake_task.set(offer_timeout=1)
     task_metadata = TaskMetadata(
-        agent_id='fake_agent_id',
+        agent_id="fake_agent_id",
         task_config=fake_task,
-        task_state='TASK_INITED',
+        task_state="TASK_INITED",
         task_state_history=m(TASK_INITED=0.0),
     )
     ef.driver = mock_driver
@@ -618,11 +527,7 @@ def test_background_thread_removes_offer_timeout(
     assert event.task_id == task_id
 
 
-def test_launch_tasks_for_offer_task_missing(
-    ef,
-    fake_task,
-    fake_offer
-):
+def test_launch_tasks_for_offer_task_missing(ef, fake_task, fake_offer):
     tasks_to_launch = [fake_task]
     ef.launch_tasks_for_offer(fake_offer, tasks_to_launch)
 
@@ -652,7 +557,7 @@ def test_reconcile_task_existing(
         fake_task.task_id,
         TaskMetadata(
             task_config=fake_task,
-            task_state='TASK_INITED',
+            task_state="TASK_INITED",
             task_state_history=m(TASK_INITED=time.time()),
         ),
     )

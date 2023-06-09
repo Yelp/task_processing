@@ -23,29 +23,31 @@ class Registry(PRecord):
 
     def register_task_executor(self, name, task_executor_cls):
         """Helper method for adding an executor"""
-        return self.transform(
-            ('task_executors', name), lambda _: task_executor_cls
-        )
+        return self.transform(("task_executors", name), lambda _: task_executor_cls)
 
     def register_deprecated_task_executor(self, name, task_executor_cls):
         """Helper method for adding an deprecated executor"""
         return self.transform(
-            ('deprecated_task_executors', name), lambda _: task_executor_cls
+            ("deprecated_task_executors", name), lambda _: task_executor_cls
         )
 
     def _executor_invariant(task_executors):
         """Invariant that task_executors must be TaskExecutors"""
         return (
             all(issubclass(v, TaskExecutor) for v in task_executors.values()),
-            'task_executors must always be a TaskExecutor'
+            "task_executors must always be a TaskExecutor",
         )
 
     task_executors = field(
-        type=PMap, initial=m(), factory=pmap,
+        type=PMap,
+        initial=m(),
+        factory=pmap,
         invariant=_executor_invariant,
     )
     deprecated_task_executors = field(
-        type=PMap, initial=m(), factory=pmap,
+        type=PMap,
+        initial=m(),
+        factory=pmap,
         invariant=_executor_invariant,
     )
     """
@@ -98,10 +100,8 @@ class TaskProcessor:
                 conflicts = set(old.keys()) & set(new.keys())
                 if conflicts:
                     raise ValueError(
-                        '{0} is trying to register elements that already '
-                        'exist in the registry: {1}'.format(
-                            plugin_name, conflicts
-                        )
+                        "{0} is trying to register elements that already "
+                        "exist in the registry: {1}".format(plugin_name, conflicts)
                     )
             return old.update(new)
 
@@ -120,11 +120,12 @@ class TaskProcessor:
             return self.registry.task_executors[provider]
         elif provider in self.registry.deprecated_task_executors:
             log.warning(
-                f'{provider} is a deprecated executor and will be removed in the future')
+                f"{provider} is a deprecated executor and will be removed in the future"
+            )
             return self.registry.deprecated_task_executors[provider]
         else:
             raise ValueError(
-                '{0} provider not registered; available providers: {1}'.format(
+                "{0} provider not registered; available providers: {1}".format(
                     provider, list(self.registry.task_executors.keys())
                 )
             )

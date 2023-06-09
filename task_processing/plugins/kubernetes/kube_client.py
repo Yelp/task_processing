@@ -19,9 +19,7 @@ class ExceededMaxAttempts(Exception):
 
 class KubeClient:
     def __init__(
-        self,
-        kubeconfig_path: Optional[str] = None,
-        user_agent: Optional[str] = None
+        self, kubeconfig_path: Optional[str] = None, user_agent: Optional[str] = None
     ) -> None:
         kubeconfig_path = kubeconfig_path or os.environ.get("KUBECONFIG")
         if kubeconfig_path is None:
@@ -34,8 +32,7 @@ class KubeClient:
         self.kubecontext = os.environ.get("KUBECONTEXT")
 
         kube_config.load_kube_config(
-            config_file=self.kubeconfig_path,
-            context=self.kubecontext
+            config_file=self.kubeconfig_path, context=self.kubecontext
         )
 
         self.user_agent = user_agent
@@ -61,8 +58,7 @@ class KubeClient:
         they don't pick up the new configuration)
         """
         kube_config.load_kube_config(
-            config_file=self.kubeconfig_path,
-            context=self.kubecontext
+            config_file=self.kubeconfig_path, context=self.kubecontext
         )
         self.initialize_api_client()
         self.core = kube_client.CoreV1Api(self.api_client)
@@ -83,7 +79,9 @@ class KubeClient:
                 )
                 self.reload_kubeconfig()
                 return True
-            logger.info(f"Recieved HTTP {exception.status} from apiserver, not reloading certs.")
+            logger.info(
+                f"Recieved HTTP {exception.status} from apiserver, not reloading certs."
+            )
         return False
 
     def terminate_pod(
@@ -110,7 +108,7 @@ class KubeClient:
                     # this is the default, but explcitly request background deletion of releated
                     # objects. see:
                     # https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/
-                    propagation_policy="Background"
+                    propagation_policy="Background",
                 )
                 # this is not ideal, but the k8s clientlib should return the status of the request
                 # as a string that is either "Success" or "Failure" (or we could potentially use
@@ -133,7 +131,9 @@ class KubeClient:
                 )
                 return False
 
-        logger.info(f"Ran out of retries attempting to request termination of {pod_name}.")
+        logger.info(
+            f"Ran out of retries attempting to request termination of {pod_name}."
+        )
         return False
 
     def create_pod(
@@ -174,13 +174,17 @@ class KubeClient:
         return False
 
     def get_pod(
-        self, namespace: str, pod_name: str, attempts: int = DEFAULT_ATTEMPTS,
+        self,
+        namespace: str,
+        pod_name: str,
+        attempts: int = DEFAULT_ATTEMPTS,
     ) -> Optional[V1Pod]:
         max_attempts = attempts
         while attempts:
             try:
                 pod = self.core.read_namespaced_pod(
-                    namespace=namespace, name=pod_name,
+                    namespace=namespace,
+                    name=pod_name,
                 )
                 return pod
             except ApiException as e:
@@ -191,7 +195,7 @@ class KubeClient:
                 if not self.maybe_reload_on_exception(exception=e) and attempts:
                     logger.debug(
                         f"Failed to fetch pod {pod_name} due to unhandled API exception, retrying",
-                        exc_info=True
+                        exc_info=True,
                     )
                 attempts -= 1
             except Exception:
@@ -200,4 +204,6 @@ class KubeClient:
                 )
                 raise
         logger.info(f"Ran out of retries attempting to fetch pod {pod_name}.")
-        raise ExceededMaxAttempts(f'Retried fetching pod {pod_name} {max_attempts} times.')
+        raise ExceededMaxAttempts(
+            f"Retried fetching pod {pod_name} {max_attempts} times."
+        )
