@@ -43,6 +43,6 @@ setup(
         "mesos_executor": ["addict", "pymesos>=0.2.14", "requests"],
         "metrics": ["yelp-meteorite"],
         "persistence": ["boto3"],
-        "k8s": ["kubernetes"],
+        "k8s": ["kubernetes", "typing-extensions"],
     },
 )
