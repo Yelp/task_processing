@@ -145,7 +145,6 @@ def test_run(mock_get_node_affinity, k8s_executor):
                 "ephemeral-storage": "1024.0Mi",
             },
             requests={
-                "cpu": None,
                 "memory": "768.0Mi",
             },
         ),
