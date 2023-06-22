@@ -470,7 +470,8 @@ class KubernetesPodExecutor(TaskExecutor):
         }
         resources = V1ResourceRequirements(
             limits=limits,
-            requests=requests,
+            # None is the default for an empty V1ResourceRequirements
+            requests=requests if requests else None,
         )
 
         return V1Container(
