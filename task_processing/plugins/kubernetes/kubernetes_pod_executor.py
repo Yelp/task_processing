@@ -454,12 +454,15 @@ class KubernetesPodExecutor(TaskExecutor):
                 privileged=task_config.privileged,
             )
 
-        requests = {
-            "cpu": task_config.cpus_request if task_config.cpus_request else None,
-            "memory": f"{task_config.memory_request}Mi"
-            if task_config.memory_request
-            else None,
-        }
+        requests = {}
+        # we need to explictly omit these if not set as k8s
+        # (or the python clientlib) will actually set the
+        # request to None instead of equal to the limit
+        if task_config.cpus_request is not None:
+            requests["cpu"] = task_config.cpus_request
+        if task_config.memory_request is not None:
+            requests["memory"] = f"{task_config.memory_request}Mi"
+
         limits = {
             "cpu": task_config.cpus,
             "memory": f"{task_config.memory}Mi",
