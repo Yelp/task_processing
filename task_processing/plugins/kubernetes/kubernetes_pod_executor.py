@@ -25,6 +25,7 @@ from pyrsistent.typing import PMap
 from task_processing.interfaces import TaskExecutor
 from task_processing.interfaces.event import Event
 from task_processing.interfaces.event import task_event
+from task_processing.plugins.kubernetes.kube_client import K8S_API_CLIENT_CONFIGURATION
 from task_processing.plugins.kubernetes.kube_client import KubeClient
 from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 from task_processing.plugins.kubernetes.task_metadata import KubernetesTaskMetadata
@@ -44,7 +45,6 @@ from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 
 logger = logging.getLogger(__name__)
-k8s_client_configuration = Configuration.get_default_copy()
 
 POD_WATCH_THREAD_JOIN_TIMEOUT_S = 1.0
 POD_EVENT_THREAD_JOIN_TIMEOUT_S = 1.0
@@ -454,7 +454,7 @@ class KubernetesPodExecutor(TaskExecutor):
             security_context = V1SecurityContext(
                 capabilities=capabilities,
                 privileged=task_config.privileged,
-                local_vars_configuration=k8s_client_configuration,
+                local_vars_configuration=K8S_API_CLIENT_CONFIGURATION,
             )
 
         requests = {}
@@ -475,7 +475,7 @@ class KubernetesPodExecutor(TaskExecutor):
             limits=limits,
             # None is the default for an empty V1ResourceRequirements
             requests=requests if requests else None,
-            local_vars_configuration=k8s_client_configuration,
+            local_vars_configuration=K8S_API_CLIENT_CONFIGURATION,
         )
 
         return V1Container(
@@ -494,14 +494,14 @@ class KubernetesPodExecutor(TaskExecutor):
             ports=[
                 V1ContainerPort(
                     container_port=port,
-                    local_vars_configuration=k8s_client_configuration,
+                    local_vars_configuration=K8S_API_CLIENT_CONFIGURATION,
                 )
                 for port in task_config.ports
             ],
             stdin=task_config.stdin,
             stdin_once=task_config.stdin_once,
             tty=task_config.tty,
-            local_vars_configuration=k8s_client_configuration,
+            local_vars_configuration=K8S_API_CLIENT_CONFIGURATION,
         )
 
     def run(self, task_config: KubernetesTaskConfig) -> Optional[str]:
@@ -532,7 +532,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     namespace=self.namespace,
                     labels=dict(task_config.labels),
                     annotations=dict(task_config.annotations),
-                    local_vars_configuration=k8s_client_configuration,
+                    local_vars_configuration=K8S_API_CLIENT_CONFIGURATION,
                 ),
                 spec=V1PodSpec(
                     restart_policy=task_config.restart_policy,
@@ -541,7 +541,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     node_selector=dict(task_config.node_selectors),
                     affinity=V1Affinity(
                         node_affinity=get_node_affinity(task_config.node_affinities),
-                        local_vars_configuration=k8s_client_configuration,
+                        local_vars_configuration=K8S_API_CLIENT_CONFIGURATION,
                     ),
                     # we're hardcoding this as Default as this is what we generally use
                     # internally - until we have a usecase for something that needs one
@@ -551,10 +551,10 @@ class KubernetesPodExecutor(TaskExecutor):
                     share_process_namespace=True,
                     security_context=V1PodSecurityContext(
                         fs_group=task_config.fs_group,
-                        local_vars_configuration=k8s_client_configuration,
+                        local_vars_configuration=K8S_API_CLIENT_CONFIGURATION,
                     ),
                     service_account_name=task_config.service_account_name,
-                    local_vars_configuration=k8s_client_configuration,
+                    local_vars_configuration=K8S_API_CLIENT_CONFIGURATION,
                 ),
             )
         except Exception:
