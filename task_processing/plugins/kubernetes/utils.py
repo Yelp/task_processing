@@ -20,6 +20,7 @@ from kubernetes.client import V1SecretKeySelector
 from kubernetes.client import V1SecretVolumeSource
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
+from kubernetes.client.configuration import Configuration
 from pyrsistent.typing import PMap
 from pyrsistent.typing import PVector
 
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
     from task_processing.plugins.kubernetes.types import ObjectFieldSelectorSource
 
 logger = logging.getLogger(__name__)
+k8s_client_configuration = Configuration.get_default_copy()
 
 
 def get_capabilities_for_capability_changes(
@@ -70,7 +72,9 @@ def get_kubernetes_env_vars(
     the actual secret.
     """
     env_vars = [
-        V1EnvVar(name=key, value=value)
+        V1EnvVar(
+            name=key, value=value, local_vars_configuration=k8s_client_configuration
+        )
         for key, value in environment.items()
         if key not in secret_environment.keys()
     ]
@@ -83,8 +87,11 @@ def get_kubernetes_env_vars(
                     name=value["secret_name"],
                     key=value["key"],
                     optional=False,
+                    local_vars_configuration=k8s_client_configuration,
                 ),
+                local_vars_configuration=k8s_client_configuration,
             ),
+            local_vars_configuration=k8s_client_configuration,
         )
         for key, value in secret_environment.items()
     ]
@@ -95,8 +102,11 @@ def get_kubernetes_env_vars(
             value_from=V1EnvVarSource(
                 field_ref=V1ObjectFieldSelector(
                     field_path=value["field_path"],
-                )
+                    local_vars_configuration=k8s_client_configuration,
+                ),
+                local_vars_configuration=k8s_client_configuration,
             ),
+            local_vars_configuration=k8s_client_configuration,
         )
         for key, value in field_selector_environment.items()
     ]
@@ -173,6 +183,7 @@ def get_kubernetes_volume_mounts(
                 f"host--{volume['host_path']}", length_limit=63
             ),
             read_only=volume.get("mode", "RO") == "RO",
+            local_vars_configuration=k8s_client_configuration,
         )
         for volume in volumes
     ]
@@ -192,6 +203,7 @@ def get_kubernetes_secret_volume_mounts(
                 f"secret--{volume['secret_name']}", length_limit=63
             ),
             read_only=True,
+            local_vars_configuration=k8s_client_configuration,
         )
         for volume in volumes
     ]
@@ -217,6 +229,7 @@ def _get_items_for_secret_volume(
                 key=item["key"],
                 mode=mode_to_int(item.get("mode")),
                 path=item["path"],
+                local_vars_configuration=k8s_client_configuration,
             )
             for item in secret_volume["items"]
         ]
@@ -249,6 +262,7 @@ def get_pod_secret_volumes(secret_volumes: PVector["SecretVolume"]) -> List[V1Vo
                 secret_name=volume["secret_volume_name"],
                 default_mode=mode_to_int(volume.get("default_mode")),
                 items=_get_items_for_secret_volume(volume),
+                local_vars_configuration=k8s_client_configuration,
             ),
         )
         for name, volume in unique_volumes.items()
@@ -269,8 +283,12 @@ def get_pod_volumes(volumes: PVector["DockerVolume"]) -> List[V1Volume]:
 
     return [
         V1Volume(
-            host_path=V1HostPathVolumeSource(path=volume["host_path"]),
+            host_path=V1HostPathVolumeSource(
+                path=volume["host_path"],
+                local_vars_configuration=k8s_client_configuration,
+            ),
             name=name,
+            local_vars_configuration=k8s_client_configuration,
         )
         for name, volume in unique_volumes.items()
     ]
@@ -289,6 +307,7 @@ def get_kubernetes_empty_volume_mounts(
             name=get_sanitised_volume_name(
                 f"empty--{volume['container_path']}", length_limit=63
             ),
+            local_vars_configuration=k8s_client_configuration,
         )
         for volume in empty_volumes
     ]
@@ -313,6 +332,7 @@ def get_pod_empty_volumes(empty_volumes: PVector["EmptyVolume"]) -> List[V1Volum
                 medium=volume["medium"],
                 size_limit=volume["size"],
             ),
+            local_vars_configuration=k8s_client_configuration,
         )
         for name, volume in unique_volumes.items()
     ]
@@ -335,7 +355,12 @@ def get_node_affinity(affinities: PVector["NodeAffinity"]) -> Optional[V1NodeAff
         else:
             continue
         match_expressions.append(
-            V1NodeSelectorRequirement(key=str(aff["key"]), operator=op, values=val)
+            V1NodeSelectorRequirement(
+                key=str(aff["key"]),
+                operator=op,
+                values=val,
+                local_vars_configuration=k8s_client_configuration,
+            )
         )
 
     # package into V1NodeAffinity
@@ -346,7 +371,11 @@ def get_node_affinity(affinities: PVector["NodeAffinity"]) -> Optional[V1NodeAff
         # changing it while the pod is running will not cause an eviction.
         required_during_scheduling_ignored_during_execution=V1NodeSelector(
             node_selector_terms=[
-                V1NodeSelectorTerm(match_expressions=match_expressions)
+                V1NodeSelectorTerm(
+                    match_expressions=match_expressions,
+                    local_vars_configuration=k8s_client_configuration,
+                )
             ],
         ),
+        local_vars_configuration=k8s_client_configuration,
     )

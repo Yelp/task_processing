@@ -16,6 +16,7 @@ from kubernetes.client import V1PodSecurityContext
 from kubernetes.client import V1PodSpec
 from kubernetes.client import V1ResourceRequirements
 from kubernetes.client import V1SecurityContext
+from kubernetes.client.configuration import Configuration
 from kubernetes.client.exceptions import ApiException
 from pyrsistent import pmap
 from pyrsistent import v
@@ -43,6 +44,7 @@ from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 
 logger = logging.getLogger(__name__)
+k8s_client_configuration = Configuration.get_default_copy()
 
 POD_WATCH_THREAD_JOIN_TIMEOUT_S = 1.0
 POD_EVENT_THREAD_JOIN_TIMEOUT_S = 1.0
@@ -452,6 +454,7 @@ class KubernetesPodExecutor(TaskExecutor):
             security_context = V1SecurityContext(
                 capabilities=capabilities,
                 privileged=task_config.privileged,
+                local_vars_configuration=k8s_client_configuration,
             )
 
         requests = {}
@@ -472,6 +475,7 @@ class KubernetesPodExecutor(TaskExecutor):
             limits=limits,
             # None is the default for an empty V1ResourceRequirements
             requests=requests if requests else None,
+            local_vars_configuration=k8s_client_configuration,
         )
 
         return V1Container(
@@ -487,10 +491,17 @@ class KubernetesPodExecutor(TaskExecutor):
                 field_selector_environment=task_config.field_selector_environment,
             ),
             volume_mounts=volume_mounts,
-            ports=[V1ContainerPort(container_port=port) for port in task_config.ports],
+            ports=[
+                V1ContainerPort(
+                    container_port=port,
+                    local_vars_configuration=k8s_client_configuration,
+                )
+                for port in task_config.ports
+            ],
             stdin=task_config.stdin,
             stdin_once=task_config.stdin_once,
             tty=task_config.tty,
+            local_vars_configuration=k8s_client_configuration,
         )
 
     def run(self, task_config: KubernetesTaskConfig) -> Optional[str]:
@@ -521,6 +532,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     namespace=self.namespace,
                     labels=dict(task_config.labels),
                     annotations=dict(task_config.annotations),
+                    local_vars_configuration=k8s_client_configuration,
                 ),
                 spec=V1PodSpec(
                     restart_policy=task_config.restart_policy,
@@ -529,6 +541,7 @@ class KubernetesPodExecutor(TaskExecutor):
                     node_selector=dict(task_config.node_selectors),
                     affinity=V1Affinity(
                         node_affinity=get_node_affinity(task_config.node_affinities),
+                        local_vars_configuration=k8s_client_configuration,
                     ),
                     # we're hardcoding this as Default as this is what we generally use
                     # internally - until we have a usecase for something that needs one
@@ -538,8 +551,10 @@ class KubernetesPodExecutor(TaskExecutor):
                     share_process_namespace=True,
                     security_context=V1PodSecurityContext(
                         fs_group=task_config.fs_group,
+                        local_vars_configuration=k8s_client_configuration,
                     ),
                     service_account_name=task_config.service_account_name,
+                    local_vars_configuration=k8s_client_configuration,
                 ),
             )
         except Exception:
