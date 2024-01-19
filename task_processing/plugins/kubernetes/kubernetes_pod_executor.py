@@ -205,12 +205,13 @@ class KubernetesPodExecutor(TaskExecutor):
         """Called during reconciliation and normal event handling"""
         pod_name = pod.metadata.name
         task_metadata = self.task_metadata[pod_name]
+        event_type = event["type"] if event else "null"
 
         raw_event = event["raw_object"] if event else None
 
         if pod.status.phase not in SUPPORTED_POD_MODIFIED_EVENT_PHASES:
             logger.debug(
-                f"Got a MODIFIED event for {pod_name} for unhandled phase: "
+                f"Got a {event_type} event for {pod_name} for unhandled phase: "
                 f"{pod.status.phase} - ignoring."
             )
             return
@@ -319,7 +320,7 @@ class KubernetesPodExecutor(TaskExecutor):
             and task_metadata.task_state is not KubernetesTaskState.TASK_LOST
         ):
             logger.info(
-                f"Got a MODIFIED event for {pod_name} with unknown phase, host likely "
+                f"Got a {event_type} event for {pod_name} with unknown phase, host likely "
                 "unexpectedly died"
             )
             self.task_metadata = self.task_metadata.set(
@@ -357,7 +358,7 @@ class KubernetesPodExecutor(TaskExecutor):
             )
         else:
             logger.info(
-                f"Ignoring MODIFIED event for {pod_name} as it did not result "
+                f"Ignoring {event_type} event for {pod_name} as it did not result "
                 "in a state transition",
             )
 
@@ -388,7 +389,7 @@ class KubernetesPodExecutor(TaskExecutor):
             elif event["type"] == "DELETED":
                 self.__handle_deleted_pod_event(event)
 
-            elif event["type"] == "MODIFIED":
+            elif event["type"] in {"MODIFIED", "ADDED"}:
                 self.__handle_modified_pod_event(event)
 
             else:
