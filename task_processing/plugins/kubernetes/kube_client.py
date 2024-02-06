@@ -5,10 +5,12 @@ from typing import Optional
 
 from kubernetes import client as kube_client
 from kubernetes import config as kube_config
+from kubernetes.client.configuration import Configuration
 from kubernetes.client.exceptions import ApiException
 from kubernetes.client.models.v1_pod import V1Pod
 
 logger = logging.getLogger(__name__)
+K8S_API_CLIENT_CONFIGURATION = Configuration.get_default_copy()
 
 DEFAULT_ATTEMPTS = 2
 
@@ -39,7 +41,9 @@ class KubeClient:
         self.initialize_api_client()
 
     def initialize_api_client(self) -> None:
-        self.api_client = kube_client.ApiClient()
+        self.api_client = kube_client.ApiClient(
+            configuration=K8S_API_CLIENT_CONFIGURATION
+        )
         self.api_client.user_agent = self.user_agent
 
         # any Kubernetes APIs that we use should be added as members here (much like as we
