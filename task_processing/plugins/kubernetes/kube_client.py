@@ -119,6 +119,13 @@ class KubeClient:
                 # the termination request.
                 return True
             except ApiException as e:
+                if e.status == 404:
+                    # Pod no longer exists; likely means it has already been deleted
+                    # Treat as success
+                    logger.warn(
+                        f"Pod {pod_name} was no longer found, marking termination as success."
+                    )
+                    return True
                 if not self.maybe_reload_on_exception(exception=e) and attempts:
                     logger.exception(
                         f"Failed to request termination for {pod_name} due to unhandled API "
