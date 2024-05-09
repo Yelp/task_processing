@@ -119,6 +119,11 @@ class KubeClient:
                 # the termination request.
                 return True
             except ApiException as e:
+                if e.status == 404:
+                    logger.info(
+                        f"Found no pods matching {pod_name} - returning success since we're in the desired state."
+                    )
+                    return True
                 if not self.maybe_reload_on_exception(exception=e) and attempts:
                     logger.exception(
                         f"Failed to request termination for {pod_name} due to unhandled API "

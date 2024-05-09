@@ -627,13 +627,36 @@ class KubernetesPodExecutor(TaskExecutor):
         This function will request that Kubernetes delete the named Pod and will return
         True if the Pod termination request was succesfully emitted or False otherwise.
         """
-        # NOTE: we're purposely not removing this task from `task_metadata` as we want
-        # to handle that with the Watch that we'll set to monitor each Pod for events.
-        # TODO(TASKPROC-242): actually handle termination events
-        return self.kube_client.terminate_pod(
+        terminated = self.kube_client.terminate_pod(
             namespace=self.namespace,
             pod_name=task_id,
         )
+        if terminated:
+            logger.info(
+                f"Successfully requested termination for {task_id}. "
+                "Emitting synthetic 'killed' event in case of Kubernetes event coalescion."
+            )
+            # we need to lock here since there will be other threads updating this metadata in response
+            # to k8s events
+            with self.task_metadata_lock:
+                # NOTE: it's possible that there'll also be a real DELETED event for this Pod
+                # but it should be safe to do this as _process_pod_event() will just ignore
+                # pods not in self.task_metadata
+                self.task_metadata = self.task_metadata.discard(task_id)
+                self.event_queue.put(
+                    task_event(
+                        task_id=task_id,
+                        terminal=True,
+                        success=False,
+                        timestamp=time.time(),
+                        raw=None,
+                        task_config=None,
+                        platform_type="killed",
+                    )
+                )
+        else:
+            logger.error(f"Failed to request termination for {task_id}.")
+        return terminated
 
     def stop(self) -> None:
         logger.debug("Preparing to stop all KubernetesPodExecutor threads.")
