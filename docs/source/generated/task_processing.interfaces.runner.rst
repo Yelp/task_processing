@@ -1,7 +1,7 @@
-task\_processing\.interfaces\.runner module
-===========================================
+task\_processing.interfaces.runner module
+=========================================
 
 .. automodule:: task_processing.interfaces.runner
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:
