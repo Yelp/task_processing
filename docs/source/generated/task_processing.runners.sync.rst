@@ -1,7 +1,7 @@
-task\_processing\.runners\.sync module
-======================================
+task\_processing.runners.sync module
+====================================
 
 .. automodule:: task_processing.runners.sync
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:

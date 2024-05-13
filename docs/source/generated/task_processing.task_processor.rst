@@ -1,7 +1,7 @@
-task\_processing.runners.promise module
+task\_processing.task\_processor module
 =======================================
 
-.. automodule:: task_processing.runners.promise
+.. automodule:: task_processing.task_processor
    :members:
    :undoc-members:
    :show-inheritance:
