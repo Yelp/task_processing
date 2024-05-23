@@ -604,12 +604,14 @@ class KubernetesPodExecutor(TaskExecutor):
 
     def reconcile(self, task_config: KubernetesTaskConfig) -> None:
         pod_name = task_config.pod_name
+        pod = None
         for kube_client in [self.kube_client] + self.old_kube_clients:
             try:
                 pod = kube_client.get_pod(namespace=self.namespace, pod_name=pod_name)
             except Exception:
-                logger.exception(f"Hit an exception attempting to fetch pod {pod_name}")
-                pod = None
+                logger.exception(
+                    f"Hit an exception attempting to fetch pod {pod_name} from {kube_client.kubeconfig_path}"
+                )
             else:
                 break
 
