@@ -5,26 +5,15 @@ Subpackages
 -----------
 
 .. toctree::
-   :maxdepth: 4
 
-   task_processing.interfaces
-   task_processing.plugins
-   task_processing.runners
-
-Submodules
-----------
-
-.. toctree::
-   :maxdepth: 4
-
-   task_processing.metrics
-   task_processing.task_processor
-   task_processing.utils
+    task_processing.interfaces
+    task_processing.plugins
+    task_processing.runners
 
 Module contents
 ---------------
 
 .. automodule:: task_processing
-   :members:
-   :undoc-members:
-   :show-inheritance:
+    :members:
+    :undoc-members:
+    :show-inheritance:
