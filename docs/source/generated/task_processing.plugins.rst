@@ -1,18 +1,17 @@
-task\_processing.plugins package
-================================
+task\_processing\.plugins package
+=================================
 
 Subpackages
 -----------
 
 .. toctree::
-   :maxdepth: 4
 
-   task_processing.plugins.kubernetes
+    task_processing.plugins.mesos
 
 Module contents
 ---------------
 
 .. automodule:: task_processing.plugins
-   :members:
-   :undoc-members:
-   :show-inheritance:
+    :members:
+    :undoc-members:
+    :show-inheritance:

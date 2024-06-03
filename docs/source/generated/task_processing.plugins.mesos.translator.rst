@@ -1,7 +1,7 @@
-task\_processing\.interfaces\.task\_executor module
+task\_processing\.plugins\.mesos\.translator module
 ===================================================
 
-.. automodule:: task_processing.interfaces.task_executor
+.. automodule:: task_processing.plugins.mesos.translator
     :members:
     :undoc-members:
     :show-inheritance:

@@ -5,27 +5,24 @@ else
 	BUILD_ENV?=$(shell hostname -f)
 endif
 
-.PHONY: venv
 venv:
 	tox -e venv
 
-.PHONY: test
 test:
 	tox
 
-.PHONY: tox_%
 tox_%:
 	tox -e $*
 
-.PHONY: docs
+itest:
+	tox -e integration
+
 docs:
 	tox -e docs
 
-.PHONY: pypi
 pypi:
 	tox -e pypi
 
-.PHONY: clean
 clean:
 	rm -rf docs/build
 	find . -name '*.pyc' -delete
