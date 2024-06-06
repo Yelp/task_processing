@@ -34,6 +34,12 @@ class SecretVolume(TypedDict):
     items: List[SecretVolumeItem]
 
 
+class ProjectedSAVolume(TypedDict, total=False):
+    container_path: str
+    audience: str
+    expiration_seconds: int
+
+
 class SecretEnvSource(TypedDict):
     secret_name: str  # full name of k8s secret resource
     key: str

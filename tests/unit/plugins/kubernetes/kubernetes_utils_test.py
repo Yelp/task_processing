@@ -10,10 +10,13 @@ from kubernetes.client import V1NodeSelector
 from kubernetes.client import V1NodeSelectorRequirement
 from kubernetes.client import V1NodeSelectorTerm
 from kubernetes.client import V1ObjectFieldSelector
+from kubernetes.client import V1ProjectedVolumeSource
 from kubernetes.client import V1SecretKeySelector
 from kubernetes.client import V1SecretVolumeSource
+from kubernetes.client import V1ServiceAccountTokenProjection
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
+from kubernetes.client import V1VolumeProjection
 from pyrsistent import pmap
 from pyrsistent import pvector
 from pyrsistent import v
@@ -25,10 +28,16 @@ from task_processing.plugins.kubernetes.utils import (
 from task_processing.plugins.kubernetes.utils import get_kubernetes_empty_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_kubernetes_env_vars
 from task_processing.plugins.kubernetes.utils import get_kubernetes_secret_volume_mounts
+from task_processing.plugins.kubernetes.utils import (
+    get_kubernetes_service_account_token_volume_mounts,
+)
 from task_processing.plugins.kubernetes.utils import get_kubernetes_volume_mounts
 from task_processing.plugins.kubernetes.utils import get_node_affinity
 from task_processing.plugins.kubernetes.utils import get_pod_empty_volumes
 from task_processing.plugins.kubernetes.utils import get_pod_secret_volumes
+from task_processing.plugins.kubernetes.utils import (
+    get_pod_service_account_token_volumes,
+)
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 from task_processing.plugins.kubernetes.utils import get_sanitised_volume_name
@@ -490,3 +499,42 @@ def test_get_node_affinity_ok():
 
 def test_get_node_affinity_empty():
     assert get_node_affinity([]) is None
+
+
+def test_get_pod_service_account_token_volume():
+    assert get_pod_service_account_token_volumes(
+        [{"audience": "foo.bar.com", "expiration_seconds": 1234}]
+    ) == [
+        V1Volume(
+            name="projected-sa--foodot-bardot-com",
+            projected=V1ProjectedVolumeSource(
+                sources=[
+                    V1VolumeProjection(
+                        service_account_token=V1ServiceAccountTokenProjection(
+                            audience="foo.bar.com",
+                            expiration_seconds=1234,
+                            path="token",
+                        ),
+                    ),
+                ],
+            ),
+        )
+    ]
+
+
+def test_get_kubernetes_service_account_token_volume_mount():
+    assert get_kubernetes_service_account_token_volume_mounts(
+        [
+            {
+                "audience": "foo.bar.com",
+                "expiration_seconds": 1234,
+                "container_path": "/var/run/secrets/foo.bar.com/serviceaccount",
+            }
+        ],
+    ) == [
+        V1VolumeMount(
+            mount_path="/var/run/secrets/foo.bar.com/serviceaccount",
+            name="projected-sa--foodot-bardot-com",
+            read_only=True,
+        )
+    ]
