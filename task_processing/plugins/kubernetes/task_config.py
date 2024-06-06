@@ -25,6 +25,9 @@ from task_processing.plugins.kubernetes.types import ObjectFieldSelectorSource
 from task_processing.plugins.kubernetes.types import ProjectedSAVolume
 from task_processing.plugins.kubernetes.types import SecretVolume
 from task_processing.plugins.kubernetes.types import SecretVolumeItem
+from task_processing.plugins.kubernetes.utils import (
+    DEFAULT_PROJECTED_SA_TOKEN_EXPIRATION_SECONDS,
+)
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
 from task_processing.plugins.kubernetes.utils import mode_to_int
 
@@ -194,6 +197,7 @@ def _valid_secret_volumes(
 def _valid_projected_sa_volumes(
     sa_volumes: Sequence[ProjectedSAVolume],
 ) -> Tuple[bool, Optional[str]]:
+    min_expiration = 600
     for volume in sa_volumes:
         if not volume.get("audience"):
             return (
@@ -205,10 +209,15 @@ def _valid_projected_sa_volumes(
                 False,
                 "No token container_path set for projected service account volume",
             )
-        if volume.get("expiration_seconds", 1800) < 600:
+        if (
+            volume.get(
+                "expiration_seconds", DEFAULT_PROJECTED_SA_TOKEN_EXPIRATION_SECONDS
+            )
+            < min_expiration
+        ):
             return (
                 False,
-                "Expiration for service account projected token must be at least 600 seconds",
+                f"Expiration for service account projected token must be at least {min_expiration} seconds",
             )
     return (True, None)
 

@@ -37,7 +37,10 @@ if TYPE_CHECKING:
     from task_processing.plugins.kubernetes.types import ObjectFieldSelectorSource
     from task_processing.plugins.kubernetes.types import ProjectedSAVolume
 
+
 logger = logging.getLogger(__name__)
+
+DEFAULT_PROJECTED_SA_TOKEN_EXPIRATION_SECONDS = 1800
 
 
 def get_capabilities_for_capability_changes(
@@ -374,7 +377,7 @@ def get_pod_service_account_token_volumes(
     """Build projected service account volumes for pod
 
     :param PVector["ProjectedSAVolume"] sa_volumes: list of projected service account volume configs
-    :return: listof kubernetes pod volume objects
+    :return: list of kubernetes pod volume objects
     """
     return [
         V1Volume(
@@ -384,7 +387,10 @@ def get_pod_service_account_token_volumes(
                     V1VolumeProjection(
                         service_account_token=V1ServiceAccountTokenProjection(
                             audience=volume["audience"],
-                            expiration_seconds=volume.get("expiration_seconds", 1800),
+                            expiration_seconds=volume.get(
+                                "expiration_seconds",
+                                DEFAULT_PROJECTED_SA_TOKEN_EXPIRATION_SECONDS,
+                            ),
                             path="token",
                         ),
                     ),
