@@ -569,3 +569,20 @@ def test_valid_ports_invariant(ports):
     )
 
     assert task_config.ports == ports
+
+
+@pytest.mark.parametrize(
+    "sa_volume",
+    (
+        {"container_path": "foo"},
+        {"audience": "bar"},
+        {"container_path": "foo", "audience": "bar", "expiration_seconds": 42},
+    ),
+)
+def test_projected_sa_volumes_invariant_failure(sa_volume):
+    with pytest.raises(InvariantException):
+        KubernetesTaskConfig(
+            image="fake_docker_image",
+            command="fake_command",
+            projected_sa_volumes=[sa_volume],
+        )

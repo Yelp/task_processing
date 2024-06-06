@@ -16,10 +16,13 @@ from kubernetes.client import V1NodeSelector
 from kubernetes.client import V1NodeSelectorRequirement
 from kubernetes.client import V1NodeSelectorTerm
 from kubernetes.client import V1ObjectFieldSelector
+from kubernetes.client import V1ProjectedVolumeSource
 from kubernetes.client import V1SecretKeySelector
 from kubernetes.client import V1SecretVolumeSource
+from kubernetes.client import V1ServiceAccountTokenProjection
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
+from kubernetes.client import V1VolumeProjection
 from pyrsistent.typing import PMap
 from pyrsistent.typing import PVector
 
@@ -32,6 +35,7 @@ if TYPE_CHECKING:
     from task_processing.plugins.kubernetes.types import NodeAffinity
     from task_processing.plugins.kubernetes.types import SecretEnvSource
     from task_processing.plugins.kubernetes.types import ObjectFieldSelectorSource
+    from task_processing.plugins.kubernetes.types import ProjectedSAVolume
 
 logger = logging.getLogger(__name__)
 
@@ -350,3 +354,60 @@ def get_node_affinity(affinities: PVector["NodeAffinity"]) -> Optional[V1NodeAff
             ],
         ),
     )
+
+
+def _get_service_account_token_volume_name(audience: str) -> str:
+    """Generate name for service account projected volume
+
+    :param str audience: audience of the authentication token
+    :return: volume name
+    """
+    return get_sanitised_volume_name(
+        f"projected-sa--{audience}",
+        length_limit=63,
+    )
+
+
+def get_pod_service_account_token_volumes(
+    sa_volumes: PVector["ProjectedSAVolume"],
+) -> List[V1Volume]:
+    """Build projected service account volumes for pod
+
+    :param PVector["ProjectedSAVolume"] sa_volumes: list of projected service account volume configs
+    :return: listof kubernetes pod volume objects
+    """
+    return [
+        V1Volume(
+            name=_get_service_account_token_volume_name(volume["audience"]),
+            projected=V1ProjectedVolumeSource(
+                sources=[
+                    V1VolumeProjection(
+                        service_account_token=V1ServiceAccountTokenProjection(
+                            audience=volume["audience"],
+                            expiration_seconds=volume.get("expiration_seconds", 1800),
+                            path="token",
+                        ),
+                    ),
+                ],
+            ),
+        )
+        for volume in sa_volumes
+    ]
+
+
+def get_kubernetes_service_account_token_volume_mounts(
+    sa_volumes: PVector["ProjectedSAVolume"],
+) -> List[V1VolumeMount]:
+    """Build container mounts for projected service account volumes
+
+    :param PVector["ProjectedSAVolume"] sa_volumes: list of projected service account volume configs
+    :return: list of kubernetes volume mount objects
+    """
+    return [
+        V1VolumeMount(
+            mount_path=volume["container_path"],
+            name=_get_service_account_token_volume_name(volume["audience"]),
+            read_only=True,
+        )
+        for volume in sa_volumes
+    ]

@@ -12,10 +12,13 @@ from kubernetes.client import V1ObjectMeta
 from kubernetes.client import V1Pod
 from kubernetes.client import V1PodSecurityContext
 from kubernetes.client import V1PodSpec
+from kubernetes.client import V1ProjectedVolumeSource
 from kubernetes.client import V1ResourceRequirements
 from kubernetes.client import V1SecurityContext
+from kubernetes.client import V1ServiceAccountTokenProjection
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
+from kubernetes.client import V1VolumeProjection
 from pyrsistent import InvariantException
 from pyrsistent import pmap
 from pyrsistent import pvector
@@ -545,6 +548,118 @@ def test_run_failed_exception(k8s_executor):
         status=403, reason="Fake unauthorized message"
     )
     assert k8s_executor.run(task_config) is None
+
+
+@mock.patch(
+    "task_processing.plugins.kubernetes.kubernetes_pod_executor.get_node_affinity",
+    autospec=True,
+)
+def test_run_authentication_token(mock_get_node_affinity, k8s_executor):
+    task_config = KubernetesTaskConfig(
+        name="fake_task_name",
+        uuid="fake_id",
+        image="fake_docker_image",
+        command="fake_command",
+        cpus=1,
+        cpus_request=0.5,
+        memory=1024,
+        disk=1024,
+        volumes=[],
+        projected_sa_volumes=[
+            {"audience": "foo.bar.com", "container_path": "/var/secret/whatever"}
+        ],
+        node_selectors={"hello": "world"},
+        node_affinities=[dict(key="a_label", operator="In", value=[])],
+        labels={
+            "some_label": "some_label_value",
+        },
+        annotations={
+            "paasta.yelp.com/some_annotation": "some_value",
+        },
+        service_account_name="testsa",
+        ports=[8888],
+        stdin=True,
+        stdin_once=True,
+        tty=True,
+    )
+    expected_container = V1Container(
+        image=task_config.image,
+        name="main",
+        command=["/bin/sh", "-c"],
+        args=[task_config.command],
+        security_context=V1SecurityContext(
+            capabilities=V1Capabilities(drop=list(task_config.cap_drop)),
+        ),
+        resources=V1ResourceRequirements(
+            limits={
+                "cpu": 1.0,
+                "memory": "1024.0Mi",
+                "ephemeral-storage": "1024.0Mi",
+            },
+            requests={"cpu": 0.5},
+        ),
+        env=[],
+        volume_mounts=[
+            V1VolumeMount(
+                mount_path="/var/secret/whatever",
+                name="projected-sa--foodot-bardot-com",
+                read_only=True,
+            ),
+        ],
+        ports=[V1ContainerPort(container_port=8888)],
+        stdin=True,
+        stdin_once=True,
+        tty=True,
+    )
+    expected_pod = V1Pod(
+        metadata=V1ObjectMeta(
+            name=task_config.pod_name,
+            namespace="task_processing_tests",
+            labels={
+                "some_label": "some_label_value",
+            },
+            annotations={
+                "paasta.yelp.com/some_annotation": "some_value",
+            },
+        ),
+        spec=V1PodSpec(
+            restart_policy=task_config.restart_policy,
+            containers=[expected_container],
+            volumes=[
+                V1Volume(
+                    name="projected-sa--foodot-bardot-com",
+                    projected=V1ProjectedVolumeSource(
+                        sources=[
+                            V1VolumeProjection(
+                                service_account_token=V1ServiceAccountTokenProjection(
+                                    audience="foo.bar.com",
+                                    expiration_seconds=1800,
+                                    path="token",
+                                ),
+                            ),
+                        ],
+                    ),
+                ),
+            ],
+            share_process_namespace=True,
+            security_context=V1PodSecurityContext(
+                fs_group=task_config.fs_group,
+            ),
+            node_selector={"hello": "world"},
+            affinity=V1Affinity(node_affinity=mock_get_node_affinity.return_value),
+            dns_policy="Default",
+            service_account_name=task_config.service_account_name,
+        ),
+    )
+
+    assert all(v is not None for v in expected_container.resources.requests.values())
+    assert k8s_executor.run(task_config) == task_config.pod_name
+    assert k8s_executor.kube_client.core.create_namespaced_pod.call_args_list == [
+        mock.call(body=expected_pod, namespace="task_processing_tests")
+    ]
+    assert mock_get_node_affinity.call_args_list == [
+        mock.call(pvector([dict(key="a_label", operator="In", value=[])])),
+    ]
 
 
 def test_process_event_enqueues_task_processing_events_pending_to_running(k8s_executor):
