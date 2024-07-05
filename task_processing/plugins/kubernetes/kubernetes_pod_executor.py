@@ -613,7 +613,9 @@ class KubernetesPodExecutor(TaskExecutor):
                     f"Hit an exception attempting to fetch pod {pod_name} from {kube_client.kubeconfig_path}"
                 )
             else:
-                break
+                # kube_client.get_pod will return None with no exception if it sees a 404 from API
+                if pod:
+                    break
 
         if pod_name not in self.task_metadata:
             self._initialize_existing_task(task_config)
