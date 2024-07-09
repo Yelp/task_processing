@@ -662,9 +662,6 @@ class KubernetesPodExecutor(TaskExecutor):
         This function will request that Kubernetes delete the named Pod and will return
         True if the Pod termination request was succesfully emitted or False otherwise.
         """
-        # NOTE: we're purposely not removing this task from `task_metadata` as we want
-        # to handle that with the Watch that we'll set to monitor each Pod for events.
-        # TODO(TASKPROC-242): actually handle termination events
         terminated = any(
             kube_client.terminate_pod(
                 namespace=self.namespace,
