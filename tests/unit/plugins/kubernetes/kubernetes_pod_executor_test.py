@@ -53,7 +53,7 @@ def k8s_executor(mock_Thread):
 
 
 @pytest.fixture
-def k8s_executor_with_old_clusters(mock_Thread):
+def k8s_executor_with_watcher_clusters(mock_Thread):
     with mock.patch(
         "task_processing.plugins.kubernetes.kube_client.kube_config.load_kube_config",
         autospec=True,
@@ -64,7 +64,7 @@ def k8s_executor_with_old_clusters(mock_Thread):
     ):
         executor = KubernetesPodExecutor(
             namespace="task_processing_tests",
-            old_kubeconfig_paths=["/this/also/doesnt/exist.conf"],
+            watcher_kubeconfig_paths=["/this/also/doesnt/exist.conf"],
         )
         yield executor
         executor.stop()
@@ -108,10 +108,10 @@ def test_init_watch_setup(k8s_executor):
     assert len(k8s_executor.watches) == len(k8s_executor.pod_event_watch_threads) == 1
 
 
-def test_init_watch_setup_multicluster(k8s_executor_with_old_clusters):
+def test_init_watch_setup_multicluster(k8s_executor_with_watcher_clusters):
     assert (
-        len(k8s_executor_with_old_clusters.watches)
-        == len(k8s_executor_with_old_clusters.pod_event_watch_threads)
+        len(k8s_executor_with_watcher_clusters.watches)
+        == len(k8s_executor_with_watcher_clusters.pod_event_watch_threads)
         == 2
     )
 
@@ -897,13 +897,13 @@ def test_reconcile_missing_pod(
 
 
 def test_reconcile_multicluster(
-    k8s_executor_with_old_clusters,
+    k8s_executor_with_watcher_clusters,
 ):
     task_config = mock.Mock(spec=KubernetesTaskConfig)
     task_config.pod_name = "pod--name.uuid"
     task_config.name = "job-name"
 
-    k8s_executor_with_old_clusters.task_metadata = pmap(
+    k8s_executor_with_watcher_clusters.task_metadata = pmap(
         {
             task_config.pod_name: KubernetesTaskMetadata(
                 task_config=mock.Mock(spec=KubernetesTaskConfig),
@@ -913,27 +913,29 @@ def test_reconcile_multicluster(
         }
     )
 
-    mock_old_kube_client = mock.Mock(autospec=True)
+    mock_watcher_kube_client = mock.Mock(autospec=True)
     mock_found_pod = mock.Mock(spec=V1Pod)
     mock_found_pod.metadata.name = task_config.pod_name
     mock_found_pod.status.phase = "Running"
     mock_found_pod.status.host_ip = "1.2.3.4"
     mock_found_pod.spec.node_name = "kubenode"
-    mock_old_kube_client.get_pod.return_value = mock_found_pod
-    mock_old_kube_clients = [mock_old_kube_client]
+    mock_watcher_kube_client.get_pod.return_value = mock_found_pod
+    mock_watcher_kube_clients = [mock_watcher_kube_client]
 
     with mock.patch.object(
-        k8s_executor_with_old_clusters, "kube_client", autospec=True
+        k8s_executor_with_watcher_clusters, "kube_client", autospec=True
     ) as mock_kube_client, mock.patch.object(
-        k8s_executor_with_old_clusters, "old_kube_clients", mock_old_kube_clients
+        k8s_executor_with_watcher_clusters,
+        "watcher_kube_clients",
+        mock_watcher_kube_clients,
     ):
         mock_kube_client.get_pod.return_value = None
-        k8s_executor_with_old_clusters.reconcile(task_config)
+        k8s_executor_with_watcher_clusters.reconcile(task_config)
 
-    mock_old_kube_client.get_pod.assert_called()
-    assert k8s_executor_with_old_clusters.event_queue.qsize() == 1
-    assert len(k8s_executor_with_old_clusters.task_metadata) == 1
-    tm = k8s_executor_with_old_clusters.task_metadata["pod--name.uuid"]
+    mock_watcher_kube_client.get_pod.assert_called()
+    assert k8s_executor_with_watcher_clusters.event_queue.qsize() == 1
+    assert len(k8s_executor_with_watcher_clusters.task_metadata) == 1
+    tm = k8s_executor_with_watcher_clusters.task_metadata["pod--name.uuid"]
     assert tm.task_state == KubernetesTaskState.TASK_RUNNING
 
 

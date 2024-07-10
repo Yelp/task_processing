@@ -72,7 +72,9 @@ class KubernetesPodExecutor(TaskExecutor):
         kubeconfig_path: Optional[str] = None,
         task_configs: Optional[Collection[KubernetesTaskConfig]] = [],
         emit_events_without_state_transitions: bool = False,
-        old_kubeconfig_paths: Collection[str] = (),
+        # kubeconfigs used to continue to watch other clusters
+        # Used when transitioning to a new cluster in the primary kubeconfig_path to continue watching still-running pods on other clusters
+        watcher_kubeconfig_paths: Collection[str] = (),
     ) -> None:
         if not version:
             version = "unknown_task_processing"
@@ -81,9 +83,9 @@ class KubernetesPodExecutor(TaskExecutor):
             kubeconfig_path=kubeconfig_path, user_agent=user_agent
         )
 
-        self.old_kube_clients = [
-            KubeClient(kubeconfig_path=old_kubeconfig_path, user_agent=user_agent)
-            for old_kubeconfig_path in old_kubeconfig_paths
+        self.watcher_kube_clients = [
+            KubeClient(kubeconfig_path=watcher_kubeconfig_path, user_agent=user_agent)
+            for watcher_kubeconfig_path in watcher_kubeconfig_paths
         ]
 
         self.namespace = namespace
@@ -115,7 +117,7 @@ class KubernetesPodExecutor(TaskExecutor):
         # from where we left off on restarts
         self.pod_event_watch_threads = []
         self.watches = []
-        for kube_client in [self.kube_client] + self.old_kube_clients:
+        for kube_client in [self.kube_client] + self.watcher_kube_clients:
             watch = kube_watch.Watch()
             pod_event_watch_thread = threading.Thread(
                 target=self._pod_event_watch_loop,
@@ -605,7 +607,7 @@ class KubernetesPodExecutor(TaskExecutor):
     def reconcile(self, task_config: KubernetesTaskConfig) -> None:
         pod_name = task_config.pod_name
         pod = None
-        for kube_client in [self.kube_client] + self.old_kube_clients:
+        for kube_client in [self.kube_client] + self.watcher_kube_clients:
             try:
                 pod = kube_client.get_pod(namespace=self.namespace, pod_name=pod_name)
             except Exception:
@@ -667,7 +669,7 @@ class KubernetesPodExecutor(TaskExecutor):
                 namespace=self.namespace,
                 pod_name=task_id,
             )
-            for kube_client in [self.kube_client] + self.old_kube_clients
+            for kube_client in [self.kube_client] + self.watcher_kube_clients
         )
         if terminated:
             logger.info(
