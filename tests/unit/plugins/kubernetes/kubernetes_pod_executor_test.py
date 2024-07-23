@@ -38,7 +38,7 @@ from task_processing.plugins.kubernetes.types import PodEvent
 
 
 @pytest.fixture
-def k8s_executor(mock_Thread):
+def k8s_executor(mock_Process):
     with mock.patch(
         "task_processing.plugins.kubernetes.kube_client.kube_config.load_kube_config",
         autospec=True,
@@ -53,7 +53,7 @@ def k8s_executor(mock_Thread):
 
 
 @pytest.fixture
-def k8s_executor_with_watcher_clusters(mock_Thread):
+def k8s_executor_with_watcher_clusters(mock_Process):
     with mock.patch(
         "task_processing.plugins.kubernetes.kube_client.kube_config.load_kube_config",
         autospec=True,
@@ -87,7 +87,7 @@ def mock_task_configs():
 
 
 @pytest.fixture
-def k8s_executor_with_tasks(mock_Thread, mock_task_configs):
+def k8s_executor_with_tasks(mock_Process, mock_task_configs):
     with mock.patch(
         "task_processing.plugins.kubernetes.kube_client.kube_config.load_kube_config",
         autospec=True,
@@ -105,13 +105,13 @@ def k8s_executor_with_tasks(mock_Thread, mock_task_configs):
 
 
 def test_init_watch_setup(k8s_executor):
-    assert len(k8s_executor.watches) == len(k8s_executor.pod_event_watch_threads) == 1
+    assert len(k8s_executor.watches) == len(k8s_executor.pod_event_watch_processes) == 1
 
 
 def test_init_watch_setup_multicluster(k8s_executor_with_watcher_clusters):
     assert (
         len(k8s_executor_with_watcher_clusters.watches)
-        == len(k8s_executor_with_watcher_clusters.pod_event_watch_threads)
+        == len(k8s_executor_with_watcher_clusters.pod_event_watch_processes)
         == 2
     )
 
@@ -802,16 +802,24 @@ def test_process_event_enqueues_task_processing_events_no_state_transition(
     assert (
         len(k8s_executor.task_metadata[mock_pod.metadata.name].task_state_history) == 0
     )
-
-
+    
+    
 def test_pending_event_processing_loop_processes_remaining_events_after_stop(
     k8s_executor,
 ):
+    # Create a V1Pod object to use for testing multiprocess instead of mock.Mock() as
+    # it is not pickleable
+    test_pod = V1Pod(
+        metadata=V1ObjectMeta(
+            name="test-pod",
+        )
+        # Add other necessary attributes here
+    )
     k8s_executor.pending_events.put(
         PodEvent(
             type="ADDED",
-            object=mock.Mock(),
-            raw_object=mock.Mock(),
+            object=test_pod,
+            raw_object={},
         )
     )
     k8s_executor.stopping = True
