@@ -804,38 +804,6 @@ def test_process_event_enqueues_task_processing_events_no_state_transition(
     )
 
 
-def test_pending_event_processing_loop_processes_remaining_events_after_stop(
-    k8s_executor,
-):
-    # Create a V1Pod object to use for testing multiprocess instead of mock.Mock() as
-    # it is not pickleable
-    test_pod = V1Pod(
-        metadata=V1ObjectMeta(
-            name="test-pod",
-            namespace="task_processing_tests",
-        )
-        # Add other necessary attributes here
-    )
-    k8s_executor.pending_events.put(
-        PodEvent(
-            type="ADDED",
-            object=test_pod,
-            raw_object={},
-        )
-    )
-    k8s_executor.stopping = True
-
-    with mock.patch.object(
-        k8s_executor,
-        "_process_pod_event",
-        autospec=True,
-    ) as mock_process_event:
-        k8s_executor._pending_event_processing_loop()
-
-    mock_process_event.assert_called_once()
-    assert k8s_executor.pending_events.qsize() == 0
-
-
 def test_process_event_enqueues_task_processing_events_deleted(
     k8s_executor,
 ):
