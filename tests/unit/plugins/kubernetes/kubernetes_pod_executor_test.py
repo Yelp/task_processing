@@ -802,8 +802,8 @@ def test_process_event_enqueues_task_processing_events_no_state_transition(
     assert (
         len(k8s_executor.task_metadata[mock_pod.metadata.name].task_state_history) == 0
     )
-    
-    
+
+
 def test_pending_event_processing_loop_processes_remaining_events_after_stop(
     k8s_executor,
 ):
@@ -812,6 +812,7 @@ def test_pending_event_processing_loop_processes_remaining_events_after_stop(
     test_pod = V1Pod(
         metadata=V1ObjectMeta(
             name="test-pod",
+            namespace="task_processing_tests",
         )
         # Add other necessary attributes here
     )

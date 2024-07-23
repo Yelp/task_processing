@@ -1,6 +1,8 @@
 import logging
+import multiprocessing
 import queue
 import time
+from multiprocessing import JoinableQueue
 from queue import Queue
 from typing import Collection
 from typing import Optional
@@ -17,8 +19,6 @@ from kubernetes.client import V1ResourceRequirements
 from kubernetes.client import V1SecurityContext
 from kubernetes.client.exceptions import ApiException
 from pyrsistent import pmap
-import multiprocessing
-from multiprocessing import JoinableQueue
 from pyrsistent import v
 from pyrsistent.typing import PMap
 
@@ -113,7 +113,7 @@ class KubernetesPodExecutor(TaskExecutor):
         # possible to cleanly shutdown both of these.
         self.pending_events: "JoinableQueue[PodEvent]" = JoinableQueue()
         self.event_queue: "JoinableQueue[Event]" = JoinableQueue()
-        
+
         # TODO(TASKPROC-243): keep track of resourceVersion so that we can continue event processing
         # from where we left off on restarts
         self.pod_event_watch_processes = []
