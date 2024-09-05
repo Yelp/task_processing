@@ -428,9 +428,18 @@ class KubernetesPodExecutor(TaskExecutor):
         """
         logger.debug("Starting Pod event processing.")
         event = None
-        while not self.stopping or not self.pending_events.empty():
+        while True:
             try:
                 event = self.pending_events.get(timeout=QUEUE_GET_TIMEOUT_S)
+                if event["type"] == "STOP":
+                    logger.debug("Received a STOP event - stopping processing.")
+                    try:
+                        self.pending_events.task_done()
+                    except ValueError:
+                        logger.error(
+                            "task_done() called on pending events queue too many times!"
+                        )
+                    break
                 self._process_pod_event(event)
             except queue.Empty:
                 logger.debug(
@@ -700,17 +709,22 @@ class KubernetesPodExecutor(TaskExecutor):
         return terminated
 
     def stop(self) -> None:
-        logger.debug("Preparing to stop all KubernetesPodExecutor threads.")
+        logger.debug("Preparing to stop all KubernetesPodExecutor processes.")
         self.stopping = True
-
         logger.debug("Signaling Pod event Watch to stop streaming events...")
         # make sure that we've stopped watching for events before calling join() - otherwise,
         # join() will block until we hit the configured timeout (or forever with no timeout).
         for watch in self.watches:
             watch.stop()
+
+        # Add a STOP event to the queue below after stopping the watch to ensure
+        # no events will be added after the STOP event
+        stop_event = PodEvent(type="STOP", object=None, raw_object={})
+        self.pending_events.put(stop_event)
+
         # timeout arbitrarily chosen - we mostly just want to make sure that we have a small
         # grace period to flush the current event to the pending_events queue as well as
-        # any other clean-up  - it's possible that after this join() the thread is still alive
+        # any other clean-up  - it's possible that after this join() the process is still alive
         # but in that case we can be reasonably sure that we're not dropping any data.
         for pod_event_watch_process in self.pod_event_watch_processes:
             pod_event_watch_process.join(timeout=POD_WATCH_PROCESS_JOIN_TIMEOUT_S)
@@ -719,13 +733,24 @@ class KubernetesPodExecutor(TaskExecutor):
         # once we've stopped updating the pending events queue, we then wait until we're done
         # processing any events we've received - this will wait until task_done() has been
         # called for every item placed in this queue
+        # since we stopped the watch above, we don't expect any more events to be added to the queue
+        # this ensure that we're not stuck due to the stop event, if it wasn't processed by the _pending_event_processing_loop loop
+        if (
+            self.pending_events.qsize() == 1
+            and self.pending_events.get(timeout=QUEUE_GET_TIMEOUT_S)["type"] == "STOP"
+        ):
+            try:
+                self.pending_events.task_done()
+            except ValueError:
+                logger.error(
+                    "task_done() called on pending events queue too many times!"
+                )
         self.pending_events.join()
         logger.debug("All pending PodEvents have been processed.")
         # and then give ourselves time to do any post-stop cleanup
         self.pending_event_processing_process.join(
             timeout=POD_EVENT_PROCESS_JOIN_TIMEOUT_S
         )
-
         logger.debug("Done stopping KubernetesPodExecutor!")
 
     def get_event_queue(self) -> "JoinableQueue[Event]":
