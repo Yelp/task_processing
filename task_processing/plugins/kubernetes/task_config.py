@@ -8,6 +8,7 @@ from typing import Optional
 from typing import Sequence
 from typing import Tuple
 from typing import TYPE_CHECKING
+from typing import Union
 
 from pyrsistent import field
 from pyrsistent import m
@@ -25,6 +26,7 @@ from task_processing.plugins.kubernetes.types import ObjectFieldSelectorSource
 from task_processing.plugins.kubernetes.types import ProjectedSAVolume
 from task_processing.plugins.kubernetes.types import SecretVolume
 from task_processing.plugins.kubernetes.types import SecretVolumeItem
+from task_processing.plugins.kubernetes.types import TopologySpreadContraint
 from task_processing.plugins.kubernetes.utils import (
     DEFAULT_PROJECTED_SA_TOKEN_EXPIRATION_SECONDS,
 )
@@ -472,6 +474,11 @@ class KubernetesTaskConfig(DefaultTaskConfigInterface):
         initial=v(),
         factory=pvector,
         invariant=_valid_node_affinities,
+    )
+    topology_spread_constraints = field(
+        type=PVector if not TYPE_CHECKING else PVector["TopologySpreadContraint"],
+        initial=v(),
+        factory=pvector,
     )
     labels = field(
         type=PMap if not TYPE_CHECKING else PMap[str, str],
