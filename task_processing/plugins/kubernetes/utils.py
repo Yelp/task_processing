@@ -11,6 +11,7 @@ from kubernetes.client import V1EnvVar
 from kubernetes.client import V1EnvVarSource
 from kubernetes.client import V1HostPathVolumeSource
 from kubernetes.client import V1KeyToPath
+from kubernetes.client import V1LabelSelector
 from kubernetes.client import V1NodeAffinity
 from kubernetes.client import V1NodeSelector
 from kubernetes.client import V1NodeSelectorRequirement
@@ -431,7 +432,7 @@ def get_topology_spread_constraints(
     """
     return [
         V1TopologySpreadConstraint(
-            label_selector=constraint["label_selector"],
+            label_selector=V1LabelSelector(match_labels=constraint["label_selector"]),
             max_skew=constraint["max_skew"],
             topology_key=constraint["topology_key"],
             when_unsatisfiable=constraint["when_unsatisfiable"],
