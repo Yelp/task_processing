@@ -47,6 +47,7 @@ from task_processing.plugins.kubernetes.utils import (
 )
 from task_processing.plugins.kubernetes.utils import get_pod_volumes
 from task_processing.plugins.kubernetes.utils import get_sanitised_kubernetes_name
+from task_processing.plugins.kubernetes.utils import get_topology_spread_constraints
 
 
 logger = logging.getLogger(__name__)
@@ -560,6 +561,9 @@ class KubernetesPodExecutor(TaskExecutor):
                     node_selector=dict(task_config.node_selectors),
                     affinity=V1Affinity(
                         node_affinity=get_node_affinity(task_config.node_affinities),
+                    ),
+                    topology_spread_constraints=get_topology_spread_constraints(
+                        task_config.topology_spread_constraints
                     ),
                     # we're hardcoding this as Default as this is what we generally use
                     # internally - until we have a usecase for something that needs one
