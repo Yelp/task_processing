@@ -427,7 +427,7 @@ def get_topology_spread_constraints(
 ) -> List[V1TopologySpreadConstraint]:
     """Build toplogy spread constraints for pod
 
-    :param PVector["TopologySpreadContraint"] sa_volumes: list of topology spread constraint configs
+    :param PVector["TopologySpreadContraint"] constraints: list of topology spread constraint configs
     :return: list of kubernetes topology spread constraint objects
     """
     return [
