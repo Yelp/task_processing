@@ -88,3 +88,10 @@ class PodEvent(TypedDict):
     object: V1Pod
     # this is just the dict-ified version of object - but it's too big to type here
     raw_object: Dict[str, Any]
+
+
+class TopologySpreadContraint(TypedDict):
+    max_skew: int
+    topology_key: str
+    when_unsatisfiable: str
+    label_selector: Dict[str, str]

@@ -11,6 +11,7 @@ from kubernetes.client import V1EnvVar
 from kubernetes.client import V1EnvVarSource
 from kubernetes.client import V1HostPathVolumeSource
 from kubernetes.client import V1KeyToPath
+from kubernetes.client import V1LabelSelector
 from kubernetes.client import V1NodeAffinity
 from kubernetes.client import V1NodeSelector
 from kubernetes.client import V1NodeSelectorRequirement
@@ -20,6 +21,7 @@ from kubernetes.client import V1ProjectedVolumeSource
 from kubernetes.client import V1SecretKeySelector
 from kubernetes.client import V1SecretVolumeSource
 from kubernetes.client import V1ServiceAccountTokenProjection
+from kubernetes.client import V1TopologySpreadConstraint
 from kubernetes.client import V1Volume
 from kubernetes.client import V1VolumeMount
 from kubernetes.client import V1VolumeProjection
@@ -27,6 +29,7 @@ from pyrsistent.typing import PMap
 from pyrsistent.typing import PVector
 
 from task_processing.plugins.kubernetes.types import NodeAffinityOperator
+from task_processing.plugins.kubernetes.types import TopologySpreadContraint
 
 if TYPE_CHECKING:
     from task_processing.plugins.kubernetes.types import EmptyVolume
@@ -416,4 +419,23 @@ def get_kubernetes_service_account_token_volume_mounts(
             read_only=True,
         )
         for volume in sa_volumes
+    ]
+
+
+def get_topology_spread_constraints(
+    constraints: PVector[TopologySpreadContraint],
+) -> List[V1TopologySpreadConstraint]:
+    """Build toplogy spread constraints for pod
+
+    :param PVector["TopologySpreadContraint"] constraints: list of topology spread constraint configs
+    :return: list of kubernetes topology spread constraint objects
+    """
+    return [
+        V1TopologySpreadConstraint(
+            label_selector=V1LabelSelector(match_labels=constraint["label_selector"]),
+            max_skew=constraint["max_skew"],
+            topology_key=constraint["topology_key"],
+            when_unsatisfiable=constraint["when_unsatisfiable"],
+        )
+        for constraint in constraints
     ]
