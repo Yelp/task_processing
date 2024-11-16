@@ -81,7 +81,8 @@ class NodeAffinity(TypedDict):
 
 
 class PodEvent(TypedDict):
-    # there are only 3 possible types for Pod events: ADDED, DELETED, MODIFIED
+    # there are only 4 possible types for Pod events: ADDED, DELETED, MODIFIED or STOP
+    # STOP is a custom type that we use to signal STOP to all KubernetesPodExecutor processes
     # XXX: this should be typed as Literal["ADDED", "DELETED", "MODIFIED"] once we drop support
     # for older Python versions
     type: str
