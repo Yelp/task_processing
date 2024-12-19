@@ -48,6 +48,7 @@ from task_processing.plugins.kubernetes.utils import get_sanitised_volume_name
     (
         (v(), v(), None),
         (v("AUDIT_READ"), v(), V1Capabilities(add=["AUDIT_READ"])),
+        (v("AUDIT_READ"), v("AUDIT_READ"), V1Capabilities(add=["AUDIT_READ"])),
         (v(), v("AUDIT_READ"), V1Capabilities(drop=["AUDIT_READ"])),
         (
             v("AUDIT_WRITE"),
