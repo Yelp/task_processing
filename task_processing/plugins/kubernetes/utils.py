@@ -57,8 +57,16 @@ def get_capabilities_for_capability_changes(
     caps = {
         capability_type: capabilities
         for (capability_type, capabilities) in [
-            ("add", list(cap_add)),
-            ("drop", list(cap_drop)),
+            # NOTE: these don't actually need to be sorted since the order of caps here won't
+            # cause bounces or anything - but in case someone is inspired by this, it'll be
+            # good to do the paranoid thing and save them the trouble of debugging what we ran
+            # into in Yelp/paasta#3973
+            ("add", sorted(list(cap_add))),
+            # NOTE: this is necessary as containerd differs in behavior from dockershim: with
+            # dockershim dropped capabilities were overriden if the same capability was added - but
+            # in containerd the dropped capabilities appear to have higher priority.
+            # Related: Yelp/paasta#3972 and Yelp/paasta#3973
+            ("drop", sorted(list(set(cap_drop) - set(cap_add)))),
         ]
         if capabilities
     }
