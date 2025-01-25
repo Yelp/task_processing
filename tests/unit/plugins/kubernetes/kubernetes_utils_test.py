@@ -62,28 +62,39 @@ def test_get_capabilities_for_capability_changes(cap_add, cap_drop, expected):
 
 
 @pytest.mark.parametrize(
-    "name,expected_name",
+    "name,expected_name,length_limit",
     (
         (
             "hello_world",
             "hello--world",
+            0,
         ),
         (
             "hello_world",
             "hello--world",
+            0,
         ),
         (
             "--hello_world",
             "underscore-hello--world",
+            0,
         ),
         (
             "TeSt",
             "test",
+            0,
+        ),
+        (
+            "hello--world.123.run",
+            "hello--world--cf28",
+            19,
         ),
     ),
 )
-def test_get_sanitised_kubernetes_name(name, expected_name):
-    assert get_sanitised_kubernetes_name(name) == expected_name
+def test_get_sanitised_kubernetes_name(name, expected_name, length_limit):
+    assert (
+        get_sanitised_kubernetes_name(name, length_limit=length_limit) == expected_name
+    )
 
 
 @pytest.mark.parametrize(
