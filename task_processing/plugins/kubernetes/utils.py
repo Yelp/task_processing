@@ -153,8 +153,10 @@ def get_sanitised_kubernetes_name(
         # the part of the name that does fit in the limit in order to replace them with
         # -- (2 characters) and then a 4 character hash (which should help ensure uniqueness
         # after truncation).
+        truncated_name = name[0 : length_limit - 6]
         name = (
-            name[0 : length_limit - 6]
+            # Avoid splitting the suffix into a subdomain as it would not meet RFC1123 requirements
+            truncated_name.rstrip(".")
             + "--"
             + hashlib.md5(name.encode("ascii")).hexdigest()[:4]
         )
