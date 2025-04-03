@@ -99,12 +99,17 @@ class KubeClient:
         while attempts:
             try:
                 logger.info(f"Attempting to terminate {pod_name}")
+                # NOTE: we used to force-kill pods by setting grace_period_seconds=0, but we later
+                # had usecases where we wanted to allow the pod to gracefully terminate (e.g., we
+                # have some applications that are prone to hanging due to legacy code that do not
+                # correctly report failures until the end of a successful execution).
+                #
+                # For the majority of our batches, the default grace period of 30s should
+                # reduce to a force-kill as most things will not specifically handle SIGTERMs in a
+                # special way :)
                 self.core.delete_namespaced_pod(
                     name=pod_name,
                     namespace=namespace,
-                    # attempt to delete immediately - Pods launched by task_processing
-                    # shouldn't need time to clean-up/drain
-                    grace_period_seconds=0,
                     # this is the default, but explcitly request background deletion of releated
                     # objects. see:
                     # https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/
