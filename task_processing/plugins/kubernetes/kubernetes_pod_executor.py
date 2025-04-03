@@ -223,6 +223,7 @@ class KubernetesPodExecutor(TaskExecutor):
                             backoff_time,
                             retry_attempt,
                         )
+                        retry_attempt += 1
                         time.sleep(backoff_time)
 
             except Exception:
