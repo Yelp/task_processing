@@ -1,6 +1,7 @@
 import logging
 import os
 from http import HTTPStatus
+from typing import List
 from typing import Optional
 
 from kubernetes import client as kube_client
@@ -211,4 +212,52 @@ class KubeClient:
         logger.info(f"Ran out of retries attempting to fetch pod {pod_name}.")
         raise ExceededMaxAttempts(
             f"Retried fetching pod {pod_name} {max_attempts} times."
+        )
+
+    def get_pods(
+        self,
+        namespace: str,
+        attempts: int = DEFAULT_ATTEMPTS,
+    ) -> List[V1Pod]:
+        """
+        Wrapper around list_namespaced_pod() in the kubernetes clientlib that adds in
+        retrying on ApiExceptions.
+        Returns a list of V1Pod on success or an empty list if no pods are found.
+        Raises ExceededMaxAttempts if it runs out of retries.
+        """
+        max_attempts = attempts
+        while attempts:
+            try:
+                pods = self.core.list_namespaced_pod(
+                    namespace=namespace,
+                ).items
+                return pods
+            except ApiException as e:
+                # Unknown pods throws ApiException w/ 404
+                if e.status == 404:
+                    logger.info(f"Found no pods in the namespace {namespace}.")
+                    return []
+                if not self.maybe_reload_on_exception(exception=e) and attempts > 1:
+                    logger.exception(
+                        f"Failed to fetch pods in {namespace} due to unhandled API exception, retrying."
+                    )
+                attempts -= 1
+                if attempts == 0:
+                    logger.info(
+                        f"Ran out of retries attempting to fetch pods in namespace {namespace}."
+                    )
+                    raise ExceededMaxAttempts(
+                        f"Retried fetching pods in namespace {namespace} {max_attempts} times."
+                    )
+            except Exception as ex:
+                logger.exception(
+                    f"Failed to fetch pods in {namespace} due to unhandled exception: {ex}"
+                )
+                raise
+        # This should never be reached due to the raise in the loop
+        logger.info(
+            f"Ran out of retries attempting to fetch pods in namespace {namespace}."
+        )
+        raise ExceededMaxAttempts(
+            f"Retried fetching pods in namespace {namespace} {max_attempts} times."
         )

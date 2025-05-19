@@ -4,6 +4,7 @@ import threading
 import time
 from queue import Queue
 from typing import Collection
+from typing import List
 from typing import Optional
 
 from kubernetes import watch as kube_watch
@@ -24,6 +25,7 @@ from pyrsistent.typing import PMap
 from task_processing.interfaces import TaskExecutor
 from task_processing.interfaces.event import Event
 from task_processing.interfaces.event import task_event
+from task_processing.plugins.kubernetes.kube_client import ExceededMaxAttempts
 from task_processing.plugins.kubernetes.kube_client import KubeClient
 from task_processing.plugins.kubernetes.task_config import KubernetesTaskConfig
 from task_processing.plugins.kubernetes.task_metadata import KubernetesTaskMetadata
@@ -54,7 +56,9 @@ logger = logging.getLogger(__name__)
 
 POD_WATCH_THREAD_JOIN_TIMEOUT_S = 1.0
 POD_EVENT_THREAD_JOIN_TIMEOUT_S = 1.0
+POD_MONITOR_THREAD_JOIN_TIMEOUT_S = 1.0
 QUEUE_GET_TIMEOUT_S = 0.5
+POD_MONITOR_INTERVAL_S = 300  # 5 minutes
 SUPPORTED_POD_MODIFIED_EVENT_PHASES = {
     "Failed",
     "Running",
@@ -144,6 +148,12 @@ class KubernetesPodExecutor(TaskExecutor):
             target=self._pending_event_processing_loop,
         )
         self.pending_event_processing_thread.start()
+
+        # Start the pod monitoring thread that periodically checks pod status
+        self.pod_monitor_thread = threading.Thread(
+            target=self._pod_monitor_loop,
+        )
+        self.pod_monitor_thread.start()
 
     def _initialize_existing_task(self, task_config: KubernetesTaskConfig) -> None:
         """Generates task_metadata in UNKNOWN state for an existing KubernetesTaskConfig.
@@ -493,6 +503,88 @@ class KubernetesPodExecutor(TaskExecutor):
 
         logger.debug("Exiting Pod event processing - stop requested.")
 
+    def _check_pod_state_discrepancy(self, pod: V1Pod) -> Optional[PodEvent]:
+        """
+        Check if there's a discrepancy between the watch-reported state and the polled state.
+        Returns a PodEvent if a discrepancy is detected, None otherwise.
+
+        This helper function is extracted from _pod_monitor_loop to make it more testable.
+        """
+        with self.task_metadata_lock:
+            # skip if pod is no longer being tracked
+            if pod.metadata.name not in self.task_metadata.keys():
+                return None
+            task_metadata = self.task_metadata[pod.metadata.name]
+            current_state = task_metadata.task_state
+
+        # check for discrepancies between watch-reported state and polled state
+        # determine expected state based on pod phase
+        expected_state = None
+        if pod.status.phase == "Running":
+            expected_state = KubernetesTaskState.TASK_RUNNING
+        elif pod.status.phase == "Succeeded":
+            expected_state = KubernetesTaskState.TASK_FINISHED
+        elif pod.status.phase == "Failed":
+            expected_state = KubernetesTaskState.TASK_FAILED
+        elif pod.status.phase == "Unknown":
+            expected_state = KubernetesTaskState.TASK_LOST
+
+        if expected_state and expected_state != current_state:
+            logger.warning(
+                f"State discrepancy detected for pod {pod.metadata.name}: "
+                f"watch-reported state is {current_state}, "
+                f"but polled state is {expected_state} (phase: {pod.status.phase})"
+            )
+
+            # we don't have a real pod event, so fake one using the fact that these are basically
+            # just the raw V1Pod object + some metadata
+            pod_event: PodEvent = {
+                "type": "MODIFIED",
+                "object": pod,
+                "raw_object": self.kube_client.api_client.sanitize_for_serialization(
+                    pod
+                ),
+            }
+
+            return pod_event
+
+        return None
+
+    def _pod_monitor_loop(self) -> None:
+        """
+        Run in a thread to periodically poll the status of all pods being tracked.
+        This provides redundancy to the watch mechanism and ensures we don't miss any pod status changes.
+        """
+        logger.debug("Starting periodic Pod status monitoring.")
+
+        while not self.stopping:
+            time.sleep(POD_MONITOR_INTERVAL_S)
+
+            pods = []
+            try:
+                for client in [self.kube_client] + self.watcher_kube_clients:
+                    pods.extend(
+                        client.get_pods(
+                            namespace=self.namespace,
+                        )
+                    )
+
+                for pod in pods:
+                    pod_event = self._check_pod_state_discrepancy(pod)
+                    if pod_event:
+                        logger.debug(
+                            f"Adding polled status for pod {pod.metadata.name} to pending event queue"
+                        )
+                        self.pending_events.put(pod_event)
+
+            except Exception:
+                # for now, we just log the exception and continue as a sleep doesn't
+                # make too much sense here - the loop already sleeps POD_MONITOR_INTERVAL_S
+                # in betweeen executions
+                logger.exception("Exception in pod monitoring thread - continuing")
+
+        logger.debug("Exiting Pod monitor - stop requested.")
+
     def _create_container_definition(
         self,
         name: str,
@@ -753,6 +845,10 @@ class KubernetesPodExecutor(TaskExecutor):
         # but in that case we can be reasonably sure that we're not dropping any data.
         for pod_event_watch_thread in self.pod_event_watch_threads:
             pod_event_watch_thread.join(timeout=POD_WATCH_THREAD_JOIN_TIMEOUT_S)
+
+        # Wait for the pod monitor thread to exit
+        logger.debug("Waiting for pod monitor thread to exit...")
+        self.pod_monitor_thread.join(timeout=POD_MONITOR_THREAD_JOIN_TIMEOUT_S)
 
         logger.debug("Waiting for all pending PodEvents to be processed...")
         # once we've stopped updating the pending events queue, we then wait until we're done

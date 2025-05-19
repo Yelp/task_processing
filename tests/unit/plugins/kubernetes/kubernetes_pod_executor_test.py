@@ -1198,9 +1198,7 @@ def test_reconcile_existing_pods(k8s_executor, mock_task_configs):
     assert running_pod_metadata.task_state == KubernetesTaskState.TASK_RUNNING
 
 
-def test_reconcile_api_error(
-    k8s_executor,
-):
+def test_reconcile_api_error(k8s_executor):
     task_config = mock.Mock(spec=KubernetesTaskConfig)
     task_config.pod_name = "pod--name.uuid"
     task_config.name = "job-name"
@@ -1215,3 +1213,406 @@ def test_reconcile_api_error(
     assert len(k8s_executor.task_metadata) == 1
     tm = k8s_executor.task_metadata["pod--name.uuid"]
     assert tm.task_state == KubernetesTaskState.TASK_LOST
+
+
+def test_check_pod_state_discrepancy_no_discrepancy(k8s_executor):
+    """Test the helper function when there's no state discrepancy."""
+    # Create a mock pod with a state that matches the task metadata
+    mock_pod = mock.Mock()
+    mock_pod.metadata.name = "test-pod"
+    mock_pod.status.phase = "Running"
+
+    # Set up task metadata with matching state
+    mock_task_config = KubernetesTaskConfig(
+        name="test-pod", uuid="test-uuid", image="test-image", command="test-command"
+    )
+    k8s_executor.task_metadata = pmap(
+        {
+            "test-pod": KubernetesTaskMetadata(
+                task_config=mock_task_config,
+                node_name="test-node",
+                task_state=KubernetesTaskState.TASK_RUNNING,
+                task_state_history=v((KubernetesTaskState.TASK_RUNNING, 123456)),
+            )
+        }
+    )
+
+    # Call the helper function
+    result = k8s_executor._check_pod_state_discrepancy(mock_pod)
+
+    # Verify no event was created since there's no discrepancy
+    assert result is None
+
+
+def test_check_pod_state_discrepancy_with_discrepancy(k8s_executor):
+    """Test the helper function when there's a state discrepancy."""
+    # Create a mock pod with a state that doesn't match the task metadata
+    mock_pod = mock.Mock()
+    mock_pod.metadata.name = "test-pod"
+    mock_pod.status.phase = "Running"
+
+    # Set up task metadata with non-matching state
+    mock_task_config = KubernetesTaskConfig(
+        name="test-pod", uuid="test-uuid", image="test-image", command="test-command"
+    )
+    k8s_executor.task_metadata = pmap(
+        {
+            "test-pod": KubernetesTaskMetadata(
+                task_config=mock_task_config,
+                node_name="test-node",
+                task_state=KubernetesTaskState.TASK_PENDING,  # Different from Running
+                task_state_history=v((KubernetesTaskState.TASK_PENDING, 123456)),
+            )
+        }
+    )
+
+    # Mock the sanitize_for_serialization method
+    with mock.patch.object(
+        k8s_executor.kube_client.api_client,
+        "sanitize_for_serialization",
+        return_value={"pod": "data"},
+    ):
+        # Call the helper function
+        result = k8s_executor._check_pod_state_discrepancy(mock_pod)
+
+    # Verify an event was created due to the discrepancy
+    assert result is not None
+    assert result["type"] == "MODIFIED"
+    assert result["object"] == mock_pod
+    assert result["raw_object"] == {"pod": "data"}
+
+
+def test_check_pod_state_discrepancy_pod_not_tracked(k8s_executor):
+    """Test the helper function when the pod is not being tracked."""
+    # Create a mock pod that's not in task_metadata
+    mock_pod = mock.Mock()
+    mock_pod.metadata.name = "unknown-pod"
+
+    # Set up task metadata without the pod
+    mock_task_config = KubernetesTaskConfig(
+        name="test-pod", uuid="test-uuid", image="test-image", command="test-command"
+    )
+    k8s_executor.task_metadata = pmap(
+        {
+            "test-pod": KubernetesTaskMetadata(
+                task_config=mock_task_config,
+                node_name="test-node",
+                task_state=KubernetesTaskState.TASK_RUNNING,
+                task_state_history=v((KubernetesTaskState.TASK_RUNNING, 123456)),
+            )
+        }
+    )
+
+    # Call the helper function
+    result = k8s_executor._check_pod_state_discrepancy(mock_pod)
+
+    # Verify no event was created since the pod is not tracked
+    assert result is None
+
+
+def test_check_pod_state_discrepancy_different_phases(k8s_executor):
+    """Test the helper function with different pod phases."""
+    test_cases = [
+        # (pod_phase, task_state, expected_discrepancy)
+        ("Running", KubernetesTaskState.TASK_RUNNING, False),
+        ("Running", KubernetesTaskState.TASK_PENDING, True),
+        ("Succeeded", KubernetesTaskState.TASK_FINISHED, False),
+        ("Succeeded", KubernetesTaskState.TASK_RUNNING, True),
+        ("Failed", KubernetesTaskState.TASK_FAILED, False),
+        ("Failed", KubernetesTaskState.TASK_RUNNING, True),
+        ("Unknown", KubernetesTaskState.TASK_LOST, False),
+        ("Unknown", KubernetesTaskState.TASK_RUNNING, True),
+        (
+            "Pending",
+            KubernetesTaskState.TASK_PENDING,
+            False,
+        ),  # No expected state for Pending
+    ]
+
+    for pod_phase, task_state, expected_discrepancy in test_cases:
+        # Create a mock pod with the specified phase
+        mock_pod = mock.Mock()
+        mock_pod.metadata.name = "test-pod"
+        mock_pod.status.phase = pod_phase
+
+        # Set up task metadata with the specified state
+        mock_task_config = KubernetesTaskConfig(
+            name="test-pod",
+            uuid="test-uuid",
+            image="test-image",
+            command="test-command",
+        )
+        k8s_executor.task_metadata = pmap(
+            {
+                "test-pod": KubernetesTaskMetadata(
+                    task_config=mock_task_config,
+                    node_name="test-node",
+                    task_state=task_state,
+                    task_state_history=v((task_state, 123456)),
+                )
+            }
+        )
+
+        # Mock the sanitize_for_serialization method if we expect a discrepancy
+        if expected_discrepancy:
+            with mock.patch.object(
+                k8s_executor.kube_client.api_client,
+                "sanitize_for_serialization",
+                return_value={"pod": "data"},
+            ):
+                # Call the helper function
+                result = k8s_executor._check_pod_state_discrepancy(mock_pod)
+
+            # Verify an event was created due to the discrepancy
+            assert (
+                result is not None
+            ), f"Expected discrepancy for phase={pod_phase}, state={task_state}"
+            assert result["type"] == "MODIFIED"
+        else:
+            # Call the helper function
+            result = k8s_executor._check_pod_state_discrepancy(mock_pod)
+
+            # Verify no event was created since there's no discrepancy
+            assert (
+                result is None
+            ), f"Expected no discrepancy for phase={pod_phase}, state={task_state}"
+
+
+def test_pod_monitor_loop_no_pods(k8s_executor):
+    """Test the pod monitor loop when no pods are returned."""
+    with mock.patch.object(
+        k8s_executor.kube_client, "get_pods", autospec=True, return_value=[]
+    ) as mock_get_pods, mock.patch.object(
+        k8s_executor,
+        "stopping",
+        new_callable=mock.PropertyMock,
+        side_effect=[False, True],
+    ), mock.patch(
+        "task_processing.plugins.kubernetes.kubernetes_pod_executor.time.sleep",
+        autospec=True,
+    ), mock.patch.object(
+        k8s_executor, "_check_pod_state_discrepancy", autospec=True
+    ) as mock_check_discrepancy:
+        # Call the function directly with no initial sleep
+        k8s_executor._pod_monitor_loop()
+
+        # Verify get_pods was called with the correct namespace
+        mock_get_pods.assert_called_once_with(namespace=k8s_executor.namespace)
+
+        # Verify check_pod_state_discrepancy was not called since there are no pods
+        mock_check_discrepancy.assert_not_called()
+
+
+def test_pod_monitor_loop_with_pods_no_discrepancy(k8s_executor):
+    """Test the pod monitor loop with pods that have no state discrepancy."""
+    # Create a mock pod with a state that matches the task metadata
+    mock_pod = mock.Mock()
+    mock_pod.metadata.name = "test-pod"
+    mock_pod.status.phase = "Running"
+
+    # Set up task metadata with matching state
+    mock_task_config = KubernetesTaskConfig(
+        name="test-pod", uuid="test-uuid", image="test-image", command="test-command"
+    )
+    k8s_executor.task_metadata = pmap(
+        {
+            "test-pod": KubernetesTaskMetadata(
+                task_config=mock_task_config,
+                node_name="test-node",
+                task_state=KubernetesTaskState.TASK_RUNNING,
+                task_state_history=v((KubernetesTaskState.TASK_RUNNING, 123456)),
+            )
+        }
+    )
+
+    with mock.patch.object(
+        k8s_executor.kube_client, "get_pods", autospec=True, return_value=[mock_pod]
+    ) as mock_get_pods, mock.patch.object(
+        k8s_executor,
+        "stopping",
+        new_callable=mock.PropertyMock,
+        side_effect=[False, True],
+    ), mock.patch.object(
+        k8s_executor.pending_events, "put", autospec=True
+    ) as mock_put:
+        # Call the function directly with no initial sleep
+        k8s_executor._pod_monitor_loop()
+
+        # Verify get_pods was called
+        mock_get_pods.assert_called_once_with(namespace=k8s_executor.namespace)
+
+        # Verify no events were put in the queue since there's no discrepancy
+        mock_put.assert_not_called()
+
+
+def test_pod_monitor_loop_with_state_discrepancy(k8s_executor):
+    """Test the pod monitor loop with pods that have a state discrepancy."""
+    # Create a mock pod with a state that doesn't match the task metadata
+    mock_pod = mock.Mock()
+    mock_pod.metadata.name = "test-pod"
+    mock_pod.status.phase = "Running"
+
+    # Set up task metadata with non-matching state
+    mock_task_config = KubernetesTaskConfig(
+        name="test-pod", uuid="test-uuid", image="test-image", command="test-command"
+    )
+    k8s_executor.task_metadata = pmap(
+        {
+            "test-pod": KubernetesTaskMetadata(
+                task_config=mock_task_config,
+                node_name="test-node",
+                task_state=KubernetesTaskState.TASK_PENDING,  # Different from Running
+                task_state_history=v((KubernetesTaskState.TASK_PENDING, 123456)),
+            )
+        }
+    )
+
+    with mock.patch.object(
+        k8s_executor.kube_client, "get_pods", autospec=True, return_value=[mock_pod]
+    ) as mock_get_pods, mock.patch.object(
+        k8s_executor,
+        "stopping",
+        new_callable=mock.PropertyMock,
+        side_effect=[False, True],
+    ), mock.patch.object(
+        k8s_executor.pending_events, "put", autospec=True
+    ) as mock_put, mock.patch.object(
+        k8s_executor.kube_client.api_client,
+        "sanitize_for_serialization",
+        return_value={"pod": "data"},
+    ):
+        # Call the function directly with no initial sleep
+        k8s_executor._pod_monitor_loop()
+
+        # Verify get_pods was called
+        mock_get_pods.assert_called_once_with(namespace=k8s_executor.namespace)
+
+        # Verify an event was put in the queue due to the discrepancy
+        mock_put.assert_called_once()
+        event_arg = mock_put.call_args[0][0]
+        assert event_arg["type"] == "MODIFIED"
+        assert event_arg["object"] == mock_pod
+        assert event_arg["raw_object"] == {"pod": "data"}
+
+
+def test_pod_monitor_loop_with_exception(k8s_executor):
+    """Test the pod monitor loop when an exception occurs."""
+    with mock.patch.object(
+        k8s_executor.kube_client,
+        "get_pods",
+        autospec=True,
+        side_effect=Exception("Test error"),
+    ) as mock_get_pods, mock.patch.object(
+        k8s_executor,
+        "stopping",
+        new_callable=mock.PropertyMock,
+        side_effect=[False, True],
+    ), mock.patch(
+        "task_processing.plugins.kubernetes.kubernetes_pod_executor.time.sleep",
+        autospec=True,
+    ) as mock_sleep, mock.patch(
+        "task_processing.plugins.kubernetes.kubernetes_pod_executor.logger",
+        autospec=True,
+    ) as mock_logger:
+        # Call the function directly with no initial sleep
+        k8s_executor._pod_monitor_loop()
+
+        # Verify get_pods was called
+        mock_get_pods.assert_called_once_with(namespace=k8s_executor.namespace)
+
+        # Verify exception was logged
+        mock_logger.exception.assert_called_once_with(
+            "Exception in pod monitoring thread - continuing"
+        )
+
+        # Verify sleep was called to avoid tight error loops
+        mock_sleep.assert_called_once_with(1)
+
+
+def test_pod_monitor_loop_with_multicluster(k8s_executor_with_watcher_clusters):
+    """Test the pod monitor loop with multiple clusters."""
+    # Create mock pods from different clusters
+    mock_pod1 = mock.Mock()
+    mock_pod1.metadata.name = "test-pod-1"
+    mock_pod1.status.phase = "Running"
+
+    mock_pod2 = mock.Mock()
+    mock_pod2.metadata.name = "test-pod-2"
+    mock_pod2.status.phase = "Succeeded"
+
+    # Set up task metadata with different states
+    mock_task_config1 = KubernetesTaskConfig(
+        name="test-pod-1",
+        uuid="test-uuid-1",
+        image="test-image",
+        command="test-command",
+    )
+    mock_task_config2 = KubernetesTaskConfig(
+        name="test-pod-2",
+        uuid="test-uuid-2",
+        image="test-image",
+        command="test-command",
+    )
+    k8s_executor_with_watcher_clusters.task_metadata = pmap(
+        {
+            "test-pod-1": KubernetesTaskMetadata(
+                task_config=mock_task_config1,
+                node_name="test-node-1",
+                task_state=KubernetesTaskState.TASK_PENDING,  # Different from Running
+                task_state_history=v((KubernetesTaskState.TASK_PENDING, 123456)),
+            ),
+            "test-pod-2": KubernetesTaskMetadata(
+                task_config=mock_task_config2,
+                node_name="test-node-2",
+                task_state=KubernetesTaskState.TASK_RUNNING,  # Different from Succeeded
+                task_state_history=v((KubernetesTaskState.TASK_RUNNING, 123456)),
+            ),
+        }
+    )
+
+    # Mock the get_pods method to return different pods for different clients
+    def mock_get_pods_side_effect(namespace):
+        if namespace == k8s_executor_with_watcher_clusters.namespace:
+            if mock_get_pods_side_effect.call_count == 1:
+                return [mock_pod1]
+            else:
+                return [mock_pod2]
+        return []
+
+    mock_get_pods_side_effect.call_count = 0
+
+    with mock.patch.object(
+        k8s_executor_with_watcher_clusters.kube_client,
+        "get_pods",
+        autospec=True,
+        side_effect=mock_get_pods_side_effect,
+    ) as mock_get_pods, mock.patch.object(
+        k8s_executor_with_watcher_clusters.watcher_kube_clients[0],
+        "get_pods",
+        autospec=True,
+        side_effect=mock_get_pods_side_effect,
+    ) as mock_get_pods_watcher, mock.patch.object(
+        k8s_executor_with_watcher_clusters,
+        "stopping",
+        new_callable=mock.PropertyMock,
+        side_effect=[False, True],
+    ), mock.patch.object(
+        k8s_executor_with_watcher_clusters.pending_events, "put", autospec=True
+    ) as mock_put, mock.patch.object(
+        k8s_executor_with_watcher_clusters.kube_client.api_client,
+        "sanitize_for_serialization",
+        return_value={"pod": "data"},
+    ):
+        # Call the function directly with no initial sleep
+        k8s_executor_with_watcher_clusters._pod_monitor_loop()
+
+        # Verify get_pods was called for both clients
+        mock_get_pods.assert_called_once_with(
+            namespace=k8s_executor_with_watcher_clusters.namespace
+        )
+        mock_get_pods_watcher.assert_called_once_with(
+            namespace=k8s_executor_with_watcher_clusters.namespace
+        )
+
+        # Verify events were put in the queue for both discrepancies
+        assert mock_put.call_count == 2
