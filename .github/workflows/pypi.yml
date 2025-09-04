@@ -36,6 +36,6 @@ jobs:
       # this will create an sdist and wheel under dist/
       - run: make pypi
       # and then this uploads those artifacts to pypi
-      - uses: pypa/gh-action-pypi-publish@v1.2.2
+      - uses: pypa/gh-action-pypi-publish@v1.13.0
         with:
           password: ${{ secrets.pypi_password }}
