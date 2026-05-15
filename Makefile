@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 # 1. Bump VERSION below
 # 2. `make release`
-VERSION = 1.3.5
+VERSION = 1.4.0
 
 ifeq ($(findstring .yelpcorp.com, $(shell hostname -f)), .yelpcorp.com)
 	BUILD_ENV?=YELP
