@@ -455,6 +455,39 @@ def test_get_kubernetes_env_vars():
     )
 
 
+def test_get_kubernetes_env_vars_dependent_vars_last():
+    env_vars = get_kubernetes_env_vars(
+        environment=pmap(
+            {
+                "POD_ADDR": "$(PAASTA_POD_IP):8080",
+                "FAKE_PLAIN_VAR": "not_secret_data",
+                "ESCAPED_VAR": "$$(NOT_A_REFERENCE)",
+                "SECRET_URL": "https://user:$(FAKE_SECRET)@host",
+            }
+        ),
+        secret_environment=pmap(
+            {
+                "FAKE_SECRET": {
+                    "secret_name": "taskns-secret-taskname-some--secret--name",
+                    "key": "some_secret_name",
+                },
+            }
+        ),
+        field_selector_environment=pmap(
+            {"PAASTA_POD_IP": {"field_path": "status.podIP"}}
+        ),
+    )
+
+    names = [env_var.name for env_var in env_vars]
+    assert set(names[:4]) == {
+        "FAKE_PLAIN_VAR",
+        "ESCAPED_VAR",
+        "FAKE_SECRET",
+        "PAASTA_POD_IP",
+    }
+    assert set(names[4:]) == {"POD_ADDR", "SECRET_URL"}
+
+
 def test_get_node_affinity_ok():
     affinities = pvector(
         [

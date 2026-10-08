@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import re
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -44,6 +45,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROJECTED_SA_TOKEN_EXPIRATION_SECONDS = 1800
+# Kubernetes only expands $(VAR_NAME) references to vars defined earlier in the env list
+# ($$(VAR_NAME) is an escaped literal, so we don't treat it as a reference)
+DEPENDENT_ENV_VAR_RE = re.compile(r"(?<!\$)\$\([A-Za-z_][A-Za-z0-9_]*\)")
 
 
 def get_capabilities_for_capability_changes(
@@ -86,12 +90,20 @@ def get_kubernetes_env_vars(
     Given a dict of environment variables, transform them into the corresponding Kubernetes
     representation. This function will replace any secret placeholders with the value of
     the actual secret.
+
+    Variables that reference other variables (e.g. "$(PAASTA_POD_IP):8080") are placed at
+    the end so that Kubernetes can expand them.
     """
-    env_vars = [
-        V1EnvVar(name=key, value=value)
-        for key, value in environment.items()
-        if key not in secret_environment.keys()
-    ]
+    env_vars = []
+    dependent_env_vars = []
+    for key, value in environment.items():
+        if key in secret_environment.keys():
+            continue
+        env_var = V1EnvVar(name=key, value=value)
+        if DEPENDENT_ENV_VAR_RE.search(value):
+            dependent_env_vars.append(env_var)
+        else:
+            env_vars.append(env_var)
 
     secret_env_vars = [
         V1EnvVar(
@@ -119,7 +131,7 @@ def get_kubernetes_env_vars(
         for key, value in field_selector_environment.items()
     ]
 
-    return env_vars + secret_env_vars + field_selector_env_vars
+    return env_vars + secret_env_vars + field_selector_env_vars + dependent_env_vars
 
 
 def get_sanitised_kubernetes_name(
